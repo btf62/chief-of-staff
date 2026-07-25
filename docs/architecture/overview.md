@@ -10,7 +10,7 @@ This document defines the technical architecture required for
 system boundaries, information flow, security constraints, and decisions that
 must precede implementation. It establishes the initial execution, runtime,
 deployment, persistence, data-lifecycle, and interaction direction while
-deferring AI provider, scheduler, and specific web framework choices.
+deferring scheduler and specific web framework choices.
 
 The architecture is subordinate to the accepted
 [Product Vision](../product/vision.md) and
@@ -112,7 +112,7 @@ imply separate services.
 | Retrieval and snapshot layer | Coordinate connector runs, capture freshness and coverage, and retain only necessary retrieval material | Does not redefine source facts |
 | Normalization layer | Convert source-specific records into a common conceptual model while preserving raw references | Does not merge conflicts or create recommendations |
 | Identity and deduplication layer | Associate likely actors, records, and cross-source representations conservatively | Does not discard source records or hide ambiguity |
-| Inference layer | Detect explicit items and propose bounded inferred commitments, waiting items, and preparation needs | Must retain evidence, explanation, and confidence |
+| Inference layer | Detect explicit items and propose bounded inferred commitments, waiting items, and preparation needs | Uses an application-owned provider-neutral boundary; no source, tool, database, or mutation access |
 | Local correction-state store | Record inspectable corrections and dispositions and project their current state | Does not rewrite external records |
 | Priority and recommendation engine | Rank candidate outcomes and supporting items using product and leadership context | Does not compose unsupported facts |
 | Briefing composer | Produce the canonical briefing from selected structured content | Must obey presentation and agency budgets |
@@ -300,6 +300,14 @@ profile.
 
 ## 7. Inference and Ranking Pipeline
 
+All probabilistic inference uses an application-owned, provider-neutral
+boundary with the OpenAI API as the initial hosted provider, as recorded in
+[ADR-0006](../decisions/0006-adopt-provider-neutral-inference-with-openai.md).
+Provider adapters receive only task-specific evidence packets selected by
+deterministic application code and return application-owned, schema-validated
+results. Models receive no connector, SQLite, local-state, or external-action
+tools.
+
 The pipeline separates deterministic work from probabilistic judgment:
 
 | Stage | Preferred mechanism | Output |
@@ -335,8 +343,37 @@ cost.
 
 Corrections influence future behavior through explicit local overlays,
 versioned rules, and reviewed regression scenarios. They do not silently train
-an uninspectable personal model. No specific AI provider is selected by this
-architecture.
+an uninspectable personal model. OpenAI is the initial hosted provider, but the
+exact model remains an evaluated configuration decision.
+
+### Sensitivity tiers
+
+| Tier | Hosted-inference policy |
+| --- | --- |
+| Tier 1 — Ordinary operational | Permitted with strict minimization, provider application-state features under application control disabled, structured output, and provenance controls |
+| Tier 2 — Heightened sensitivity | Excluded by default; requires Brad's category-specific approval, demonstrated need, minimal evidence, and reviewed provider-retention implications |
+| Tier 3 — Highly sensitive | Prohibited under standard hosted retention; requires an approved Zero Data Retention or equivalent arrangement for the specific use, or approved local-only processing |
+
+Credentials and authentication secrets are prohibited from every model,
+including under Zero Data Retention. When hosted inference is prohibited or
+unavailable, deterministic processing may produce a reduced briefing with
+clear coverage disclosure.
+
+### Inference-task specification requirements
+
+Every future inference-task specification must define:
+
+- Deterministic-versus-model responsibility
+- Evidence-packet limits
+- Sensitivity eligibility
+- Input and output schemas
+- Confidence and exclusion behavior
+- Representative evaluation scenarios
+- Fallback behavior
+
+Classification, ranking, and synthesis remain logically separate and
+independently testable. Exact model selection requires representative
+evaluation and configuration rather than another architecture choice.
 
 ## 8. Deduplication and Conflict Handling
 
@@ -432,6 +469,18 @@ remains in force.
   references.
 - Read-only access is enforced through least-privilege scopes, retrieval-only
   interfaces, mutation rejection, and connector contract tests.
+- Hosted inference receives only bounded, task-specific evidence after
+  deterministic minimization and sensitivity classification.
+- Provider application-state features under application control are disabled,
+  including `store=false` where applicable; this does not imply Zero Data
+  Retention or eliminate standard abuse-monitoring and feature-specific
+  retention.
+- Tier 2 content is excluded from hosted inference by default, and Tier 3
+  content is prohibited under standard hosted retention.
+- The OpenAI API key remains in macOS Keychain and never enters SQLite, logs,
+  backups, prompts, fixtures, or briefing output.
+- Logs exclude full prompts, responses, evidence excerpts, source bodies,
+  credentials, authorization headers, and hidden model reasoning.
 
 The accepted persistence, retention, inspection, deletion, encryption, backup,
 and portability boundaries are defined in
@@ -439,6 +488,9 @@ and portability boundaries are defined in
 The accepted authentication, authorization, secret-storage, revocation, and
 reauthorization boundaries are defined in
 [ADR-0005](../decisions/0005-adopt-oauth-and-macos-keychain.md).
+The accepted inference, provider, egress, sensitivity, structured-output,
+versioning, logging, fallback, and evaluation boundaries are defined in
+[ADR-0006](../decisions/0006-adopt-provider-neutral-inference-with-openai.md).
 
 ### Remaining decisions and investigation
 
@@ -448,7 +500,8 @@ reauthorization boundaries are defined in
 - Detailed backup tooling, rotation, restoration, and deletion procedures
 - Application-level encryption if a future threat model, backup method, or
   remote-access design requires it
-- Language-model data egress, retention, and provider privacy terms
+- Exact OpenAI organization, project, retention setting, endpoint and feature
+  eligibility, evaluated model, and provider-policy review owner
 
 Connector specifications must identify when records may be referenced without
 persisting source content. Any cache exception must justify its content,
@@ -515,6 +568,9 @@ The architecture supports:
 - **Correction regression tests:** Confirm that corrected or dismissed items do
   not recur from materially unchanged evidence and reappear explainably after
   material change.
+- **Sensitivity and egress tests:** Confirm tier classification, evidence-packet
+  limits, hosted-inference eligibility, application-state controls, and safe
+  fallback behavior.
 - **End-to-end validation:** Source coverage through rendered briefing,
   including provenance, privacy, deduplication, presentation budgets, and no
   external writes.
@@ -540,6 +596,7 @@ The local deployment boundary includes:
 - One application-owned local SQLite database for durable correction,
   disposition, run, briefing, provenance, and configuration-reference state
 - macOS Keychain for connector credentials and secret values
+- macOS Keychain for the OpenAI API key
 - On-demand execution
 - A replaceable scheduled-invocation adapter
 - Local structured logs with redaction
@@ -556,6 +613,8 @@ Operational documentation should eventually cover:
 
 - Credential expiration and reauthorization
 - OAuth registration, scope review, revocation, and connector disconnection
+- Provider-retention review, model availability, rate limits, cost controls,
+  and reduced-briefing fallback
 - Connector outage and partial briefing behavior
 - Local-state backup and restoration
 - Correction-state inspection and deletion
@@ -587,19 +646,34 @@ cloud connectors use provider-supported OAuth authorization-code flows, secret
 values remain in macOS Keychain, SQLite contains only non-secret authorization
 metadata, and read-only behavior is enforced in depth.
 
+The inference and provider boundary is resolved by
+[ADR-0006](../decisions/0006-adopt-provider-neutral-inference-with-openai.md):
+all model use crosses a provider-neutral boundary, OpenAI is the initial hosted
+provider, evidence egress is minimized and tiered by sensitivity, outputs are
+schema-validated, and hosted failure degrades explicitly.
+
 | Decision | Why it matters | Required timing |
 | --- | --- | --- |
 | Connector-specific accounts and scopes | Determines the exact authority, sensitivity, registration, refresh, and revocation behavior for each source | In each connector specification before authorization is enabled |
 | Connector-specific cache exceptions | Determines whether a source needs narrowly bounded persistence beyond the transient default | In each connector specification before its cache is enabled |
-| AI model and provider boundary | Determines privacy, data egress, structured inference, cost, and evaluation reproducibility | Before probabilistic inference |
+| OpenAI model and request configuration | Determines evaluated quality, cost, latency, endpoint eligibility, and exact provider behavior within the accepted inference boundary | Before probabilistic inference |
 | Local web framework and interaction design | Determines presentation and the required correction loop within the accepted local web direction | Before completing the usable v1 experience |
 | Scheduling mechanism | Determines morning reliability and host requirements | Before scheduled delivery |
 
-### Remaining minimum ADR before affected implementation
+### Minimum ADR status
 
-1. **Inference and model boundary:** Decide provider abstraction, local versus
-   hosted inference constraints, data egress, structured-output requirements,
-   versioning, and fallback behavior.
+The cross-cutting minimum ADRs previously identified before affected
+implementation are now accepted:
+
+1. Execution, runtime, and deployment boundary — ADR-0003
+2. Persistence and data lifecycle — ADR-0004
+3. Connector authentication and secrets — ADR-0005
+4. Inference and provider boundary — ADR-0006
+
+No additional cross-cutting minimum ADR is currently identified. Connector-
+specific specifications, inference-task specifications, evaluated model
+selection, and other decisions in the table above remain required before their
+affected capabilities are implemented.
 
 The local web framework, detailed interaction design, and scheduling mechanism
 require decisions before those portions of v1 are implemented, but they need
@@ -622,6 +696,9 @@ documents. The following dependencies remain unresolved:
   and representative evaluation data.
 - The product requires precision-first inference evaluation, but its minimum
   acceptance thresholds remain a product decision.
+- The exact OpenAI model and request configuration require representative
+  evaluation and verification of the project's current provider-retention
+  controls before probabilistic inference begins.
 - Scheduled morning delivery depends on the selected host being awake and a
   scheduler that has not been selected.
 
@@ -638,3 +715,4 @@ documents. The following dependencies remain unresolved:
 - [ADR-0003: Local-First Python Runtime](../decisions/0003-adopt-local-first-python-runtime.md)
 - [ADR-0004: SQLite and Bounded Local Data Lifecycle](../decisions/0004-adopt-sqlite-and-bounded-local-data-lifecycle.md)
 - [ADR-0005: OAuth and macOS Keychain](../decisions/0005-adopt-oauth-and-macos-keychain.md)
+- [ADR-0006: Provider-Neutral Inference with OpenAI](../decisions/0006-adopt-provider-neutral-inference-with-openai.md)
