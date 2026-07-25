@@ -120,10 +120,10 @@ These rules apply the Vision's
 5. Preserve enough margin for prayer, people, thoughtful judgment, creativity,
    and adaptation.
 
-> **TODO — Leadership Model:** Define Brad-specific focus counts, priority
-> tiers, energy patterns, leadership horizons, delegation thresholds,
-> protected rhythms, communication preferences, growth areas, and success
-> measures in the [Leadership Model](leadership-model.md).
+Brad-specific focus, energy patterns, leadership horizons, delegation
+thresholds, protected rhythms, communication preferences, growth areas, and
+success measures are defined in the
+[Leadership Model](leadership-model.md).
 
 ## Article VI — Communication, Truth, and Provenance
 

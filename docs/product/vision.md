@@ -115,10 +115,9 @@ Its greatest achievement will be helping Brad become a wiser, healthier, more
 faithful leader whose influence grows through people, systems, and ministries
 that continue to flourish long after individual tasks have been completed.
 
-> **TODO — Leadership Model:** Translate these outcomes into leadership
-> horizons, protected rhythms, stewardship responsibilities, growth areas, and
-> success measures in the
-> [Leadership Model](../foundations/leadership-model.md).
+These outcomes are expressed as leadership horizons, protected rhythms,
+stewardship responsibilities, growth areas, and success measures in the
+[Leadership Model](../foundations/leadership-model.md).
 
 ## Guiding ideas
 
