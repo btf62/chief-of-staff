@@ -29,3 +29,4 @@ decisions.
 | --- | --- | --- | --- |
 | [ADR-0001](0001-documentation-first-development.md) | Documentation-First Development | Accepted | 2026-07-25 |
 | [ADR-0002](0002-define-governing-document-authority.md) | Define Governing Document Authority and Exception Handling | Accepted | 2026-07-25 |
+| [ADR-0003](0003-adopt-local-first-python-runtime.md) | Adopt a Local-First Python Runtime | Accepted | 2026-07-25 |

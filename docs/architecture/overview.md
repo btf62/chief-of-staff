@@ -8,8 +8,9 @@
 This document defines the technical architecture required for
 [Daily Briefing v1](../product/features/daily-briefing-v1.md). It establishes
 system boundaries, information flow, security constraints, and decisions that
-must precede implementation without selecting a final runtime, persistence
-technology, AI provider, scheduler, or user interface.
+must precede implementation. It establishes the initial execution, runtime,
+deployment, and interaction direction while deferring persistence technology,
+AI provider, scheduler, secret storage, and specific web framework choices.
 
 The architecture is subordinate to the accepted
 [Product Vision](../product/vision.md) and
@@ -50,8 +51,8 @@ specification as the product contract.
 
 ## Architectural Principles
 
-1. Favor simplicity and local-first operation unless a clear requirement
-   demands otherwise.
+1. Use the accepted local-first execution model and favor simplicity unless a
+   clear requirement demands otherwise.
 2. Keep external systems authoritative for their records.
 3. Retrieve and persist no more source content than necessary.
 4. Preserve provenance for factual claims, inferences, and recommendations.
@@ -100,8 +101,8 @@ never either category of private runtime data.
 
 ## 2. Architectural Boundaries
 
-The architecture uses replaceable logical components. Version 1 may deploy
-several components in one local process; separation of responsibility does not
+The architecture uses replaceable logical components. Version 1 deploys these
+components in one local Python process; separation of responsibility does not
 imply separate services.
 
 | Component | Responsibility | Boundary |
@@ -117,7 +118,7 @@ imply separate services.
 | Briefing composer | Produce the canonical briefing from selected structured content | Must obey presentation and agency budgets |
 | Policy and output validator | Check provenance, privacy, duplication, confidence disclosures, length, and external-write boundaries | May reject or downgrade output |
 | Evaluation harness | Run deterministic, connector, inference, regression, and end-to-end scenarios | Uses synthetic, redacted, or access-controlled data |
-| User interface boundary | Present briefing output and correction controls | Final interface remains an open product decision |
+| User interface boundary | Present briefing output and correction controls | Uses a lightweight local web interface; specific framework and interaction design remain open |
 
 Each boundary should expose structured inputs and outputs so deterministic
 logic, language-model judgment, persistence, and presentation can be tested
@@ -456,10 +457,13 @@ Scheduled invocation must report:
 - Run time and generated briefing version
 
 The delivery boundary returns a structured briefing, rendered presentation,
-coverage report, and correction controls. The final interface—local web,
-desktop, command line, email-to-self, or another presentation—is an open
-product and architecture decision. No delivery mechanism may send externally
-without an explicitly authorized policy.
+coverage report, and correction controls through a lightweight local web
+interface. The specific framework and detailed interaction design remain open.
+Command-line tools may support development and operations but are not the
+intended final user experience. No delivery mechanism may send externally
+without an explicitly authorized policy, and the local interface must not be
+exposed beyond the local machine or a trusted network without a separate
+security decision.
 
 ## 12. Evaluation and Testing Architecture
 
@@ -495,13 +499,14 @@ path.
 
 ## 13. Deployment and Operations
 
-The smallest viable operational footprint is a local application or service on
-Brad's current Mac. This is a preferred candidate, not an accepted deployment
-decision.
+The accepted initial deployment is a local, single-user Python application on
+Brad's current Mac. It runs as one process with clearly separated internal
+modules, as recorded in
+[ADR-0003](../decisions/0003-adopt-local-first-python-runtime.md).
 
 The local deployment boundary includes:
 
-- One application process or a small number of local processes
+- One application process
 - Persistent local correction, disposition, run, and configuration state
 - On-demand execution
 - A replaceable scheduled-invocation adapter
@@ -524,41 +529,43 @@ Operational documentation should eventually cover:
 - Health checks and missed-run recovery
 
 Connector, persistence, inference, composer, and delivery boundaries should
-remain portable enough to permit a later hosted or dedicated-machine
-deployment without designing a distributed system now.
+remain portable from Brad's current Mac to a future always-on Mac mini with
+minimal change. They should also permit a later hosted deployment without
+designing a distributed system now.
 
 ## 14. Open Architecture Decisions
 
+The execution, runtime, and initial deployment boundary is resolved by
+[ADR-0003](../decisions/0003-adopt-local-first-python-runtime.md):
+Version 1 is a single-user, local-first Python application deployed as one
+process on Brad's current Mac, with on-demand execution first and a lightweight
+local web interface as the preferred interaction direction.
+
 | Decision | Why it matters | Required timing |
 | --- | --- | --- |
-| Local-first versus hosted execution | Determines trust boundaries, availability, data egress, operations, and runtime shape | Before implementation |
-| Application runtime and process model | Determines project structure and the local deployment boundary | Before implementation |
 | SQLite versus another persistence layer | Determines correction history, projections, concurrency, backup, and deletion behavior | Before stateful implementation |
 | Authentication and secret storage | Determines connector authorization and credential risk | Before the first connector |
 | Retrieval versus local snapshot strategy | Determines source-content retention, offline behavior, evidence reproduction, and storage risk | Before connector data is persisted |
 | AI model and provider boundary | Determines privacy, data egress, structured inference, cost, and evaluation reproducibility | Before probabilistic inference |
-| Briefing and correction interface | Determines presentation and the required correction loop | Before completing the usable v1 experience |
+| Local web framework and interaction design | Determines presentation and the required correction loop within the accepted local web direction | Before completing the usable v1 experience |
 | Scheduling mechanism | Determines morning reliability and host requirements | Before scheduled delivery |
 | Retention, deletion, encryption, and backup policy | Determines privacy guarantees and operational recovery | Before persistent private data |
 
-### Minimum ADRs before implementation
+### Remaining minimum ADRs before affected implementation
 
-1. **Execution, runtime, and deployment boundary:** Decide local-first versus
-   hosted execution, initial application runtime, process model, and supported
-   host assumptions.
-2. **Persistence and data lifecycle:** Decide the persistence layer,
+1. **Persistence and data lifecycle:** Decide the persistence layer,
    append-oriented disposition history and projection model, source snapshot
    strategy, retention, deletion, encryption, and backup boundaries.
-3. **Connector authentication and secrets:** Decide authorization patterns,
+2. **Connector authentication and secrets:** Decide authorization patterns,
    token storage, least-privilege enforcement, and reauthorization behavior.
-4. **Inference and model boundary:** Decide provider abstraction, local versus
+3. **Inference and model boundary:** Decide provider abstraction, local versus
    hosted inference constraints, data egress, structured-output requirements,
    versioning, and fallback behavior.
 
-The briefing/correction interface and scheduling mechanism require decisions
-before those portions of v1 are implemented, but they need not block
-deterministic domain, connector-contract, or evaluation work if the boundaries
-remain replaceable.
+The local web framework, detailed interaction design, and scheduling mechanism
+require decisions before those portions of v1 are implemented, but they need
+not block deterministic domain, connector-contract, or evaluation work if the
+boundaries remain replaceable.
 
 ### Contradictions and unresolved dependencies
 
@@ -567,8 +574,8 @@ documents. The following dependencies remain unresolved:
 
 - Append-oriented audit history must be reconciled with user deletion and
   privacy requirements in the persistence and retention decision.
-- The correction loop is required for v1, but its user interface remains an
-  open product decision.
+- The correction loop and local web direction are required for v1, but the
+  specific framework and detailed interaction design remain open.
 - Connector account scopes, retrieval windows, freshness thresholds, and
   source-specific authorization remain to be defined in connector
   specifications.
@@ -576,10 +583,8 @@ documents. The following dependencies remain unresolved:
   and representative evaluation data.
 - The product requires precision-first inference evaluation, but its minimum
   acceptance thresholds remain a product decision.
-- Scheduled morning delivery depends on a host and scheduler that have not
-  been selected.
-- Local-first operation is preferred but not accepted until the deployment ADR
-  is reviewed.
+- Scheduled morning delivery depends on the selected host being awake and a
+  scheduler that has not been selected.
 
 ## Related Documents
 
@@ -591,3 +596,4 @@ documents. The following dependencies remain unresolved:
 - [Connector specifications](connectors/README.md)
 - [ADR-0001: Documentation-First Development](../decisions/0001-documentation-first-development.md)
 - [ADR-0002: Governing Document Authority](../decisions/0002-define-governing-document-authority.md)
+- [ADR-0003: Local-First Python Runtime](../decisions/0003-adopt-local-first-python-runtime.md)
