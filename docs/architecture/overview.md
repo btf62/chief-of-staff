@@ -10,8 +10,7 @@ This document defines the technical architecture required for
 system boundaries, information flow, security constraints, and decisions that
 must precede implementation. It establishes the initial execution, runtime,
 deployment, persistence, data-lifecycle, and interaction direction while
-deferring AI provider, scheduler, secret storage, and specific web framework
-choices.
+deferring AI provider, scheduler, and specific web framework choices.
 
 The architecture is subordinate to the accepted
 [Product Vision](../product/vision.md) and
@@ -109,7 +108,7 @@ imply separate services.
 | Component | Responsibility | Boundary |
 | --- | --- | --- |
 | Invocation and workday context | Resolve briefing date, timezone, workday status, invocation mode, and run identity | Does not select priorities or read source content |
-| Connector layer | Authenticate within approved scope and retrieve source-specific records | Read-only; does not infer meaning or mutate a source |
+| Connector layer | Authorize through the approved credential boundary and retrieve source-specific records | OAuth and Keychain by default for cloud sources; read-only and does not infer meaning or mutate a source |
 | Retrieval and snapshot layer | Coordinate connector runs, capture freshness and coverage, and retain only necessary retrieval material | Does not redefine source facts |
 | Normalization layer | Convert source-specific records into a common conceptual model while preserving raw references | Does not merge conflicts or create recommendations |
 | Identity and deduplication layer | Associate likely actors, records, and cross-source representations conservatively | Does not discard source records or hide ambiguity |
@@ -186,6 +185,14 @@ Every connector implements a common, read-only conceptual contract:
 Connectors must not rank priorities, infer commitments, or write to a source.
 They should return enough source context for downstream interpretation while
 minimizing copied content.
+
+Cloud connectors use provider-supported OAuth authorization-code flows by
+default and store secret values in macOS Keychain. Approved local repository
+context needs no remote credential when read from an approved local path.
+Exact accounts, resource boundaries, scopes, provider registration, refresh
+behavior, and revocation procedures belong in each connector specification.
+Read-only behavior is enforced through scopes, connector interfaces, and
+contract tests.
 
 Phase 1 requires connectors for:
 
@@ -416,23 +423,32 @@ remains in force.
   protection without being treated as complete application protection.
 - Backups are optional, deliberate, encrypted, bounded, and enabled only after
   their contents and restoration behavior are documented and tested.
+- Provider-supported OAuth authorization-code flows are the default for cloud
+  connectors.
+- macOS Keychain stores refresh tokens, persisted access tokens, client
+  secrets, and other approved secret values behind an application-owned
+  abstraction.
+- SQLite stores only non-secret authorization metadata and Keychain lookup
+  references.
+- Read-only access is enforced through least-privilege scopes, retrieval-only
+  interfaces, mutation rejection, and connector contract tests.
 
 The accepted persistence, retention, inspection, deletion, encryption, backup,
 and portability boundaries are defined in
 [ADR-0004](../decisions/0004-adopt-sqlite-and-bounded-local-data-lifecycle.md).
+The accepted authentication, authorization, secret-storage, revocation, and
+reauthorization boundaries are defined in
+[ADR-0005](../decisions/0005-adopt-oauth-and-macos-keychain.md).
 
 ### Remaining decisions and investigation
 
-- OAuth and connector-specific authentication flows
-- Platform-backed or application-managed secret storage
+- Exact provider scopes, account boundaries, OAuth registrations, and Keychain
+  entry design in each connector specification
 - Connector-specific cache exceptions within the accepted lifecycle boundary
 - Detailed backup tooling, rotation, restoration, and deletion procedures
 - Application-level encryption if a future threat model, backup method, or
   remote-access design requires it
 - Language-model data egress, retention, and provider privacy terms
-
-Secrets should use an operating-system-backed or equivalently protected store,
-but the specific mechanism is deferred.
 
 Connector specifications must identify when records may be referenced without
 persisting source content. Any cache exception must justify its content,
@@ -523,6 +539,7 @@ The local deployment boundary includes:
 - One application process
 - One application-owned local SQLite database for durable correction,
   disposition, run, briefing, provenance, and configuration-reference state
+- macOS Keychain for connector credentials and secret values
 - On-demand execution
 - A replaceable scheduled-invocation adapter
 - Local structured logs with redaction
@@ -538,6 +555,7 @@ and able to reach each source.
 Operational documentation should eventually cover:
 
 - Credential expiration and reauthorization
+- OAuth registration, scope review, revocation, and connector disconnection
 - Connector outage and partial briefing behavior
 - Local-state backup and restoration
 - Correction-state inspection and deletion
@@ -563,19 +581,23 @@ durable application state uses one local SQLite database, source persistence is
 minimal and bounded, correction history is append-oriented and deletable, and
 backup is optional, deliberate, and encrypted.
 
+The connector authentication and secret-storage boundary is resolved by
+[ADR-0005](../decisions/0005-adopt-oauth-and-macos-keychain.md):
+cloud connectors use provider-supported OAuth authorization-code flows, secret
+values remain in macOS Keychain, SQLite contains only non-secret authorization
+metadata, and read-only behavior is enforced in depth.
+
 | Decision | Why it matters | Required timing |
 | --- | --- | --- |
-| Authentication and secret storage | Determines connector authorization and credential risk | Before the first connector |
+| Connector-specific accounts and scopes | Determines the exact authority, sensitivity, registration, refresh, and revocation behavior for each source | In each connector specification before authorization is enabled |
 | Connector-specific cache exceptions | Determines whether a source needs narrowly bounded persistence beyond the transient default | In each connector specification before its cache is enabled |
 | AI model and provider boundary | Determines privacy, data egress, structured inference, cost, and evaluation reproducibility | Before probabilistic inference |
 | Local web framework and interaction design | Determines presentation and the required correction loop within the accepted local web direction | Before completing the usable v1 experience |
 | Scheduling mechanism | Determines morning reliability and host requirements | Before scheduled delivery |
 
-### Remaining minimum ADRs before affected implementation
+### Remaining minimum ADR before affected implementation
 
-1. **Connector authentication and secrets:** Decide authorization patterns,
-   token storage, least-privilege enforcement, and reauthorization behavior.
-2. **Inference and model boundary:** Decide provider abstraction, local versus
+1. **Inference and model boundary:** Decide provider abstraction, local versus
    hosted inference constraints, data egress, structured-output requirements,
    versioning, and fallback behavior.
 
@@ -593,9 +615,9 @@ documents. The following dependencies remain unresolved:
   retention and deletion policy before caching is enabled.
 - The correction loop and local web direction are required for v1, but the
   specific framework and detailed interaction design remain open.
-- Connector account scopes, retrieval windows, freshness thresholds, and
-  source-specific authorization remain to be defined in connector
-  specifications.
+- Connector account scopes, OAuth registration details, retrieval windows,
+  freshness thresholds, and source-specific authorization behavior remain to
+  be defined in connector specifications.
 - Cross-source actor identity and deduplication require conservative heuristics
   and representative evaluation data.
 - The product requires precision-first inference evaluation, but its minimum
@@ -615,3 +637,4 @@ documents. The following dependencies remain unresolved:
 - [ADR-0002: Governing Document Authority](../decisions/0002-define-governing-document-authority.md)
 - [ADR-0003: Local-First Python Runtime](../decisions/0003-adopt-local-first-python-runtime.md)
 - [ADR-0004: SQLite and Bounded Local Data Lifecycle](../decisions/0004-adopt-sqlite-and-bounded-local-data-lifecycle.md)
+- [ADR-0005: OAuth and macOS Keychain](../decisions/0005-adopt-oauth-and-macos-keychain.md)
