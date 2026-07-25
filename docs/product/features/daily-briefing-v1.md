@@ -11,15 +11,17 @@ Daily Briefing v1 is the first usable Chief of Staff product milestone. Each
 workday morning, it scans approved sources, separates signal from noise, and
 gives Brad a trustworthy starting point for the day.
 
-The briefing is read-only and advisory. It should take approximately five
-minutes to read, present clarity rather than completeness, and help Brad direct
-his attention without replacing the systems where the underlying records live.
+The briefing is read-only toward external systems and advisory. It may maintain
+bounded, inspectable local state so Brad can correct or disposition inferred
+items. It should take approximately five minutes to read, present clarity
+rather than completeness, and help Brad direct his attention without replacing
+the systems where the underlying records live.
 
 ## User Outcome
 
 After reading the briefing, Brad should be able to answer:
 
-1. What are the three most important outcomes today?
+1. What are the most important outcomes today, up to three?
 2. What is fixed on the calendar?
 3. What preparation is needed?
 4. Who is waiting on Brad?
@@ -47,13 +49,34 @@ Each source remains authoritative for its own records. The briefing may
 interpret and prioritize records across sources, but it must not replace,
 silently correct, or modify those systems.
 
+Product-owned local state is not an authoritative source for external records.
+It exists only to make briefing inferences correctable, prevent repeated false
+recommendations, and remember Brad's explicit disposition of an item.
+
 If a source is unavailable, stale, incomplete, or outside approved access, the
 briefing must disclose the limitation rather than implying complete coverage.
 
-## Required Briefing Structure
+## Presentation Budget
 
-The briefing must use the following sections in this order unless Brad gives an
-explicit current instruction to vary the presentation.
+The briefing should contain no more than 1,000 words, with 800 words or fewer
+preferred. Shorter is better when the day does not require more context.
+
+Sections with no material content should be omitted or collapsed to a concise
+statement. When sections are present, keep the canonical order below.
+
+Up Next, People Waiting on Brad, Commitments at Risk, and Important Tasks
+should normally contain no more than three items each. If an exceptional
+situation requires more, disclose why in the Chief of Staff Note and remain
+within the overall reading budget.
+
+Never add filler, low-confidence claims, or a manufactured priority merely to
+populate a section.
+
+## Canonical Briefing Structure
+
+The briefing uses the following sections when they contain material
+information, unless Brad gives an explicit current instruction to vary the
+presentation.
 
 ### 1. Chief of Staff Note
 
@@ -69,9 +92,14 @@ The note should explain:
 Distinguish source facts from recommendations. Avoid generic encouragement,
 restating the remainder of the briefing, or presenting inference as certainty.
 
-### 2. Today's Three Outcomes
+### 2. Today's Outcomes
 
-Recommend exactly three primary outcomes. Each outcome must include:
+Recommend no more than three primary outcomes. Normally the briefing should
+identify three, but it may include fewer when the available evidence does not
+support three meaningful outcomes. Never manufacture a third outcome to
+satisfy the format.
+
+Each outcome must include:
 
 - The desired result
 - Why it matters today
@@ -135,11 +163,15 @@ For each item, include:
 - The person
 - What the person appears to be waiting for
 - How long the person has been waiting, or that the duration is unknown
+- Whether the expectation is explicit or inferred
+- Why an inferred item appeared
 - The relevant source link
 - A recommended next action
 
 Prioritize trust, relationship consequences, and explicit commitments rather
-than email age alone. Clearly label inferred expectations.
+than email age alone. Clearly label inferred expectations and prioritize
+precision over recall: omit a questionable inference rather than present a
+false relationship claim with unwarranted confidence.
 
 ### 7. Commitments at Risk
 
@@ -154,15 +186,18 @@ Surface meaningful commitments that appear:
 
 Every commitment should remain accounted for until it is completed, delegated,
 intentionally abandoned, or consciously rescheduled. Include the source,
-current state, apparent risk, and recommended disposition.
+current state, apparent risk, recommended disposition, and whether the
+commitment is explicit or inferred. Every inferred commitment must explain the
+evidence and reasoning that caused it to appear.
 
 Daily Briefing v1 must not automatically create tasks, change dates, or alter a
-source system.
+source system. Prefer precision over recall: omit a weak commitment inference
+rather than present it as fact.
 
 ### 8. Important Tasks
 
 Show only Todoist, Jira, or Asana work that materially affects today. Avoid
-duplicating items already represented in Today's Three Outcomes, Preparation
+duplicating items already represented in Today's Outcomes, Preparation
 Needed, People Waiting on Brad, or Commitments at Risk.
 
 Source status and ownership must remain visible when they affect the
@@ -242,6 +277,65 @@ Example source-coverage disclosure:
 The briefing must not imply that absence from the approved source set proves
 that no relevant work or commitment exists.
 
+## Inference and Evaluation Standard
+
+Relationship and commitment inferences carry a higher trust risk than direct
+source display. Daily Briefing v1 must therefore:
+
+- Classify a commitment or waiting item as **explicit** when an authoritative
+  source contains a direct request, promise, assignment, acknowledgment
+  obligation, or deadline.
+- Classify it as **inferred** when the expectation or commitment is derived
+  from context rather than directly stated.
+- Explain why every inferred item appeared and link the evidence used.
+- Prioritize precision over recall for People Waiting on Brad and Commitments
+  at Risk.
+- Track Brad's corrections and dispositions so the same mistake is not
+  repeated from materially unchanged evidence.
+
+Before the feature is accepted, evaluate it against representative,
+human-reviewed scenarios. The evaluation set should include explicit and
+inferred commitments, false-positive candidates, cross-source duplicates,
+conflicting sources, source outages, priority tradeoffs, and previously
+corrected items.
+
+Measure precision separately for People Waiting on Brad and Commitments at
+Risk. Review false positives and repeated mistakes explicitly. Recall may be
+observed diagnostically, but it must not be improved by flooding the briefing
+with questionable inferences. Brad must review the representative results
+before the feature is accepted.
+
+Use synthetic, redacted, or access-controlled scenarios so evaluation does not
+place private source content in the repository.
+
+## Local State and Correction Loop
+
+Daily Briefing v1 must provide a way for Brad to inspect, correct, and
+disposition inferred items. The exact interface is deferred, but the behavior
+is required for v1.
+
+Local state must support at least these dispositions:
+
+- Confirmed
+- Corrected
+- Dismissed
+- Delegated
+- Rescheduled
+- Completed
+- Intentionally abandoned
+
+Each local record should preserve the source reference, the original
+inference, Brad's correction or disposition, and enough timestamped history to
+explain why the item is or is not shown again.
+
+Local disposition controls briefing interpretation and presentation; it does
+not rewrite the external source. If local state and an authoritative source
+conflict, disclose or resolve the conflict rather than silently treating the
+source as modified.
+
+Brad must be able to inspect, correct, and delete persistent local conclusions
+where technically possible, consistent with the Constitution.
+
 ## Privacy and Data Minimization
 
 The briefing must follow the Constitution's privacy and affected-party
@@ -259,7 +353,8 @@ protections.
 
 ## Agency Boundaries
 
-Daily Briefing v1 is read-only and advisory.
+Daily Briefing v1 is advisory and read-only toward external systems. Writes to
+the bounded local correction state described above are permitted.
 
 It may recommend:
 
@@ -279,7 +374,8 @@ It must not:
 - Take any other external action
 
 Generating the briefing must not write to an external source, even when a
-recommended action appears obvious or reversible.
+recommended action appears obvious or reversible. Local-state writes must be
+inspectable and limited to briefing correction, disposition, and explanation.
 
 ## Tone and Presentation
 
@@ -324,18 +420,22 @@ The following sources and capabilities are outside Daily Briefing v1:
 
 | ID | Criterion |
 | --- | --- |
-| AC-01 | Brad can read a representative briefing in approximately five minutes. |
-| AC-02 | The briefing recommends exactly three primary outcomes, each with a desired result, reason, relevant deadline or dependency, and authoritative source link. |
-| AC-03 | A selective next tier remains visible without reproducing a full task list or overwhelming the five-minute reading budget. |
-| AC-04 | Calendar commitments appear in chronological order and correctly connect to known preparation, transition, and conflict concerns. |
-| AC-05 | People waiting on Brad are surfaced with the apparent expectation, waiting duration or an explicit unknown, source link, and suggested action. |
-| AC-06 | Overdue, approaching, stale, postponed, blocked, or actionless commitments are identified with their source and recommended disposition. |
-| AC-07 | An item is not repeated across briefing sections unless the repeated placement adds necessary, non-duplicative context. |
-| AC-08 | Missing, unavailable, conflicting, incomplete, or stale source data is explicitly disclosed. |
-| AC-09 | Factual claims and recommendations can be traced to authoritative sources and applicable governing context where practical. |
-| AC-10 | Generating the briefing creates no external writes and modifies no source system. |
-| AC-11 | Sensitive content is minimized and handled consistently with the Constitution's privacy and affected-party protections. |
-| AC-12 | After reading the briefing, Brad can identify what to do, what can wait, and what is approaching. |
+| AC-01 | Brad can read a representative briefing in approximately five minutes; it contains no more than 1,000 words, with 800 words or fewer preferred. |
+| AC-02 | The briefing recommends no more than three primary outcomes, each with a desired result, reason, relevant deadline or dependency, and authoritative source link; it includes fewer when three meaningful outcomes are not supported. |
+| AC-03 | Up Next, People Waiting on Brad, Commitments at Risk, and Important Tasks normally contain no more than three items each; any exception is disclosed and remains within the reading budget. |
+| AC-04 | Empty or immaterial sections are omitted or collapsed, and sections that appear retain the canonical order. |
+| AC-05 | Calendar commitments appear in chronological order and correctly connect to known preparation, transition, and conflict concerns. |
+| AC-06 | People waiting on Brad are surfaced with the apparent expectation, waiting duration or an explicit unknown, explicit-or-inferred classification, explanation for inference, source link, and suggested action. |
+| AC-07 | Overdue, approaching, stale, postponed, blocked, or actionless commitments are identified with their source, explicit-or-inferred classification, inference explanation when applicable, and recommended disposition. |
+| AC-08 | An item is not repeated across briefing sections unless the repeated placement adds necessary, non-duplicative context. |
+| AC-09 | Missing, unavailable, conflicting, incomplete, or stale source data is explicitly disclosed. |
+| AC-10 | Factual claims and recommendations can be traced to authoritative sources and applicable governing context where practical. |
+| AC-11 | Generating the briefing creates no external writes and modifies no source system; any local write is limited to inspectable correction or disposition state. |
+| AC-12 | Sensitive content is minimized and handled consistently with the Constitution's privacy and affected-party protections. |
+| AC-13 | Brad can inspect, correct, dismiss, confirm, delegate, reschedule, complete, intentionally abandon, or delete supported local conclusions without modifying an external source. |
+| AC-14 | A corrected or dismissed false inference does not recur from materially unchanged evidence. |
+| AC-15 | Representative, human-reviewed scenarios evaluate People Waiting on Brad and Commitments at Risk separately, with precision treated as the primary trust measure and false positives explicitly reviewed. |
+| AC-16 | After reading the briefing, Brad can identify what to do, what can wait, and what is approaching. |
 
 ## Open Questions
 
@@ -348,7 +448,12 @@ The following questions require later product or architecture decisions:
 - What freshness threshold applies to each source?
 - How should duplicate or conflicting items across task systems be recognized?
 - How should confidence be represented without adding visual noise?
-- How should Brad record corrections or dismiss recommendations?
+- Through what interface should Brad inspect, correct, or disposition
+  recommendations?
+- How should local correction state be retained, secured, synchronized, and
+  reconciled with later source changes?
+- What representative evaluation corpus and minimum precision threshold should
+  be required before acceptance?
 - What approved source scopes and access boundaries are required?
 
 Do not resolve these questions through implementation assumptions. Record

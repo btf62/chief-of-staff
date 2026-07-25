@@ -173,8 +173,12 @@ correspondence analysis, scheduling recommendations, and the daily-start
 experience is defined in the
 [Daily Briefing v1 specification](../product/features/daily-briefing-v1.md).
 
+Daily Briefing v1 also defines bounded, inspectable local state for corrections
+and dispositions.
+
 > **TODO — Future Product Requirements:** Define any future approval-based
-> automation and inspectable product memory in the
+> automation or broader product memory beyond the Daily Briefing correction
+> loop in the
 > [Product Requirements](../product/requirements.md) and applicable
 > [feature specifications](../product/features/README.md).
 

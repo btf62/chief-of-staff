@@ -1,7 +1,7 @@
 # Product Requirements
 
 - **Status:** Draft
-- **Owner:** TBD
+- **Owner:** Brad
 - **Last updated:** 2026-07-25
 
 ## Responsibility
@@ -19,9 +19,11 @@ sources, separates signal from noise, recommends priorities, identifies
 preparation, surfaces commitments and people waiting on Brad, and shows
 approaching work.
 
-Daily Briefing v1 is read-only and advisory. Source systems remain
-authoritative; the product provides a unified interpretation rather than
-replacing or modifying them.
+Daily Briefing v1 is read-only toward external systems and advisory. Source
+systems remain authoritative; the product provides a unified interpretation
+rather than replacing or modifying them. It may maintain bounded, inspectable
+local state so Brad can correct or disposition inferred items and prevent
+repeated false recommendations.
 
 ## Delivery phases
 
@@ -42,6 +44,8 @@ All product capabilities must:
 - Minimize sensitive information and protect affected third parties.
 - Present clarity rather than completeness.
 - Stay within explicitly approved access and agency boundaries.
+- Make persistent conclusions and local correction state inspectable,
+  correctable, and deletable where technically possible.
 
 ## Feature index
 
@@ -58,7 +62,6 @@ Detailed feature specifications belong in the
   [technical architecture](../architecture/overview.md) and
   [decision records](../decisions/README.md).
 - No production data should be used during discovery.
-- TBD
 
 ## Out of scope
 
