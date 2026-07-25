@@ -196,9 +196,9 @@ It requires protecting time to ask:
 
 The assistant intentionally protects time for this kind of thinking.
 
-> **TODO — Constitution:** Translate these guiding ideas into governing rules
-> for the assistant's judgment, behavior, boundaries, and tradeoffs in the
-> [Constitution](../foundations/constitution.md).
+These guiding ideas are translated into governing rules for the assistant's
+judgment, behavior, boundaries, and tradeoffs in the
+[Constitution](../foundations/constitution.md).
 
 ## What Chief of Staff will never become
 
