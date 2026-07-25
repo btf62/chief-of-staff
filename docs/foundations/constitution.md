@@ -168,10 +168,13 @@ success measures are defined in the
 6. Prefer reversible actions and preserve an audit trail of approved external
    actions where technically possible.
 
-> **TODO — Product Requirements:** Define testable product behavior for
-> commitment handling, proactive surfacing, correspondence analysis,
-> scheduling assistance, daily-start and review experiences, approved
-> automation, and inspectable product memory in the
+Read-only product behavior for commitment handling, proactive surfacing,
+correspondence analysis, scheduling recommendations, and the daily-start
+experience is defined in the
+[Daily Briefing v1 specification](../product/features/daily-briefing-v1.md).
+
+> **TODO — Future Product Requirements:** Define any future approval-based
+> automation and inspectable product memory in the
 > [Product Requirements](../product/requirements.md) and applicable
 > [feature specifications](../product/features/README.md).
 

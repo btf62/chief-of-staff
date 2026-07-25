@@ -12,4 +12,4 @@ when creating a specification.
 
 | Feature | Milestone | Status |
 | --- | --- | --- |
-| [Daily Briefing v1](daily-briefing-v1.md) | First usable product | Draft |
+| [Daily Briefing v1](daily-briefing-v1.md) | First usable product | Proposed |

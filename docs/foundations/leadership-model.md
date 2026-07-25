@@ -242,12 +242,8 @@ turning coaching into hidden evaluation or surveillance:
 - Building leaders.
 - Increasing faithfulness to Brad's calling.
 
-> **TODO — Product Requirements:** Keep the first usable product narrowly
-> focused on a trustworthy Daily Briefing that scans approved sources,
-> separates signal from noise, recommends priorities, identifies preparation,
-> surfaces commitments, identifies people waiting on Brad, and shows
-> approaching work. Define how that product may use leadership horizons,
-> protected rhythms, planning, and delegation context in the
-> [Product Requirements](../product/requirements.md) and applicable
-> [feature specifications](../product/features/README.md) without turning this
-> descriptive model into rigid scheduling or hidden scoring.
+The first usable product is the
+[Daily Briefing v1](../product/features/daily-briefing-v1.md), which uses
+leadership horizons, protected rhythms, planning, and delegation context
+without turning this descriptive model into rigid scheduling or hidden
+scoring.

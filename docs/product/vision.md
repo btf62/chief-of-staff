@@ -218,10 +218,9 @@ Technology serves ministry.
 
 Technology never becomes the ministry.
 
-> **TODO — Product Requirements:** Translate these anti-goals and the desired
-> outcomes above into explicit scope, cross-feature requirements, delivery
-> phases, and acceptance boundaries in the
-> [Product Requirements](requirements.md).
+These anti-goals and desired outcomes are reflected in the
+[Product Requirements](requirements.md) and the
+[Daily Briefing v1 specification](features/daily-briefing-v1.md).
 
 ## The north star
 

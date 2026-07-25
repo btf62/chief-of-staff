@@ -12,25 +12,42 @@ links to detailed, implementable feature specifications.
 
 ## Product scope
 
-TBD. Summarize the approved product boundary and current phase.
+The first product phase is narrowly focused on
+[Daily Briefing v1](features/daily-briefing-v1.md), a trustworthy,
+approximately five-minute workday-morning briefing for Brad. It scans approved
+sources, separates signal from noise, recommends priorities, identifies
+preparation, surfaces commitments and people waiting on Brad, and shows
+approaching work.
+
+Daily Briefing v1 is read-only and advisory. Source systems remain
+authoritative; the product provides a unified interpretation rather than
+replacing or modifying them.
 
 ## Delivery phases
 
 | Phase | Intended outcome | Status |
 | --- | --- | --- |
-| Daily Briefing v1 | TBD | Draft |
+| [Daily Briefing v1](features/daily-briefing-v1.md) | A trusted daily starting point that clarifies today's outcomes, commitments, preparation, relationships, and approaching work | Proposed |
 
 ## Cross-feature requirements
 
-TBD. Capture requirements that apply consistently across multiple features,
-such as privacy, security, authorization, accessibility, auditability,
-reliability, and source-system authority.
+All product capabilities must:
+
+- Remain subordinate to the [Vision](vision.md) and
+  [Constitution](../foundations/constitution.md).
+- Use the [Leadership Model](../foundations/leadership-model.md) as descriptive
+  context rather than a fixed schedule or hidden scoring model.
+- Preserve source-system authority and identify provenance, uncertainty, stale
+  data, and conflicts.
+- Minimize sensitive information and protect affected third parties.
+- Present clarity rather than completeness.
+- Stay within explicitly approved access and agency boundaries.
 
 ## Feature index
 
 | Feature | Specification | Status |
 | --- | --- | --- |
-| Daily Briefing v1 | [Specification](features/daily-briefing-v1.md) | Draft |
+| Daily Briefing v1 | [Specification](features/daily-briefing-v1.md) | Proposed |
 
 Detailed feature specifications belong in the
 [feature specifications directory](features/README.md).
@@ -46,10 +63,13 @@ Detailed feature specifications belong in the
 ## Out of scope
 
 - Functional implementation during repository initialization.
+- Rock RMS, Church Online Platform, ministry analytics, dashboards, and
+  autonomous actions in Daily Briefing v1.
 - Ideas explicitly deferred in [future ideas](future-ideas.md).
 
 ## Acceptance
 
-This document may move to `Proposed` when scope and phases are clear,
-cross-feature requirements are testable, detailed feature specifications are
-linked, and key privacy and security questions have owners.
+This top-level PRD remains `Draft` until its cross-feature requirements,
+architecture dependencies, privacy and security decisions, and ownership are
+reviewed. Daily Briefing v1 may be reviewed independently through its linked
+feature specification.
