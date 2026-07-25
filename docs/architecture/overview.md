@@ -9,8 +9,9 @@ This document defines the technical architecture required for
 [Daily Briefing v1](../product/features/daily-briefing-v1.md). It establishes
 system boundaries, information flow, security constraints, and decisions that
 must precede implementation. It establishes the initial execution, runtime,
-deployment, and interaction direction while deferring persistence technology,
-AI provider, scheduler, secret storage, and specific web framework choices.
+deployment, persistence, data-lifecycle, and interaction direction while
+deferring AI provider, scheduler, secret storage, and specific web framework
+choices.
 
 The architecture is subordinate to the accepted
 [Product Vision](../product/vision.md) and
@@ -196,15 +197,17 @@ Phase 1 requires connectors for:
 - Approved Google Drive content
 - Approved repository context
 
-Connector-specific retrieval rules, permissions, freshness semantics, and
-failure behavior belong in the
+Connector-specific retrieval rules, permissions, freshness semantics, bounded
+cache exceptions, and failure behavior belong in the
 [planned connector specifications](connectors/README.md#planned-specifications).
 This overview defines only their common boundary.
 
 ## 5. Internal Information Model
 
-The information model is conceptual and does not prescribe final database
-tables or serialization formats.
+SQLite is the accepted persistence layer, but this information model remains
+conceptual and does not prescribe final database tables or serialization
+formats. The persistence and data-lifecycle boundaries are recorded in
+[ADR-0004](../decisions/0004-adopt-sqlite-and-bounded-local-data-lifecycle.md).
 
 Every stored or transient item should distinguish:
 
@@ -260,14 +263,14 @@ Each disposition links to stable source evidence and records:
 - Optional explanation
 - Processing or policy version
 
-An append-oriented disposition history plus a derived current-state projection
-is preferred because it makes changes inspectable and supports regression
-testing. This is a logical pattern, not a decision about a specific database.
+SQLite stores an append-oriented disposition history and a derived
+current-state projection. This pattern makes changes inspectable and supports
+regression testing without destructively replacing history.
 
 The history is append-oriented rather than absolutely immutable. A privacy or
 deletion request must be able to remove sensitive payloads and dependent
-indexes. Whether a minimal non-sensitive tombstone may remain for recurrence
-prevention depends on the future retention and deletion policy.
+indexes. A minimal non-sensitive tombstone or fingerprint may remain only when
+necessary to prevent recurrence and permitted by the accepted deletion policy.
 
 To prevent recurrence:
 
@@ -403,26 +406,37 @@ remains in force.
 - Local conclusions and correction state remain inspectable, correctable, and
   deletable.
 - Evaluation uses synthetic, redacted, or access-controlled scenarios.
+- Application-owned durable state uses one local SQLite database with
+  transactions, foreign-key enforcement, and explicit migrations.
+- Runtime database files, backups, private exports, and private evaluation data
+  remain outside Git.
+- Full source payloads are transient by default; persisted facts and excerpts
+  are limited to what explanation and provenance require.
+- macOS account security and full-disk encryption provide baseline host
+  protection without being treated as complete application protection.
+- Backups are optional, deliberate, encrypted, bounded, and enabled only after
+  their contents and restoration behavior are documented and tested.
 
-### Decisions requiring ADRs or investigation
+The accepted persistence, retention, inspection, deletion, encryption, backup,
+and portability boundaries are defined in
+[ADR-0004](../decisions/0004-adopt-sqlite-and-bounded-local-data-lifecycle.md).
+
+### Remaining decisions and investigation
 
 - OAuth and connector-specific authentication flows
 - Platform-backed or application-managed secret storage
-- Local database and snapshot encryption boundaries
-- Source snapshot retention and deletion periods
-- Whether and how local state is included in backups
-- Backup encryption, restoration, and deletion propagation
+- Connector-specific cache exceptions within the accepted lifecycle boundary
+- Detailed backup tooling, rotation, restoration, and deletion procedures
+- Application-level encryption if a future threat model, backup method, or
+  remote-access design requires it
 - Language-model data egress, retention, and provider privacy terms
 
 Secrets should use an operating-system-backed or equivalently protected store,
-but the specific mechanism is deferred. Local disk encryption may reduce risk
-but does not by itself resolve application access, backup, export, or deletion
-requirements.
+but the specific mechanism is deferred.
 
-Retention defaults should be the shortest periods that still support briefing
-quality, corrections, evaluation, and auditability. Connector specifications
-must identify when records may be referenced without persisting source
-content.
+Connector specifications must identify when records may be referenced without
+persisting source content. Any cache exception must justify its content,
+purpose, retention period, and deletion behavior within ADR-0004.
 
 ## 11. Scheduling and Delivery Boundary
 
@@ -445,8 +459,8 @@ is a workday.
 
 A run coordinator prevents concurrent duplicate runs for the same briefing
 date and profile. An intentional refresh creates a new run version rather than
-silently replacing the earlier result. The final idempotency and retention
-semantics depend on the persistence decision.
+silently replacing the earlier result. SQLite records run versions
+transactionally; exact idempotency keys remain an implementation detail.
 
 Scheduled invocation must report:
 
@@ -507,13 +521,15 @@ modules, as recorded in
 The local deployment boundary includes:
 
 - One application process
-- Persistent local correction, disposition, run, and configuration state
+- One application-owned local SQLite database for durable correction,
+  disposition, run, briefing, provenance, and configuration-reference state
 - On-demand execution
 - A replaceable scheduled-invocation adapter
 - Local structured logs with redaction
 - Health checks for persistence, configuration, and connector availability
 - Connector-level failure and freshness visibility
-- Optional encrypted backup after retention and backup policy are decided
+- Optional encrypted backup after its contents, bounded retention, restoration,
+  and deletion behavior are documented and tested
 
 The design must not assume a dedicated Mac mini or always-on host is available.
 Scheduled runs depend on the selected host being awake, connected, authorized,
@@ -541,24 +557,25 @@ Version 1 is a single-user, local-first Python application deployed as one
 process on Brad's current Mac, with on-demand execution first and a lightweight
 local web interface as the preferred interaction direction.
 
+The persistence and data-lifecycle boundary is resolved by
+[ADR-0004](../decisions/0004-adopt-sqlite-and-bounded-local-data-lifecycle.md):
+durable application state uses one local SQLite database, source persistence is
+minimal and bounded, correction history is append-oriented and deletable, and
+backup is optional, deliberate, and encrypted.
+
 | Decision | Why it matters | Required timing |
 | --- | --- | --- |
-| SQLite versus another persistence layer | Determines correction history, projections, concurrency, backup, and deletion behavior | Before stateful implementation |
 | Authentication and secret storage | Determines connector authorization and credential risk | Before the first connector |
-| Retrieval versus local snapshot strategy | Determines source-content retention, offline behavior, evidence reproduction, and storage risk | Before connector data is persisted |
+| Connector-specific cache exceptions | Determines whether a source needs narrowly bounded persistence beyond the transient default | In each connector specification before its cache is enabled |
 | AI model and provider boundary | Determines privacy, data egress, structured inference, cost, and evaluation reproducibility | Before probabilistic inference |
 | Local web framework and interaction design | Determines presentation and the required correction loop within the accepted local web direction | Before completing the usable v1 experience |
 | Scheduling mechanism | Determines morning reliability and host requirements | Before scheduled delivery |
-| Retention, deletion, encryption, and backup policy | Determines privacy guarantees and operational recovery | Before persistent private data |
 
 ### Remaining minimum ADRs before affected implementation
 
-1. **Persistence and data lifecycle:** Decide the persistence layer,
-   append-oriented disposition history and projection model, source snapshot
-   strategy, retention, deletion, encryption, and backup boundaries.
-2. **Connector authentication and secrets:** Decide authorization patterns,
+1. **Connector authentication and secrets:** Decide authorization patterns,
    token storage, least-privilege enforcement, and reauthorization behavior.
-3. **Inference and model boundary:** Decide provider abstraction, local versus
+2. **Inference and model boundary:** Decide provider abstraction, local versus
    hosted inference constraints, data egress, structured-output requirements,
    versioning, and fallback behavior.
 
@@ -572,8 +589,8 @@ boundaries remain replaceable.
 No direct contradiction exists among the current product and governing
 documents. The following dependencies remain unresolved:
 
-- Append-oriented audit history must be reconciled with user deletion and
-  privacy requirements in the persistence and retention decision.
+- Connector-specific cache needs must be justified and assigned a bounded
+  retention and deletion policy before caching is enabled.
 - The correction loop and local web direction are required for v1, but the
   specific framework and detailed interaction design remain open.
 - Connector account scopes, retrieval windows, freshness thresholds, and
@@ -597,3 +614,4 @@ documents. The following dependencies remain unresolved:
 - [ADR-0001: Documentation-First Development](../decisions/0001-documentation-first-development.md)
 - [ADR-0002: Governing Document Authority](../decisions/0002-define-governing-document-authority.md)
 - [ADR-0003: Local-First Python Runtime](../decisions/0003-adopt-local-first-python-runtime.md)
+- [ADR-0004: SQLite and Bounded Local Data Lifecycle](../decisions/0004-adopt-sqlite-and-bounded-local-data-lifecycle.md)
