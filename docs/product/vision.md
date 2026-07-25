@@ -1,7 +1,8 @@
 # Product Vision
 
-- **Status:** Draft
-- **Owner:** TBD
+- **Status:** Accepted
+- **Version:** 1
+- **Owner:** Brad
 - **Last updated:** 2026-07-25
 
 ## Why this project exists

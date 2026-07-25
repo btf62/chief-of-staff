@@ -13,8 +13,9 @@ areas in which coaching is most valuable. It personalizes the
 
 The Leadership Model is descriptive rather than constitutional. It informs how
 Chief of Staff should adapt its recommendations, but it does not override the
-Constitution or prescribe software behavior. Brad's explicit current
-instruction remains authoritative when his circumstances change.
+Vision or Constitution and does not prescribe software behavior. Brad's
+explicit current instruction governs present execution within those boundaries
+and may supersede this descriptive model when his circumstances change.
 
 Include only the minimum operationally necessary personal context and follow
 the repository's
@@ -29,9 +30,13 @@ connect today's work to the longer responsibilities it serves.
 | --- | --- |
 | **Today** | Execute today's commitments faithfully. |
 | **This Week** | Deliver recurring ministry rhythms, including scripts, video production, follow-up, and meetings. |
-| **Six Months** | Advance agreed ministry goals and performance commitments. |
-| **This Season** | Move strategic initiatives and major projects forward. |
+| **This Season** | Use a rolling, approximately 90-day execution horizon to move strategic initiatives and major projects forward. |
+| **Six Months** | Advance Brad's official ministry goals, organizational commitments, and performance goals. |
 | **Calling** | Grow as a disciple, shepherd, husband, father, leader, and builder of lasting ministries. |
+
+The six-month horizon has special importance because it represents formally
+agreed goals and commitments. Seasonal execution should advance those goals
+rather than displace them.
 
 ## Primary Stewardships
 
@@ -154,9 +159,19 @@ discernment, or Brad's decision.
 
 ## Weekly Ministry Rhythm
 
-The following is Brad's normal operating rhythm. It is a default planning
-pattern rather than a fixed schedule; ministry, family, seasonal demands, and
-explicit calendar commitments may require adjustment.
+The Leadership Model should primarily contain durable leadership context. The
+weekly rhythm below remains here as current contextual guidance, but it is not
+a fixed schedule and must never override the live calendar. Google Calendar is
+authoritative for any particular day or week.
+
+Ministry, family, seasonal demands, and explicit calendar commitments may
+require adjustment.
+
+> **TODO — Private operating profile:** Move exact meeting times, named
+> participants, current weekly meetings, retreat dates, and other frequently
+> changing operating details to a private or ignored operating-profile or
+> configuration source. This separation should reduce staleness and protect
+> private operational information while preserving durable context here.
 
 ### Monday
 
@@ -227,10 +242,12 @@ turning coaching into hidden evaluation or surveillance:
 - Building leaders.
 - Increasing faithfulness to Brad's calling.
 
-> **TODO — Product Requirements:** Define how approved product behavior may
-> represent leadership horizons, account for protected rhythms, support
-> planning and delegation, and adapt recommendations to this model in the
+> **TODO — Product Requirements:** Keep the first usable product narrowly
+> focused on a trustworthy Daily Briefing that scans approved sources,
+> separates signal from noise, recommends priorities, identifies preparation,
+> surfaces commitments, identifies people waiting on Brad, and shows
+> approaching work. Define how that product may use leadership horizons,
+> protected rhythms, planning, and delegation context in the
 > [Product Requirements](../product/requirements.md) and applicable
-> [feature specifications](../product/features/README.md). The implementation
-> should not turn this descriptive context into rigid scheduling or hidden
-> scoring.
+> [feature specifications](../product/features/README.md) without turning this
+> descriptive model into rigid scheduling or hidden scoring.
