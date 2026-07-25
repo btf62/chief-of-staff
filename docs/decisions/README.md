@@ -25,4 +25,6 @@ decisions.
 
 ## Decision index
 
-No decisions have been recorded.
+| ADR | Title | Status | Date |
+| --- | --- | --- | --- |
+| [ADR-0001](0001-documentation-first-development.md) | Documentation-First Development | Accepted | 2026-07-25 |
