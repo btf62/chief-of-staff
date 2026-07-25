@@ -195,10 +195,14 @@ and dispositions.
 6. Build technology that multiplies people's effectiveness rather than making
    them dependent on it.
 
-> **TODO — Architecture and ADRs:** Define source-system authority,
-> integration boundaries, provenance, and technical conflict handling in the
-> [Architecture](../architecture/overview.md) and an accepted
-> [architecture decision record](../decisions/README.md).
+Source-system authority, integration boundaries, provenance, and technical
+conflict handling are defined in the
+[Architecture](../architecture/overview.md).
+
+> **TODO — Architecture Decisions:** Record and accept the material deployment,
+> persistence, authentication, privacy, and inference choices in
+> [architecture decision records](../decisions/README.md) before
+> implementation.
 
 ## Article IX — Privacy and Affected Parties
 
