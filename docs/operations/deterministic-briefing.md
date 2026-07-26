@@ -40,22 +40,31 @@ The reduced pipeline:
    provenance.
 5. Collapses only semantically identical copies with the same source-owned
    identity and preserves conflicting records.
-6. Selects factual items using visible deterministic priority inputs.
-7. Builds a structured plan in the canonical Daily Briefing order, omitting
-   sections without material content.
-8. Renders Markdown and validates provenance, duplicate keys, section order,
-   section item limits, the 150-word note limit, and the 1,000-word briefing
-   maximum.
+6. Retains approved governing context for pipeline use without rendering
+   context documents as standalone daily items.
+7. Classifies Calendar facts as fixed commitments, tentative holds, all-day
+   context, or scheduled events without title-based inference.
+8. Selects factual items using visible deterministic priority inputs and
+   applies the lighter non-workday presentation policy.
+9. Synthesizes only timestamp-obvious schedule implications: confirmed span,
+   overlaps, back-to-back events, and transitions of 15 minutes or less.
+10. Builds a structured plan in the canonical Daily Briefing order, omitting
+    content sections without material content and appending Source Coverage.
+11. Renders Markdown and validates provenance, duplicate keys, section order,
+    coverage placement, section item limits, the 150-word note limit, and the
+    1,000-word briefing maximum.
 
 The ordinary target remains 800 words or fewer. The synthetic demonstration is
 also tested against that preferred budget.
 
 ## Failure and trust behavior
 
-A connector retrieval failure becomes `unavailable` source coverage and is
-disclosed in the Chief of Staff Note. Partial coverage and connector warnings
-are also disclosed. Malformed connector output, inconsistent record counts,
-or an invalid briefing plan fails validation instead of producing an
+A connector retrieval failure becomes `unavailable` Source Coverage. Partial
+coverage, record counts, safe connector warnings, and error categories appear
+in the final Source Coverage appendix rather than the Chief of Staff Note.
+Schedule synthesis is phrased as based on retrieved Calendar facts so it does
+not imply completeness. Malformed connector output, inconsistent record
+counts, or an invalid briefing plan fails validation instead of producing an
 apparently trustworthy result.
 
 Every briefing item retains its authoritative source name, source record
@@ -63,11 +72,17 @@ identifier, and display link when supplied. Priority recommendations expose
 the deterministic facts used to include them; there is no hidden composite
 score.
 
+On a non-workday, the reduced composer omits task-driven outcomes, Up Next,
+Important Tasks, and focus-block recommendations. It retains current Calendar
+commitments, explicit preparation, concise future awareness, and Source
+Coverage. An explicit invocation override may classify that date as a workday.
+
 ## Current limitations
 
-- All source records are synthetic and held in memory.
-- The connector contract is implemented, but no production connector or live
-  authorization exists.
+- The demonstrations described here use only synthetic source records held in
+  memory.
+- The bounded live Calendar trial is complete and stopped; these commands do
+  not use its authorization or make live requests.
 - The reduced composer does not infer people waiting, commitments at risk, or
   a recommended focus block.
 - The pipeline does not yet apply the Milestone 2 correction state during

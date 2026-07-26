@@ -57,6 +57,10 @@ No strict versioning scheme is promised before a distributable product exists.
 - Synthetic live-boundary tests for Keychain isolation, OAuth scope handling,
   primary-only retrieval, authorization failures, pagination, data lifecycle,
   and presentation budgets.
+- Deterministic briefing rules and tests separating governing context from
+  display content, protecting non-workdays, classifying Calendar events,
+  synthesizing timestamp-obvious schedule implications, and placing source
+  coverage outside the Chief of Staff Note.
 
 ### Changed
 

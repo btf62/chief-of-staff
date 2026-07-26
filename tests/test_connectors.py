@@ -511,16 +511,18 @@ def test_connector_briefing_reports_repository_and_partial_calendar() -> None:
         (repository, calendar),
     )
 
-    assert "Feature: Daily Briefing v1" in result.rendered.text
-    assert "repository://docs/product/features/daily-briefing-v1.md" in (
+    assert "Feature: Daily Briefing v1" not in result.rendered.text
+    assert "repository://docs/product/features/daily-briefing-v1.md" not in (
         result.rendered.text
     )
     assert "Planning Session" in result.rendered.text
-    assert "**Focus Day** — All day" in result.rendered.text
-    assert "google_calendar partial" in result.rendered.text
+    assert "**Focus Day** — All-day context · All day" in result.rendered.text
+    assert "`google_calendar`: partial" in result.rendered.text
+    assert "coverage" not in (result.plan.sections[0].summary or "").casefold()
     assert result.rendered.word_count <= 800
     names = tuple(section.name for section in result.plan.sections)
     assert names == (
         BriefingSectionName.CHIEF_OF_STAFF_NOTE,
         BriefingSectionName.TODAYS_CALENDAR,
+        BriefingSectionName.SOURCE_COVERAGE,
     )

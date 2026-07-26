@@ -8,7 +8,6 @@ from datetime import date, datetime
 from enum import StrEnum
 
 from chief_of_staff.connectors import SourceCoverage
-from chief_of_staff.domain import CoverageStatus
 from chief_of_staff.pipeline.context import InvocationContext
 from chief_of_staff.pipeline.normalization import NormalizedRecord, RecordKind
 
@@ -32,9 +31,19 @@ class BriefingSectionName(StrEnum):
     IMPORTANT_TASKS = "Important Tasks"
     RECOMMENDED_FOCUS_BLOCK = "Recommended Focus Block"
     LOOKING_AHEAD = "Looking Ahead"
+    SOURCE_COVERAGE = "Source Coverage"
 
 
 CANONICAL_ORDER = tuple(BriefingSectionName)
+
+
+class CalendarEventClassification(StrEnum):
+    """Evidence-bounded Calendar presentation classifications."""
+
+    FIXED_COMMITMENT = "Fixed commitment"
+    TENTATIVE_HOLD = "Tentative hold"
+    ALL_DAY_CONTEXT = "All-day context"
+    SCHEDULED_EVENT = "Scheduled event"
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,22 +140,32 @@ def build_reduced_plan(
 
     today = context.briefing_date
     used_record_ids: set[str] = set()
+    todays_calendar = tuple(
+        sorted(
+            (
+                record
+                for record in records
+                if record.kind is RecordKind.CALENDAR_EVENT
+                and _is_displayable_calendar_event(record)
+                and record.start_at is not None
+                and record.start_at.date() == today
+            ),
+            key=lambda record: record.start_at or datetime.max,
+        )
+    )
     sections: list[BriefingSection] = [
         BriefingSection(
             name=BriefingSectionName.CHIEF_OF_STAFF_NOTE,
-            summary=_chief_note(context, records, coverage),
-            items=tuple(
-                _context_item(record)
-                for record in records
-                if record.kind is RecordKind.CONTEXT
-            )[:LIMITED_SECTION_ITEMS],
+            summary=_chief_note(context, todays_calendar),
         )
     ]
 
     task_records = tuple(
         record
         for record in records
-        if record.kind is RecordKind.TASK and record.status != "completed"
+        if context.is_workday
+        and record.kind is RecordKind.TASK
+        and record.status != "completed"
     )
     prioritized_tasks = sorted(
         task_records,
@@ -190,18 +209,6 @@ def build_reduced_plan(
         )
         used_record_ids.update(record.id for record in up_next)
 
-    todays_calendar = tuple(
-        sorted(
-            (
-                record
-                for record in records
-                if record.kind is RecordKind.CALENDAR_EVENT
-                and record.start_at is not None
-                and record.start_at.date() == today
-            ),
-            key=lambda record: record.start_at or datetime.max,
-        )
-    )
     if todays_calendar:
         sections.append(
             BriefingSection(
@@ -254,6 +261,10 @@ def build_reduced_plan(
                 for record in records
                 if record.id not in used_record_ids
                 and (
+                    record.kind is not RecordKind.CALENDAR_EVENT
+                    or _is_displayable_calendar_event(record)
+                )
+                and (
                     (record.start_at is not None and record.start_at.date() > today)
                     or (record.due_at is not None and record.due_at.date() > today)
                 )
@@ -268,6 +279,13 @@ def build_reduced_plan(
                 items=tuple(_looking_ahead_item(record) for record in looking_ahead),
             )
         )
+
+    sections.append(
+        BriefingSection(
+            name=BriefingSectionName.SOURCE_COVERAGE,
+            summary=_coverage_summary(coverage),
+        )
+    )
 
     return BriefingPlan(
         context=context,
@@ -316,10 +334,14 @@ def validate_briefing(
         errors.append("sections must be unique and in canonical order")
     if not names or names[0] is not BriefingSectionName.CHIEF_OF_STAFF_NOTE:
         errors.append("Chief of Staff Note must be the first section")
+    if not names or names[-1] is not BriefingSectionName.SOURCE_COVERAGE:
+        errors.append("Source Coverage must be the final section")
 
     note = plan.sections[0] if plan.sections else None
     if note is not None and _word_count(note.summary or "") > MAX_NOTE_WORDS:
         errors.append("Chief of Staff Note exceeds 150 words")
+    if note is not None and "source coverage" in (note.summary or "").casefold():
+        errors.append("Chief of Staff Note must not contain source coverage metadata")
     if rendered.word_count > MAX_WORDS:
         errors.append("briefing exceeds the 1,000-word maximum")
 
@@ -351,15 +373,21 @@ def validate_briefing(
                 errors.append(f"{item.key} appears more than once")
             seen_keys.add(item.key)
 
-    note_text = note.summary if note is not None and note.summary else ""
-    if "Source coverage:" not in note_text:
+    coverage_sections = tuple(
+        section
+        for section in plan.sections
+        if section.name is BriefingSectionName.SOURCE_COVERAGE
+    )
+    coverage_text = (
+        coverage_sections[0].summary
+        if len(coverage_sections) == 1 and coverage_sections[0].summary
+        else ""
+    )
+    if len(coverage_sections) != 1 or not coverage_text:
         errors.append("source coverage disclosure is missing")
     for source in plan.coverage:
-        if (
-            source.status is not CoverageStatus.COMPLETE
-            and source.source not in note_text
-        ):
-            errors.append(f"partial coverage for {source.source} is not disclosed")
+        if source.source not in coverage_text:
+            errors.append(f"coverage for {source.source} is not disclosed")
 
     if errors:
         raise BriefingValidationError(tuple(errors))
@@ -367,23 +395,165 @@ def validate_briefing(
 
 def _chief_note(
     context: InvocationContext,
-    records: tuple[NormalizedRecord, ...],
-    coverage: tuple[SourceCoverage, ...],
+    todays_calendar: tuple[NormalizedRecord, ...],
 ) -> str:
-    day_shape = (
-        f"This is a deterministic reduced briefing for a {context.workday_reason}. "
-        f"It includes {len(records)} normalized source records and does not use "
-        "hosted inference."
+    day_posture = (
+        "Today is a workday."
+        if context.is_workday
+        else (
+            "Today is a non-workday; protect it from ordinary work demands. "
+            "Only fixed schedule facts, explicit preparation, and concise "
+            "looking-ahead context are shown."
+        )
     )
-    coverage_parts = []
+    schedule = _schedule_summary(todays_calendar)
+    return f"{day_posture} {schedule}"
+
+
+def _coverage_summary(coverage: tuple[SourceCoverage, ...]) -> str:
+    if not coverage:
+        return "No approved source coverage was supplied."
+
+    coverage_parts: list[str] = []
     for report in coverage:
-        detail = f"{report.source} {report.status.value}"
+        record_label = "record" if report.record_count == 1 else "records"
+        detail = (
+            f"`{report.source}`: {report.status.value}; "
+            f"{report.record_count} {record_label}"
+        )
         if report.warnings:
-            detail += f" ({'; '.join(report.warnings)})"
+            detail += f"; {'; '.join(report.warnings)}"
         if report.error_category:
-            detail += f" ({report.error_category})"
+            detail += f"; {report.error_category}"
         coverage_parts.append(detail)
-    return f"{day_shape} Source coverage: {', '.join(coverage_parts)}."
+    return ". ".join(coverage_parts) + "."
+
+
+def classify_calendar_event(
+    record: NormalizedRecord,
+) -> CalendarEventClassification:
+    """Classify a Calendar fact without title-based inference."""
+
+    if record.kind is not RecordKind.CALENDAR_EVENT:
+        raise ValueError("calendar classification requires a calendar event")
+    if record.all_day:
+        return CalendarEventClassification.ALL_DAY_CONTEXT
+
+    status = (record.status or "").casefold()
+    if status == "confirmed":
+        return CalendarEventClassification.FIXED_COMMITMENT
+    if status == "tentative":
+        return CalendarEventClassification.TENTATIVE_HOLD
+    return CalendarEventClassification.SCHEDULED_EVENT
+
+
+def _schedule_summary(todays_calendar: tuple[NormalizedRecord, ...]) -> str:
+    if not todays_calendar:
+        return "No scheduled Calendar items were retrieved for today."
+
+    fixed = tuple(
+        record
+        for record in todays_calendar
+        if classify_calendar_event(record)
+        is CalendarEventClassification.FIXED_COMMITMENT
+    )
+    tentative_count = sum(
+        classify_calendar_event(record) is CalendarEventClassification.TENTATIVE_HOLD
+        for record in todays_calendar
+    )
+    all_day_count = sum(
+        classify_calendar_event(record) is CalendarEventClassification.ALL_DAY_CONTEXT
+        for record in todays_calendar
+    )
+    unclassified_count = sum(
+        classify_calendar_event(record) is CalendarEventClassification.SCHEDULED_EVENT
+        for record in todays_calendar
+    )
+
+    parts: list[str] = []
+    if fixed:
+        first_start = min(
+            record.start_at for record in fixed if record.start_at is not None
+        )
+        fixed_ends = tuple(
+            record.end_at for record in fixed if record.end_at is not None
+        )
+        time_span = (
+            f" from {first_start:%-I:%M %p} to {max(fixed_ends):%-I:%M %p}"
+            if fixed_ends
+            else ""
+        )
+        noun = "commitment" if len(fixed) == 1 else "commitments"
+        parts.append(
+            f"Retrieved Calendar facts show {len(fixed)} fixed {noun}{time_span}."
+        )
+        parts.extend(_schedule_implications(fixed))
+    if tentative_count:
+        noun = "hold remains" if tentative_count == 1 else "holds remain"
+        parts.append(f"{tentative_count} tentative {noun} non-fixed.")
+    if unclassified_count:
+        noun = "event lacks" if unclassified_count == 1 else "events lack"
+        parts.append(
+            f"{unclassified_count} scheduled {noun} enough status evidence "
+            "to call fixed."
+        )
+    if all_day_count:
+        noun = "item is" if all_day_count == 1 else "items are"
+        parts.append(
+            f"{all_day_count} all-day {noun} treated as context, not full-day "
+            "occupancy."
+        )
+    return " ".join(parts)
+
+
+def _schedule_implications(
+    fixed_events: tuple[NormalizedRecord, ...],
+) -> tuple[str, ...]:
+    timed = tuple(
+        sorted(
+            (
+                event
+                for event in fixed_events
+                if event.start_at is not None and event.end_at is not None
+            ),
+            key=lambda event: event.start_at or datetime.max,
+        )
+    )
+    overlaps = 0
+    back_to_back = 0
+    tight_transitions = 0
+    previous_end: datetime | None = None
+    for event in timed:
+        if event.start_at is None or event.end_at is None:
+            continue
+        if previous_end is not None:
+            if event.start_at < previous_end:
+                overlaps += 1
+            elif event.start_at == previous_end:
+                back_to_back += 1
+            elif (event.start_at - previous_end).total_seconds() <= 15 * 60:
+                tight_transitions += 1
+        previous_end = (
+            event.end_at
+            if previous_end is None or event.end_at > previous_end
+            else previous_end
+        )
+
+    implications: list[str] = []
+    if overlaps:
+        noun = "overlap requires" if overlaps == 1 else "overlaps require"
+        implications.append(f"{overlaps} schedule {noun} attention.")
+    if back_to_back:
+        noun = "transition leaves" if back_to_back == 1 else "transitions leave"
+        implications.append(f"{back_to_back} back-to-back {noun} no calendar margin.")
+    if tight_transitions:
+        noun = "transition has" if tight_transitions == 1 else "transitions have"
+        implications.append(f"{tight_transitions} tight {noun} 15 minutes or less.")
+    return tuple(implications)
+
+
+def _is_displayable_calendar_event(record: NormalizedRecord) -> bool:
+    return (record.status or "").casefold() != "cancelled"
 
 
 def _is_outcome_candidate(record: NormalizedRecord, today: date) -> bool:
@@ -455,10 +625,13 @@ def _calendar_item(record: NormalizedRecord) -> BriefingItem:
         time_range = record.start_at.strftime("%-I:%M %p")
         if record.end_at is not None:
             time_range += f"-{record.end_at:%-I:%M %p}"
+    classification = classify_calendar_event(record).value
+    if record.all_day and (record.status or "").casefold() == "tentative":
+        classification += " (tentative)"
     return _record_item(
         record,
         key_prefix="calendar",
-        detail=time_range,
+        detail=f"{classification} · {time_range}",
     )
 
 
@@ -482,14 +655,6 @@ def _looking_ahead_item(record: NormalizedRecord) -> BriefingItem:
             else f"{when:%A, %B %-d at %-I:%M %p}."
         )
     return _record_item(record, key_prefix="ahead", detail=detail)
-
-
-def _context_item(record: NormalizedRecord) -> BriefingItem:
-    return _record_item(
-        record,
-        key_prefix="context",
-        detail=record.summary or "Approved repository context was consulted.",
-    )
 
 
 def _record_item(

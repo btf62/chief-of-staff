@@ -243,8 +243,7 @@ def test_reduced_pipeline_is_deterministic_traceable_and_within_budget() -> None
 
     assert first.rendered == second.rendered
     assert first.rendered.word_count <= 800
-    assert "synthetic_tasks partial" in first.rendered.text
-    assert "hosted inference" in first.rendered.text
+    assert "`synthetic_tasks`: partial" in first.rendered.text
     assert "source importance 5/5" in first.rendered.text
     assert "[synthetic_tasks/task-1]" in first.rendered.text
     names = tuple(section.name for section in first.plan.sections)
@@ -255,6 +254,7 @@ def test_reduced_pipeline_is_deterministic_traceable_and_within_budget() -> None
         BriefingSectionName.TODAYS_CALENDAR,
         BriefingSectionName.PREPARATION_NEEDED,
         BriefingSectionName.LOOKING_AHEAD,
+        BriefingSectionName.SOURCE_COVERAGE,
     )
     all_items = tuple(item for section in first.plan.sections for item in section.items)
     assert len({item.key for item in all_items}) == len(all_items)
@@ -286,7 +286,7 @@ def test_connector_failure_is_disclosed_without_aborting_the_briefing() -> None:
         (_FailingConnector(),),
     )
 
-    assert "unavailable_source unavailable" in result.rendered.text
+    assert "`unavailable_source`: unavailable" in result.rendered.text
     assert "TimeoutError" in result.rendered.text
     assert result.plan.coverage[0].record_count == 0
 
@@ -303,7 +303,231 @@ def test_empty_static_connector_reports_complete_zero_record_coverage() -> None:
 
     assert result.plan.coverage[0].record_count == 0
     assert result.plan.coverage[0].status is CoverageStatus.COMPLETE
-    assert "empty_source complete" in result.rendered.text
+    assert "`empty_source`: complete" in result.rendered.text
+
+
+def test_governing_context_informs_the_run_without_becoming_display_content() -> None:
+    governing_title = "Accepted governing document"
+    governing_summary = "This text governs behavior but is not a daily item."
+    repository = _connector(
+        "synthetic_repository",
+        _item(
+            "context-1",
+            item_type="context",
+            title=governing_title,
+            summary=governing_summary,
+        ),
+    )
+    context = resolve_context(
+        run_id="governing-context",
+        briefing_date=BRIEFING_DATE,
+        timezone="America/New_York",
+    )
+
+    result = DeterministicBriefingPipeline().run(context, (repository,))
+
+    assert any(
+        record.kind.value == "context" for record in result.deduplication.records
+    )
+    assert governing_title not in result.rendered.text
+    assert governing_summary not in result.rendered.text
+    assert result.plan.sections[0].items == ()
+    assert result.plan.sections[-1].name is BriefingSectionName.SOURCE_COVERAGE
+    assert "synthetic_repository" in (result.plan.sections[-1].summary or "")
+
+
+def test_non_workday_briefing_protects_time_off_and_keeps_fixed_context() -> None:
+    calendar = _connector(
+        "synthetic_calendar",
+        _item(
+            "event-today",
+            item_type="calendar_event",
+            title="Scheduled Ministry Commitment",
+            status="confirmed",
+            start_at="2026-07-27T09:00:00-04:00",
+            end_at="2026-07-27T10:00:00-04:00",
+            preparation="Bring the approved outline.",
+        ),
+    )
+    tasks = _connector(
+        "synthetic_tasks",
+        _item(
+            "task-today",
+            title="Ordinary work due today",
+            due_at="2026-07-27T16:00:00-04:00",
+            importance=5,
+            explicit_commitment=True,
+            status="open",
+        ),
+        _item(
+            "task-future",
+            title="Prepare for the next workday",
+            due_at="2026-07-28T16:00:00-04:00",
+            importance=3,
+            status="open",
+        ),
+    )
+    context = resolve_context(
+        run_id="non-workday",
+        briefing_date=BRIEFING_DATE,
+        timezone="America/New_York",
+        workday_override=False,
+    )
+
+    result = DeterministicBriefingPipeline().run(context, (calendar, tasks))
+
+    names = tuple(section.name for section in result.plan.sections)
+    assert BriefingSectionName.TODAYS_OUTCOMES not in names
+    assert BriefingSectionName.UP_NEXT not in names
+    assert BriefingSectionName.IMPORTANT_TASKS not in names
+    assert names == (
+        BriefingSectionName.CHIEF_OF_STAFF_NOTE,
+        BriefingSectionName.TODAYS_CALENDAR,
+        BriefingSectionName.PREPARATION_NEEDED,
+        BriefingSectionName.LOOKING_AHEAD,
+        BriefingSectionName.SOURCE_COVERAGE,
+    )
+    assert "non-workday; protect it" in result.rendered.text
+    assert "Scheduled Ministry Commitment" in result.rendered.text
+    assert "Bring the approved outline" in result.rendered.text
+    assert "Ordinary work due today" not in result.rendered.text
+    assert "Prepare for the next workday" in result.rendered.text
+
+
+def test_calendar_events_receive_evidence_bounded_classifications() -> None:
+    calendar = _connector(
+        "synthetic_calendar",
+        _item(
+            "confirmed",
+            item_type="calendar_event",
+            title="Confirmed Event",
+            status="confirmed",
+            start_at="2026-07-27T09:00:00-04:00",
+            end_at="2026-07-27T10:00:00-04:00",
+        ),
+        _item(
+            "tentative",
+            item_type="calendar_event",
+            title="Tentative Event",
+            status="tentative",
+            start_at="2026-07-27T10:30:00-04:00",
+            end_at="2026-07-27T11:00:00-04:00",
+        ),
+        _item(
+            "all-day",
+            item_type="calendar_event",
+            title="All-Day Context",
+            status="confirmed",
+            all_day=True,
+            start_at="2026-07-27T00:00:00-04:00",
+            end_at="2026-07-28T00:00:00-04:00",
+        ),
+        _item(
+            "unknown",
+            item_type="calendar_event",
+            title="Unknown-Status Event",
+            start_at="2026-07-27T12:00:00-04:00",
+            end_at="2026-07-27T12:30:00-04:00",
+        ),
+        _item(
+            "cancelled",
+            item_type="calendar_event",
+            title="Cancelled Event",
+            status="cancelled",
+            start_at="2026-07-27T13:00:00-04:00",
+            end_at="2026-07-27T14:00:00-04:00",
+        ),
+    )
+    context = resolve_context(
+        run_id="calendar-classification",
+        briefing_date=BRIEFING_DATE,
+        timezone="America/New_York",
+    )
+
+    result = DeterministicBriefingPipeline().run(context, (calendar,))
+
+    assert "Confirmed Event** — Fixed commitment" in result.rendered.text
+    assert "Tentative Event** — Tentative hold" in result.rendered.text
+    assert "All-Day Context** — All-day context" in result.rendered.text
+    assert "Unknown-Status Event** — Scheduled event" in result.rendered.text
+    assert "Cancelled Event" not in result.rendered.text
+
+
+def test_obvious_schedule_implications_are_synthesized_deterministically() -> None:
+    calendar = _connector(
+        "synthetic_calendar",
+        _item(
+            "event-1",
+            item_type="calendar_event",
+            title="First",
+            status="confirmed",
+            start_at="2026-07-27T09:00:00-04:00",
+            end_at="2026-07-27T10:00:00-04:00",
+        ),
+        _item(
+            "event-2",
+            item_type="calendar_event",
+            title="Second",
+            status="confirmed",
+            start_at="2026-07-27T10:00:00-04:00",
+            end_at="2026-07-27T10:30:00-04:00",
+        ),
+        _item(
+            "event-3",
+            item_type="calendar_event",
+            title="Third",
+            status="confirmed",
+            start_at="2026-07-27T10:20:00-04:00",
+            end_at="2026-07-27T11:00:00-04:00",
+        ),
+        _item(
+            "event-4",
+            item_type="calendar_event",
+            title="Fourth",
+            status="confirmed",
+            start_at="2026-07-27T11:10:00-04:00",
+            end_at="2026-07-27T12:00:00-04:00",
+        ),
+    )
+    context = resolve_context(
+        run_id="schedule-implications",
+        briefing_date=BRIEFING_DATE,
+        timezone="America/New_York",
+    )
+    pipeline = DeterministicBriefingPipeline()
+
+    first = pipeline.run(context, (calendar,))
+    second = pipeline.run(context, (calendar,))
+    note = first.plan.sections[0].summary or ""
+
+    assert first.rendered == second.rendered
+    assert "4 fixed commitments from 9:00 AM to 12:00 PM" in note
+    assert "1 schedule overlap requires attention" in note
+    assert "1 back-to-back transition leaves no calendar margin" in note
+    assert "1 tight transition has 15 minutes or less" in note
+
+
+def test_coverage_metadata_is_separate_from_the_chief_of_staff_note() -> None:
+    connector = _connector(
+        "synthetic_tasks",
+        status=CoverageStatus.PARTIAL,
+        warnings=("one bounded page was unavailable",),
+    )
+    context = resolve_context(
+        run_id="coverage-placement",
+        briefing_date=BRIEFING_DATE,
+        timezone="America/New_York",
+    )
+
+    result = DeterministicBriefingPipeline().run(context, (connector,))
+
+    note = result.plan.sections[0].summary or ""
+    coverage = result.plan.sections[-1]
+    assert "coverage" not in note.casefold()
+    assert "synthetic_tasks" not in note
+    assert coverage.name is BriefingSectionName.SOURCE_COVERAGE
+    assert "`synthetic_tasks`: partial" in (coverage.summary or "")
+    assert "one bounded page was unavailable" in (coverage.summary or "")
 
 
 def test_read_only_connector_surface_exposes_no_mutation_operations() -> None:
@@ -346,11 +570,15 @@ def test_validation_rejects_duplicates_missing_provenance_and_hard_budgets() -> 
         sections=(
             BriefingSection(
                 name=BriefingSectionName.CHIEF_OF_STAFF_NOTE,
-                summary="Source coverage: synthetic_tasks complete.",
+                summary="Today is a workday.",
             ),
             BriefingSection(
                 name=BriefingSectionName.TODAYS_OUTCOMES,
                 items=(duplicate, duplicate, duplicate, missing_source),
+            ),
+            BriefingSection(
+                name=BriefingSectionName.SOURCE_COVERAGE,
+                summary="`synthetic_tasks`: complete; 1 record.",
             ),
         ),
     )
@@ -363,3 +591,34 @@ def test_validation_rejects_duplicates_missing_provenance_and_hard_budgets() -> 
     assert "Today's Outcomes exceeds its item budget" in error.value.errors
     assert "duplicate appears more than once" in error.value.errors
     assert "duplicate has no source provenance" in error.value.errors
+
+
+def test_validation_rejects_coverage_metadata_inside_the_note() -> None:
+    context = resolve_context(
+        run_id="coverage-in-note",
+        briefing_date=BRIEFING_DATE,
+        timezone="America/New_York",
+    )
+    plan = BriefingPlan(
+        context=context,
+        coverage=(),
+        sections=(
+            BriefingSection(
+                name=BriefingSectionName.CHIEF_OF_STAFF_NOTE,
+                summary="Source coverage: metadata does not belong here.",
+            ),
+            BriefingSection(
+                name=BriefingSectionName.SOURCE_COVERAGE,
+                summary="No approved source coverage was supplied.",
+            ),
+        ),
+    )
+    rendered = RenderedBriefing(text="short", word_count=1)
+
+    with pytest.raises(BriefingValidationError) as error:
+        validate_briefing(plan, rendered)
+
+    assert (
+        "Chief of Staff Note must not contain source coverage metadata"
+        in error.value.errors
+    )

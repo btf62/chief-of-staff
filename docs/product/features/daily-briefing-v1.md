@@ -1,7 +1,7 @@
 # Feature: Daily Briefing v1
 
 - **Status:** Accepted
-- **Version:** 1
+- **Version:** 2
 - **Owner:** Brad
 - **Last updated:** 2026-07-25
 
@@ -61,13 +61,36 @@ recommendations, and remember Brad's explicit disposition of an item.
 If a source is unavailable, stale, incomplete, or outside approved access, the
 briefing must disclose the limitation rather than implying complete coverage.
 
+## Governing Context and Display Content
+
+The pipeline must distinguish context used to govern judgment from content
+selected for display:
+
+- **Governing context** includes the Vision, Constitution, Leadership Model,
+  Product Requirements, accepted feature specifications, architecture,
+  decisions, and approved operating rules. It constrains classification,
+  prioritization, synthesis, and validation.
+- **Display content** includes source facts, evidence-bounded implications,
+  recommendations, and approaching work that materially help Brad understand
+  the day.
+
+Retrieving a governing document does not make its title, summary, headings, or
+status a briefing item. Governing context must not be rendered as daily work
+merely to prove that it was consulted. If work on a governing document is
+itself relevant today, display the authoritative task or commitment record;
+the document may be linked as supporting context.
+
+Source coverage for governing context remains visible in the operational
+Source Coverage appendix.
+
 ## Presentation Budget
 
 The briefing should contain no more than 1,000 words, with 800 words or fewer
 preferred. Shorter is better when the day does not require more context.
 
 Sections with no material content should be omitted or collapsed to a concise
-statement. When sections are present, keep the canonical order below.
+statement. The Source Coverage appendix is always present because it is trust
+metadata. When content sections are present, keep the canonical order below.
 
 Up Next, People Waiting on Brad, Commitments at Risk, and Important Tasks
 should normally contain no more than three items each. If an exceptional
@@ -96,6 +119,10 @@ The note should explain:
 
 Distinguish source facts from recommendations. Avoid generic encouragement,
 restating the remainder of the briefing, or presenting inference as certainty.
+Do not place connector statuses, record counts, retrieval errors, or governing
+document summaries in this note. Phrase synthesis as based on retrieved facts
+when completeness is uncertain; all coverage limitations and detailed
+metadata belong in Source Coverage.
 
 ### 2. Today's Outcomes
 
@@ -138,6 +165,33 @@ useful:
 
 Google Calendar is authoritative for the current day. The briefing must not
 substitute a stored schedule or Leadership Model default for the live calendar.
+
+Classify Calendar records only from explicit provider facts:
+
+- A confirmed timed event is a **fixed commitment**.
+- A tentative timed event is a **tentative hold**, not a fixed commitment.
+- An all-day event is **all-day context** and does not, by itself, consume the
+  entire day's capacity.
+- An event without sufficient status evidence is a **scheduled event** and
+  must not be described more strongly.
+- A cancelled event is not an active commitment and should not appear as
+  current or approaching work.
+
+Do not infer classification, priority, preparation, travel, or immovability
+from an event title. Provider facts or additional authoritative evidence are
+required.
+
+The briefing may deterministically synthesize obvious schedule implications
+that follow directly from timestamps and classifications:
+
+- Confirmed timed-event span
+- Overlapping fixed commitments
+- Back-to-back fixed commitments with no calendar margin
+- Transitions of 15 minutes or less
+- The presence of tentative holds or all-day context
+
+Do not infer travel feasibility, meeting importance, cancellation likelihood,
+or usable focus time without the additional evidence needed for that claim.
 
 ### 5. Preparation Needed
 
@@ -235,6 +289,38 @@ Provide selective awareness of:
 Keep this section brief and action-oriented. Do not turn it into a complete
 future task list.
 
+### Operational Appendix: Source Coverage
+
+After the canonical content sections, show compact operational metadata for
+every approved source used in the run. Include status and record count, plus
+safe warnings or error categories when relevant.
+
+Keep this appendix out of the Chief of Staff Note. It exists to make
+completeness, partial retrieval, authorization failures, and empty results
+inspectable without displacing the note's synthesis.
+
+## Non-Workday Briefing Behavior
+
+A non-workday briefing should protect the day from ordinary work pressure
+rather than present a normal workday plan with a different label.
+
+By default it should:
+
+- Retain fixed Calendar commitments and their explicit preparation.
+- Preserve concise Looking Ahead awareness.
+- Omit task-driven Today's Outcomes, Up Next, Important Tasks, and a
+  Recommended Focus Block.
+- Avoid treating an ordinary due date, importance flag, or accepted governing
+  document as sufficient reason to turn the day off into a workday.
+- Continue retrieving approved sources and disclosing Source Coverage.
+
+Brad may explicitly override the workday classification for a particular
+invocation. A later inference-capable implementation may surface a genuine
+time-sensitive exception on a non-workday only when direct evidence supports
+it, the reason is explained, and the exception is presented without quietly
+normalizing work on protected time. The deterministic reduced mode does not
+infer such exceptions.
+
 ## Prioritization and Conflict Handling
 
 Recommendations should consider:
@@ -274,7 +360,7 @@ The briefing must:
   conflict
 - State when a recommendation has low confidence and why
 
-Example source-coverage disclosure:
+Example Source Coverage disclosure:
 
 > Todoist was unavailable. Today's recommendations are based on Calendar,
 > Gmail, Jira, Asana, Drive, and repository context.
@@ -441,13 +527,18 @@ The following sources and capabilities are outside Daily Briefing v1:
 | AC-14 | A corrected or dismissed false inference does not recur from materially unchanged evidence. |
 | AC-15 | Representative, human-reviewed scenarios evaluate People Waiting on Brad and Commitments at Risk separately, with precision treated as the primary trust measure and false positives explicitly reviewed. |
 | AC-16 | After reading the briefing, Brad can identify what to do, what can wait, and what is approaching. |
+| AC-17 | Governing context constrains briefing behavior but is not rendered as a daily item merely because it was retrieved. |
+| AC-18 | A non-workday briefing preserves fixed commitments, explicit preparation, concise looking-ahead context, and source coverage while suppressing ordinary task-driven work sections unless Brad explicitly overrides the workday classification. |
+| AC-19 | Calendar events are classified from provider status and time shape; cancelled events are omitted, tentative events are not called fixed, and all-day events are not treated as full-day occupancy without additional evidence. |
+| AC-20 | Timestamp-derived overlaps, back-to-back commitments, transitions of 15 minutes or less, and confirmed schedule span are synthesized deterministically without title-based or unsupported implications. |
+| AC-21 | Source status, counts, safe warnings, and error categories appear in a final Source Coverage appendix rather than the Chief of Staff Note. |
 
 ## Open Questions
 
 The following questions require later product or architecture decisions:
 
 - At what time and through which interface should the briefing be delivered?
-- How is a workday determined, including timezone and exceptions?
+- Where should configured workdays and one-off exceptions be maintained?
 - What Gmail search window and labels should be used?
 - How should commitments in sent mail be detected?
 - What freshness threshold applies to each source?
