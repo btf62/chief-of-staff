@@ -5,8 +5,8 @@
 This is a documentation-first repository with an accepted Version 1 design
 baseline for Daily Briefing v1. The product requirements, feature
 specification, architecture, and ADR-0001 through ADR-0006 are accepted.
-Milestone 0 is complete, and Milestone 1 — Python Project Foundation is the
-next implementation milestone in `docs/roadmap.md`.
+Milestones 0 and 1 are complete. Milestone 2 — Core Domain and Persistence is
+the next implementation milestone in `docs/roadmap.md`.
 
 ## Working rules
 
@@ -68,12 +68,18 @@ The Version 1 design-readiness requirements have been met:
 5. The implementation roadmap defines milestone dependencies, deliverables,
    acceptance gates, and exclusions.
 
-Implementation may proceed only when a task explicitly authorizes it. Start
-with Milestone 1, use synthetic data before approved live data, and satisfy a
+Implementation may proceed only when a task explicitly authorizes it. Continue
+with Milestone 2, use synthetic data before approved live data, and satisfy a
 milestone's acceptance gate before beginning dependent work. Record material
 new product or architecture decisions before implementing them.
 
 ## Validation
+
+For Python changes, run:
+
+```text
+make check
+```
 
 For documentation-only changes, verify:
 

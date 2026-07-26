@@ -2,12 +2,73 @@
 
 ## Current scope
 
-The Version 1 design baseline is accepted, and
-[Milestone 1 — Python Project Foundation](docs/roadmap.md#milestone-1--python-project-foundation)
+The Version 1 design baseline and Python project foundation are complete.
+[Milestone 2 — Core Domain and Persistence](docs/roadmap.md#milestone-2--core-domain-and-persistence)
 is next. Contributions may improve authoritative documentation or implement
 the current roadmap milestone when the task explicitly authorizes
 implementation. Do not begin a later milestone before its dependencies and
 acceptance gate are satisfied.
+
+## Python environment
+
+The project supports CPython 3.14.x. The `.python-version` file selects the
+minor line without locking contributors to one patch release; use the current
+maintenance patch available for Python 3.14.
+
+Python minor-version changes are deliberate compatibility updates. Update
+`requires-python`, `.python-version`, CI, tool configuration, and this policy
+together after the new minor line is evaluated.
+
+The project uses the standard-library `venv` module and pip dependency groups.
+The ignored `.venv/` directory is the default local environment. Runtime
+dependencies belong in `project.dependencies`; development-only tools belong
+in the `dev` dependency group in `pyproject.toml`. Milestone 1 intentionally
+has no third-party runtime dependencies.
+
+Create or refresh the environment:
+
+```text
+make bootstrap
+```
+
+If `python3.14` is not on `PATH`, pass its absolute path:
+
+```text
+make bootstrap PYTHON=/path/to/python3.14
+```
+
+Do not install project tools into the macOS system Python.
+
+## Developer commands
+
+| Command | Purpose |
+| --- | --- |
+| `make bootstrap` | Create `.venv`, update pip, and install the package and exact-pinned development tools |
+| `make format` | Format Python and apply safe Ruff fixes |
+| `make lint` | Verify formatting and run Ruff lint rules |
+| `make typecheck` | Run strict mypy checks against `src` and `tests` |
+| `make test` | Run pytest |
+| `make check` | Run the complete local quality gate |
+
+GitHub Actions runs the same `make bootstrap` and `make check` workflow on
+Python 3.14.
+
+## Configuration and logging boundaries
+
+`chief_of_staff.config.RuntimeSettings` is the application boundary for
+validated, non-secret runtime configuration. Current variables are limited to:
+
+- `CHIEF_OF_STAFF_ENVIRONMENT`
+- `CHIEF_OF_STAFF_LOG_LEVEL`
+
+Do not place tokens, credentials, or private source content in environment
+configuration. Future connector secrets belong in macOS Keychain under
+[ADR-0005](docs/decisions/0005-adopt-oauth-and-macos-keychain.md).
+
+Application logs are newline-delimited JSON. The logging boundary emits only
+allow-listed operational metadata, drops free-form message content, redacts
+secret-shaped strings, and records only exception types. Do not bypass this
+boundary or add private content to the allow list.
 
 ## Workflow
 

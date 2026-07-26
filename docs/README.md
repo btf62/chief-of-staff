@@ -7,10 +7,10 @@ documents should link to it instead of duplicating governing content.
 ## Current baseline
 
 The Version 1 design baseline for Daily Briefing v1 is accepted. The
-[implementation roadmap](roadmap.md) records Milestone 0 as complete and
-Milestone 1 — Python Project Foundation as the next milestone. Design
-acceptance authorizes implementation within the accepted scope; it does not
-mean the feature has passed operational acceptance.
+[implementation roadmap](roadmap.md) records Milestones 0 and 1 as complete
+and Milestone 2 — Core Domain and Persistence as next. Design acceptance
+authorizes implementation within the accepted scope; it does not mean the
+feature has passed operational acceptance.
 
 ## Index
 

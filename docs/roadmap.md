@@ -6,8 +6,8 @@
 - **Last updated:** 2026-07-25
 
 This roadmap sequences implementation of the accepted
-[Daily Briefing v1](product/features/daily-briefing-v1.md) design. Milestone 0
-is complete, and Milestone 1 is the next authorized implementation milestone.
+[Daily Briefing v1](product/features/daily-briefing-v1.md) design. Milestones 0
+and 1 are complete, and Milestone 2 is the next implementation milestone.
 Dates and estimates remain intentionally omitted until implementation evidence
 supports them.
 
@@ -52,7 +52,7 @@ boundaries.
 
 ## Milestone 1 — Python Project Foundation
 
-- **Status:** Next
+- **Status:** Complete
 - **Intended user-visible outcome:** No end-user briefing yet; Brad and
   contributors can develop and validate the application through a consistent,
   safe, repeatable project workflow.
@@ -77,7 +77,7 @@ boundaries.
 
 ## Milestone 2 — Core Domain and Persistence
 
-- **Status:** Planned
+- **Status:** Next
 - **Intended user-visible outcome:** Brad's future corrections, dispositions,
   briefing runs, and provenance have an inspectable and deletable local
   foundation, demonstrated entirely with synthetic data.

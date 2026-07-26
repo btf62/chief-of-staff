@@ -7,17 +7,17 @@ identifying priorities, commitments, and useful signals.
 
 ## Status
 
-**Phase:** Accepted Version 1 design baseline; implementation readiness
+**Phase:** Milestone 1 complete; Milestone 2 ready
 
-There is no functional application yet. The product requirements, Daily
-Briefing v1 specification, architecture, and foundational ADRs are accepted.
-[Milestone 1 — Python Project Foundation](docs/roadmap.md#milestone-1--python-project-foundation)
-is the next implementation milestone.
+The Python project foundation is complete, but there is no product
+functionality yet. The next implementation milestone is
+[Milestone 2 — Core Domain and Persistence](docs/roadmap.md#milestone-2--core-domain-and-persistence).
 
 ## Repository map
 
 ```text
 .
+├── .github/workflows/     Continuous integration
 ├── docs/
 │   ├── architecture/
 │   │   ├── connectors/     External source integration specifications
@@ -33,11 +33,15 @@ is the next implementation milestone.
 │   │   └── vision.md       Product purpose and desired outcomes
 │   ├── README.md           Documentation index
 │   └── roadmap.md          Milestones and sequencing
+├── src/chief_of_staff/     Python application package
 ├── templates/              Reusable documentation templates
+├── tests/                  Synthetic foundation tests
 ├── AGENTS.md               Canonical instructions for repository agents
 ├── CHANGELOG.md            Notable repository changes
 ├── CONTRIBUTING.md         Contribution workflow
 ├── LICENSE                 MIT License
+├── Makefile                Developer commands
+├── pyproject.toml          Python package and quality-tool configuration
 └── README.md               Project entry point
 ```
 
@@ -67,8 +71,8 @@ is the next implementation milestone.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the current documentation-focused
-workflow.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for Python setup, developer commands,
+quality checks, documentation conventions, and the current milestone boundary.
 
 ## License
 
