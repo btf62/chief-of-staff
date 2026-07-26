@@ -27,9 +27,25 @@ from chief_of_staff.connectors.google_calendar_live import (
 )
 from chief_of_staff.connectors.repository import RepositoryContextConnector
 from chief_of_staff.connectors.static import StaticConnector
+from chief_of_staff.connectors.todoist import (
+    TODOIST_DATA_READ_SCOPE,
+    TODOIST_FILTER_QUERY,
+    TodoistAuthenticationError,
+    TodoistAuthorization,
+    TodoistAuthorizationProvider,
+    TodoistAuthorizationUnavailable,
+    TodoistConnector,
+    TodoistFilterRequest,
+    TodoistRetrievalError,
+    TodoistTask,
+    TodoistTaskPage,
+    TodoistTransport,
+)
 
 __all__ = (
     "GOOGLE_CALENDAR_EVENTS_OWNED_READONLY_SCOPE",
+    "TODOIST_DATA_READ_SCOPE",
+    "TODOIST_FILTER_QUERY",
     "CalendarAuthenticationError",
     "CalendarAuthorization",
     "CalendarAuthorizationProvider",
@@ -50,4 +66,14 @@ __all__ = (
     "SourceItem",
     "StaticConnector",
     "StoredGoogleCalendarAuthorizationProvider",
+    "TodoistAuthenticationError",
+    "TodoistAuthorization",
+    "TodoistAuthorizationProvider",
+    "TodoistAuthorizationUnavailable",
+    "TodoistConnector",
+    "TodoistFilterRequest",
+    "TodoistRetrievalError",
+    "TodoistTask",
+    "TodoistTaskPage",
+    "TodoistTransport",
 )

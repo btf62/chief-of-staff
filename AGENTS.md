@@ -5,10 +5,10 @@
 This is a documentation-first repository with an accepted Version 1 design
 baseline for Daily Briefing v1. The product requirements, feature
 specification, architecture, and ADR-0001 through ADR-0006 are accepted.
-Milestones 0 through 4 are complete. Milestone 4 — First Safe Connectors
-included one explicitly approved, bounded Google Calendar live trial. Work is
-paused before Milestone 5, and no additional live connector or broader
-Calendar access is authorized.
+Milestones 0 through 4 are complete. Milestone 5 has begun with a mock-only
+Todoist retrieval contract. Work is paused at the explicit Todoist live-access
+gate in `docs/architecture/connectors/todoist.md`, and no Todoist live access
+or broader Calendar access is authorized.
 
 ## Working rules
 

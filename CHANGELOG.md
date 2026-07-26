@@ -61,6 +61,12 @@ No strict versioning scheme is promised before a distributable product exists.
   display content, protecting non-workdays, classifying Calendar events,
   synthesizing timestamp-obvious schedule implications, and placing source
   coverage outside the Chief of Staff Note.
+- Provider-backed Calendar status signals and deterministic tomorrow-morning
+  sequence synthesis that preserves individual event provenance.
+- A proposed Todoist connector specification and mock-only contract with exact
+  `data:read` scope enforcement, a fixed bounded filter, cursor pagination,
+  deterministic due normalization, partial-failure handling, and an explicit
+  live-access gate.
 
 ### Changed
 

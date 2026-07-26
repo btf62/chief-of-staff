@@ -8,7 +8,8 @@
 This roadmap sequences implementation of the accepted
 [Daily Briefing v1](product/features/daily-briefing-v1.md) design. Milestones 0
 through 4 are complete. Milestone 4 concluded with one explicitly approved,
-bounded primary-calendar trial; work is stopped before Milestone 5. Dates and
+bounded primary-calendar trial. Milestone 5 has begun with a mock-only
+Todoist boundary and is stopped at its explicit live-access gate. Dates and
 estimates remain intentionally omitted until implementation evidence supports
 them.
 
@@ -166,7 +167,7 @@ explicit approval for another Calendar retrieval or any later connector.
 
 ## Milestone 5 — Task-System Connectors
 
-- **Status:** Planned
+- **Status:** In progress — stopped at Todoist live-access gate
 - **Intended user-visible outcome:** Brad's factual briefing can include
   relevant source-owned work across Todoist, Jira, and Asana without replacing
   any task system.
@@ -186,6 +187,18 @@ explicit approval for another Calendar retrieval or any later connector.
 - **Explicitly excluded work:** Gmail, Drive, model-based inference, task
   creation or modification, automatic conflict resolution, and broad
   cross-source identity claims.
+
+### Current checkpoint
+
+The proposed [Todoist connector](architecture/connectors/todoist.md) has a
+mockable retrieval-only interface, exact `data:read` scope and fixed-filter
+enforcement, cursor pagination, deterministic due-date normalization, partial
+failure handling, and no-write contract tests.
+
+No Todoist OAuth application has been registered, no account has been
+authorized, no credential has been stored, and no live request has occurred.
+Continue only after Brad explicitly approves the connector specification's
+live-access gate.
 
 ## Milestone 6 — Gmail and Google Drive Connectors
 
