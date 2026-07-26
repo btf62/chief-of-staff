@@ -5,8 +5,8 @@
 This is a documentation-first repository with an accepted Version 1 design
 baseline for Daily Briefing v1. The product requirements, feature
 specification, architecture, and ADR-0001 through ADR-0006 are accepted.
-Milestones 0 and 1 are complete. Milestone 2 — Core Domain and Persistence is
-the next implementation milestone in `docs/roadmap.md`.
+Milestones 0 through 2 are complete. Milestone 3 — Deterministic Briefing
+Pipeline is the next implementation milestone in `docs/roadmap.md`.
 
 ## Working rules
 
@@ -69,7 +69,7 @@ The Version 1 design-readiness requirements have been met:
    acceptance gates, and exclusions.
 
 Implementation may proceed only when a task explicitly authorizes it. Continue
-with Milestone 2, use synthetic data before approved live data, and satisfy a
+with Milestone 3, use synthetic data before approved live data, and satisfy a
 milestone's acceptance gate before beginning dependent work. Record material
 new product or architecture decisions before implementing them.
 

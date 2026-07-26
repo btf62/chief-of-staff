@@ -31,6 +31,9 @@ build/
 coverage/
 htmlcov/
 *.egg-info/
+*.db
+*.sqlite
+*.sqlite3
 
 # Language-specific caches
 __pycache__/

@@ -2,8 +2,8 @@
 
 ## Current scope
 
-The Version 1 design baseline and Python project foundation are complete.
-[Milestone 2 — Core Domain and Persistence](docs/roadmap.md#milestone-2--core-domain-and-persistence)
+The Version 1 design baseline and Milestones 1–2 are complete.
+[Milestone 3 — Deterministic Briefing Pipeline](docs/roadmap.md#milestone-3--deterministic-briefing-pipeline)
 is next. Contributions may improve authoritative documentation or implement
 the current roadmap milestone when the task explicitly authorizes
 implementation. Do not begin a later milestone before its dependencies and
@@ -60,6 +60,7 @@ validated, non-secret runtime configuration. Current variables are limited to:
 
 - `CHIEF_OF_STAFF_ENVIRONMENT`
 - `CHIEF_OF_STAFF_LOG_LEVEL`
+- `CHIEF_OF_STAFF_DATABASE_PATH`
 
 Do not place tokens, credentials, or private source content in environment
 configuration. Future connector secrets belong in macOS Keychain under

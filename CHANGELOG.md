@@ -25,6 +25,10 @@ No strict versioning scheme is promised before a distributable product exists.
   targets and continuous integration.
 - Validated non-secret configuration and deny-by-default structured logging
   boundaries with synthetic tests.
+- Application-owned domain models and checksummed SQLite migrations for run
+  metadata, provenance, conclusions, and append-oriented dispositions.
+- Inspectable correction history, evidence-fingerprint recurrence projection,
+  bounded run pruning, individual deletion, and complete local-state reset.
 
 ### Changed
 
@@ -35,3 +39,5 @@ No strict versioning scheme is promised before a distributable product exists.
   acceptance.
 - Marked Milestone 1 — Python Project Foundation complete and Milestone 2 —
   Core Domain and Persistence as next.
+- Marked Milestone 2 — Core Domain and Persistence complete and Milestone 3 —
+  Deterministic Briefing Pipeline as next.

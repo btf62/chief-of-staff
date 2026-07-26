@@ -7,8 +7,10 @@ import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 from typing import Final, Self
 
+DATABASE_PATH_VARIABLE: Final = "CHIEF_OF_STAFF_DATABASE_PATH"
 ENVIRONMENT_VARIABLE: Final = "CHIEF_OF_STAFF_ENVIRONMENT"
 LOG_LEVEL_VARIABLE: Final = "CHIEF_OF_STAFF_LOG_LEVEL"
 
@@ -39,6 +41,7 @@ class RuntimeSettings:
 
     environment: Environment = Environment.DEVELOPMENT
     log_level: int = logging.INFO
+    database_path: Path | None = None
 
     @classmethod
     def from_environ(
@@ -51,6 +54,7 @@ class RuntimeSettings:
         return cls(
             environment=_parse_environment(source.get(ENVIRONMENT_VARIABLE)),
             log_level=_parse_log_level(source.get(LOG_LEVEL_VARIABLE)),
+            database_path=_parse_database_path(source.get(DATABASE_PATH_VARIABLE)),
         )
 
 
@@ -77,3 +81,11 @@ def _parse_log_level(raw_value: str | None) -> int:
         allowed = ", ".join(_ALLOWED_LOG_LEVELS)
         message = f"{LOG_LEVEL_VARIABLE} must be one of: {allowed}"
         raise ConfigurationError(message) from None
+
+
+def _parse_database_path(raw_value: str | None) -> Path | None:
+    if raw_value is None:
+        return None
+    if not raw_value.strip():
+        raise ConfigurationError(f"{DATABASE_PATH_VARIABLE} must not be empty")
+    return Path(raw_value).expanduser()

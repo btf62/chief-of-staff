@@ -7,11 +7,11 @@ identifying priorities, commitments, and useful signals.
 
 ## Status
 
-**Phase:** Milestone 1 complete; Milestone 2 ready
+**Phase:** Milestones 1–2 complete; Milestone 3 ready
 
-The Python project foundation is complete, but there is no product
-functionality yet. The next implementation milestone is
-[Milestone 2 — Core Domain and Persistence](docs/roadmap.md#milestone-2--core-domain-and-persistence).
+The Python and local-state foundations are complete, but there is no generated
+briefing yet. The next implementation milestone is
+[Milestone 3 — Deterministic Briefing Pipeline](docs/roadmap.md#milestone-3--deterministic-briefing-pipeline).
 
 ## Repository map
 

@@ -25,3 +25,9 @@ requires each policy or procedure.
 Step-by-step operational procedures belong in
 [the runbooks directory](runbooks/README.md). No procedures exist because
 there is no implemented or deployed system.
+
+## Implemented foundations
+
+- [Local state operations](local-state.md) — SQLite migrations, inspection,
+  recurrence projection, deletion, retention pruning, reset, and current
+  limitations

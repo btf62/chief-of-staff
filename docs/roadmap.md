@@ -7,7 +7,7 @@
 
 This roadmap sequences implementation of the accepted
 [Daily Briefing v1](product/features/daily-briefing-v1.md) design. Milestones 0
-and 1 are complete, and Milestone 2 is the next implementation milestone.
+through 2 are complete, and Milestone 3 is the next implementation milestone.
 Dates and estimates remain intentionally omitted until implementation evidence
 supports them.
 
@@ -77,7 +77,7 @@ boundaries.
 
 ## Milestone 2 — Core Domain and Persistence
 
-- **Status:** Next
+- **Status:** Complete
 - **Intended user-visible outcome:** Brad's future corrections, dispositions,
   briefing runs, and provenance have an inspectable and deletable local
   foundation, demonstrated entirely with synthetic data.
@@ -102,7 +102,7 @@ boundaries.
 
 ## Milestone 3 — Deterministic Briefing Pipeline
 
-- **Status:** Planned
+- **Status:** Next
 - **Intended user-visible outcome:** Brad can generate a reduced, factual,
   presentation-budget-compliant briefing from synthetic data without hosted
   inference.

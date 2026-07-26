@@ -7,8 +7,8 @@ documents should link to it instead of duplicating governing content.
 ## Current baseline
 
 The Version 1 design baseline for Daily Briefing v1 is accepted. The
-[implementation roadmap](roadmap.md) records Milestones 0 and 1 as complete
-and Milestone 2 — Core Domain and Persistence as next. Design acceptance
+[implementation roadmap](roadmap.md) records Milestones 0 through 2 as complete
+and Milestone 3 — Deterministic Briefing Pipeline as next. Design acceptance
 authorizes implementation within the accepted scope; it does not mean the
 feature has passed operational acceptance.
 
@@ -49,6 +49,8 @@ feature has passed operational acceptance.
   dependencies, deliverables, acceptance gates, and excluded work
 - [Operations](operations/README.md) — operational policies and deployment
   documentation
+- [Local state operations](operations/local-state.md) — SQLite migration,
+  inspection, deletion, reset, and recurrence behavior
 - [Runbooks](operations/runbooks/README.md) — step-by-step operational
   procedures
 

@@ -24,7 +24,7 @@ dev = [
 where = ["src"]
 
 [tool.setuptools.package-data]
-chief_of_staff = ["py.typed"]
+chief_of_staff = ["py.typed", "persistence/migrations/*.sql"]
 
 [tool.ruff]
 target-version = "py314"
