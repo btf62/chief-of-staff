@@ -5,9 +5,10 @@
 This is a documentation-first repository with an accepted Version 1 design
 baseline for Daily Briefing v1. The product requirements, feature
 specification, architecture, and ADR-0001 through ADR-0006 are accepted.
-Milestones 0 through 3 are complete. The authorized non-live portion of
-Milestone 4 — First Safe Connectors is implemented. Work is paused at the
-explicit live-access gate in `docs/roadmap.md`.
+Milestones 0 through 4 are complete. Milestone 4 — First Safe Connectors
+included one explicitly approved, bounded Google Calendar live trial. Work is
+paused before Milestone 5, and no additional live connector or broader
+Calendar access is authorized.
 
 ## Working rules
 
@@ -69,13 +70,13 @@ The Version 1 design-readiness requirements have been met:
 5. The implementation roadmap defines milestone dependencies, deliverables,
    acceptance gates, and exclusions.
 
-Implementation may proceed only when a task explicitly authorizes it. Do not
-register a Google OAuth application, request a live scope, open authorization,
-place credentials in Keychain, or access live Calendar data without Brad's
-explicit approval of the
-`docs/architecture/connectors/google-calendar.md` live-access gate. Satisfy a
-milestone's acceptance gate before beginning dependent work. Record material
-new product or architecture decisions before implementing them.
+Implementation may proceed only when a task explicitly authorizes it. The
+one-trial Google Calendar gate in
+`docs/architecture/connectors/google-calendar.md` has been exercised; do not
+repeat live retrieval, broaden Calendar access, refresh authorization, or
+begin another connector without new explicit approval. Satisfy a milestone's
+acceptance gate before beginning dependent work. Record material new product
+or architecture decisions before implementing them.
 
 ## Validation
 

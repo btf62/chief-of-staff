@@ -70,6 +70,24 @@ class RecurrenceAction(StrEnum):
     SUPPRESS = "suppress"
 
 
+class AuthorizationStatus(StrEnum):
+    """Inspectable non-secret connector authorization state."""
+
+    AUTHORIZED = "authorized"
+    EXPIRED = "expired"
+    REVOKED = "revoked"
+    ERROR = "error"
+
+
+class CredentialHealth(StrEnum):
+    """Whether the referenced Keychain credential appears usable."""
+
+    HEALTHY = "healthy"
+    EXPIRED = "expired"
+    MISSING = "missing"
+    ERROR = "error"
+
+
 @dataclass(frozen=True, slots=True)
 class ConnectorRun:
     """Retrieval metadata without raw source payloads."""
@@ -85,6 +103,7 @@ class ConnectorRun:
     completed_at: datetime | None = None
     freshness_at: datetime | None = None
     error_category: str | None = None
+    page_count: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,3 +198,35 @@ class StateInspection:
     source_evidence: int
     conclusions: int
     disposition_events: int
+    oauth_clients: int
+    connector_authorizations: int
+
+
+@dataclass(frozen=True, slots=True)
+class OAuthClientMetadata:
+    """Non-secret installed-application client configuration."""
+
+    connector: str
+    oauth_project_id: str
+    oauth_client_id: str
+    credential_service: str
+    client_secret_account: str
+    configured_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class ConnectorAuthorizationMetadata:
+    """Non-secret authorization and Keychain-reference metadata."""
+
+    connector: str
+    account_reference: str
+    account_identity: str
+    granted_scope: str
+    credential_service: str
+    access_token_account: str
+    authorization_status: AuthorizationStatus
+    credential_health: CredentialHealth
+    token_expires_at: datetime
+    authorized_at: datetime
+    updated_at: datetime
+    last_used_at: datetime | None = None

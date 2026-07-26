@@ -7,13 +7,13 @@ identifying priorities, commitments, and useful signals.
 
 ## Status
 
-**Phase:** Milestones 1–3 complete; Milestone 4 at live-access gate
+**Phase:** Milestones 1–4 complete; stopped before Milestone 5
 
-The Python, local-state, and deterministic briefing foundations are complete.
-The approved repository connector and mocked Google Calendar boundary are
-implemented. [Milestone 4](docs/roadmap.md#milestone-4--first-safe-connectors)
-is paused before OAuth registration, scope request, account authorization,
-Keychain storage, and live Calendar access.
+The Python, local-state, deterministic briefing, repository connector, and
+read-only Google Calendar foundations are complete. An explicitly approved,
+bounded primary-calendar trial satisfied
+[Milestone 4](docs/roadmap.md#milestone-4--first-safe-connectors). No later
+connector or broader Calendar access is authorized.
 
 ## Repository map
 
@@ -76,6 +76,10 @@ The demonstration reads two exact repository-owned documentation paths and
 uses a mocked Calendar page. It performs no live source access, credential
 lookup, hosted inference, persistence, or external writes. Use
 `make demo-synthetic` for the fully synthetic Milestone 3 scenario.
+
+The bounded live-trial procedure is documented separately in
+[First Safe Connector Operations](docs/operations/first-safe-connectors.md).
+It must not be repeated or broadened without explicit approval.
 
 ## Documentation principles
 

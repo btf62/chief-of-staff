@@ -44,6 +44,19 @@ No strict versioning scheme is promised before a distributable product exists.
   and distinct unauthorized and empty coverage.
 - A safe on-demand connector demonstration combining repository-owned context
   with a synthetic Calendar page.
+- Installed-app Google OAuth with state validation, PKCE, exact-scope
+  enforcement, and short-lived authorization for a bounded Calendar trial.
+- Native macOS Keychain storage for OAuth client secrets and access tokens,
+  with only non-secret authorization metadata retained in SQLite.
+- A primary-calendar-only HTTP transport with bounded windows, pagination,
+  minimized event normalization, transient raw payloads, and no mutation
+  methods.
+- A deterministic bounded-trial runner that stores minimal provenance and
+  coverage locally and writes private briefing output under ignored local
+  state.
+- Synthetic live-boundary tests for Keychain isolation, OAuth scope handling,
+  primary-only retrieval, authorization failures, pagination, data lifecycle,
+  and presentation budgets.
 
 ### Changed
 
@@ -60,3 +73,5 @@ No strict versioning scheme is promised before a distributable product exists.
   4 — First Safe Connectors as next.
 - Recorded the authorized non-live Milestone 4 work as implemented and paused
   before the Google Calendar live-access approval gate.
+- Completed the explicitly approved Milestone 4 bounded live Calendar trial
+  and stopped before Milestone 5 or any additional live connector.

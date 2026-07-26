@@ -1,15 +1,14 @@
 # Google Calendar Connector
 
-- **Status:** Proposed — live-access approval required
-- **Version:** 1
+- **Status:** Accepted
+- **Version:** 2
 - **Owner:** Brad
 - **Last updated:** 2026-07-25
 
-This specification defines the implemented read-only contract and mocked OAuth
-boundary for the Milestone 4 Google Calendar connector. It is ready for
-live-access review, but it does not authorize OAuth registration, a live scope
-request, account authorization, Keychain storage, a production transport, or
-access to Calendar data.
+This specification defines the implemented read-only Google Calendar
+connector and the explicitly approved bounded live trial that completed
+Milestone 4. It does not authorize continuing live access, broader Calendar
+access, another account, or another connector.
 
 ## Source authority
 
@@ -19,26 +18,26 @@ connector retrieves event facts and provenance only. It does not rank
 priorities, infer commitments, replace the live calendar with a stored
 schedule, or modify Calendar.
 
-## Proposed account and resource boundary
+## Account and resource boundary
 
-Version 1 proposes:
+Version 1 retrieval is restricted to:
 
-- One Google account selected by Brad at authorization time and represented in
-  application metadata by an opaque, non-email alias.
+- One Google Workspace account explicitly selected and confirmed by Brad
+  during authorization. Its address remains absent from Git.
 - That account's `primary` calendar only.
-- A bounded window supplied by each briefing invocation.
+- A bounded window supplied by the briefing invocation.
 - Expanded recurring-event instances ordered by start time.
 - Deleted events excluded.
 - All result pages followed until complete or a bounded failure occurs.
 
-The exact Google account remains intentionally absent from Git and must be
-confirmed at the live-access gate. Secondary calendars, calendar-list
-discovery, free/busy access, settings, ACLs, and cross-account fallback are not
-authorized.
+Secondary calendars, calendar-list discovery, free/busy access, settings,
+ACLs, and cross-account fallback are not authorized. The OAuth application
+belongs to a Northridge-controlled Google Cloud project with an internal
+audience.
 
-## Proposed OAuth scope
+## OAuth scope
 
-The only proposed scope is:
+The only accepted scope is:
 
 ```text
 https://www.googleapis.com/auth/calendar.events.owned.readonly
@@ -51,6 +50,11 @@ sensitive because it reads private Calendar events. The implementation rejects
 missing, broader, or additional scopes rather than silently accepting scope
 expansion.
 
+The provider scope can technically read events on other calendars the user
+owns. The application accepts that residual provider limitation while fixing
+every request to `calendarId=primary` and enforcing the boundary in contract
+tests.
+
 Official references:
 
 - [Google Calendar API scopes](https://developers.google.com/workspace/calendar/api/auth)
@@ -59,42 +63,30 @@ Official references:
 - [Google OAuth for desktop applications](https://developers.google.com/identity/protocols/oauth2/native-app)
 - [Google sensitive-scope verification](https://developers.google.com/identity/protocols/oauth2/production-readiness/sensitive-scope-verification)
 
-No scope has been configured or requested. Adding this scope to an OAuth
-consent configuration or authorization request requires Brad's explicit
-approval.
+## Authorization and credential boundary
 
-## Mocked authorization boundary
-
-The implemented application boundary supplies only non-secret authorization
-metadata:
-
-- Opaque account reference.
-- Exact granted-scope set.
-- Opaque credential lookup reference.
-
-Tests use a mock provider. They contain no client ID, client secret,
-authorization code, access token, refresh token, account address, or Keychain
-entry.
-
-After approval, the live authorization design must follow
+The implemented authorization follows
 [ADR-0005](../../decisions/0005-adopt-oauth-and-macos-keychain.md):
 
 - Google OAuth installed-application authorization-code flow.
-- System browser and a loopback redirect suitable for a desktop application.
-- `state` validation and PKCE.
-- Offline access only if explicitly approved for future invocations.
-- Secret values stored in macOS Keychain, never SQLite, Git, configuration,
-  logs, fixtures, or output.
-- A non-secret Keychain lookup reference separated by application, provider,
-  environment, account alias, and credential purpose.
+- System browser and loopback redirect.
+- Cryptographically random state with validation.
+- PKCE using `S256`.
+- Explicit account selection and a Brad-confirmed account identity.
+- Exact-scope validation after token exchange.
+- No offline access or refresh token for the bounded trial.
+- OAuth client secret and access token stored only in macOS Keychain.
+- Non-secret OAuth project, client, account, scope, expiry, health, and
+  Keychain lookup metadata stored in SQLite.
 
-OAuth project ownership, consent-screen identity, client registration,
-redirect details, selected account, Keychain entry names, refresh behavior,
-revocation, and reauthorization remain live-gate decisions.
+Secret values are never written to SQLite, Git, configuration, logs, fixtures,
+or command output. The account identity and credential health can be displayed
+without revealing a secret.
 
 ## Read-only transport contract
 
-The provider transport exposes only `list_events`. Each request fixes:
+The provider transport exposes only `list_events`. It uses `GET` against the
+Google Calendar `events.list` resource and fixes:
 
 - Calendar ID `primary`.
 - Bounded `timeMin` and `timeMax`.
@@ -102,15 +94,14 @@ The provider transport exposes only `list_events`. Each request fixes:
 - `singleEvents=true`.
 - `showDeleted=false`.
 - `orderBy=startTime`.
-- An optional opaque page token.
+- A bounded page size and optional opaque page token.
 
 The connector and transport expose no insert, create, update, patch, delete,
-move, import, watch, ACL, settings, send, or other mutation operation. There
-is deliberately no live HTTP or Google SDK transport before authorization.
+move, import, watch, ACL, settings, send, or other mutation operation.
 
 ## Retrieved and normalized data
 
-The mocked contract normalizes synthetic events into:
+The live boundary reads only the provider fields needed to normalize:
 
 - Stable Google event ID.
 - Title.
@@ -121,10 +112,9 @@ The mocked contract normalizes synthetic events into:
 - Authoritative event link when available.
 - Retrieval and source-coverage metadata.
 
-Invalid events are omitted with partial coverage rather than converted into
-unsupported facts. Full provider payloads, attendees, descriptions,
-attachments, conference payloads, and private extended properties are not
-currently retrieved or persisted.
+Descriptions, attendees, attachments, conference payloads, and private
+extended properties are ignored. Invalid events are omitted with partial
+coverage rather than converted into unsupported facts.
 
 ## Pagination and failure behavior
 
@@ -132,8 +122,8 @@ currently retrieved or persisted.
 - A later page fails after earlier events were retrieved: retain those events
   and report `partial`.
 - The first page fails: `unavailable`.
-- Authorization is missing, revoked, or scope-mismatched: `unauthorized`,
-  distinct from an empty calendar.
+- Authorization is missing, expired, revoked, or scope-mismatched:
+  `unauthorized`, distinct from an empty calendar.
 - A malformed event: omit it and report `partial`.
 - A repeated page token or the 100-page safety limit: stop and report
   `partial`.
@@ -144,14 +134,18 @@ substitute cached events, or retry through a write-capable endpoint.
 
 ## Persistence, retention, and observability
 
-No Calendar source cache is authorized. Provider pages and normalized event
-records are transient pipeline inputs. Coverage may include status, item count,
-retrieval time, freshness, safe account alias, primary-calendar boundary, and
-error category. It must never contain credential values or private event
-content in logs.
+No Calendar source cache is authorized. Raw provider pages and normalized
+events are transient pipeline inputs. The accepted local run graph stores:
 
-Any later persistence of minimal evidence or application-owned conclusions
-must follow
+- Non-secret authorization and credential-health metadata.
+- Connector status, approved scope, bounded retrieval window, freshness,
+  coverage, safe error category, and page count.
+- Minimal source record identifiers, authoritative links, timestamps, and
+  evidence fingerprints.
+- Application-owned briefing-run metadata and private ignored output.
+
+It does not store event excerpts or raw provider payloads. This lifecycle
+follows
 [ADR-0004](../../decisions/0004-adopt-sqlite-and-bounded-local-data-lifecycle.md).
 
 ## Implemented validation
@@ -159,27 +153,28 @@ must follow
 Synthetic contract and integration tests demonstrate:
 
 - Exact read-only scope enforcement.
-- Mocked authorized and unauthorized behavior.
+- State and PKCE authorization parameters without offline access.
+- Keychain-only secret handling.
+- Authorized, expired, missing, and unauthorized behavior.
 - Empty-calendar distinction.
-- Multi-page retrieval.
-- Retention of prior pages after partial failure.
+- Primary-calendar-only live requests.
+- Multi-page retrieval and retention of prior pages after partial failure.
 - All-day and timezone-aware normalization.
-- Freshness, coverage, and source provenance.
+- Freshness, coverage, source provenance, and minimal persistence.
+- Transient raw payloads and ignored private briefing output.
 - Absence of mutation operations.
-- Partial-source disclosure in a deterministic on-demand briefing.
+- Presentation-budget compliance in deterministic on-demand briefings.
 
-## Live-access approval gate
+One explicitly approved trial validated the live boundary against the selected
+primary calendar using the beginning of the trial day through seven days ahead
+in the configured timezone. It invoked no hosted inference, other connector,
+external-link retrieval, or Calendar mutation.
 
-Before implementation continues, Brad must explicitly approve:
+## Bounded live-trial authorization
 
-1. Registering or selecting the Google Cloud project and Desktop OAuth client.
-2. The registration owner and consent-screen identity.
-3. The exact Google account to authorize.
-4. The `calendar.events.owned.readonly` sensitive scope above.
-5. The primary-calendar-only resource boundary.
-6. The loopback, PKCE, refresh, Keychain, revocation, and reauthorization
-   approach.
-7. A bounded live trial using private Calendar data.
+Brad explicitly approved one bounded trial subject to this specification. The
+trial is complete, and the mandatory stop is in effect.
 
-Until that approval, the connector remains mock-only and no live Calendar
-request is permitted.
+No further Calendar retrieval, reauthorization, token refresh, account change,
+scope change, secondary-calendar access, or additional live connector is
+authorized without a new explicit approval.

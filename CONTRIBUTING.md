@@ -2,13 +2,14 @@
 
 ## Current scope
 
-The Version 1 design baseline and Milestones 1–3 are complete.
+The Version 1 design baseline and Milestones 1–4 are complete.
 [Milestone 4 — First Safe Connectors](docs/roadmap.md#milestone-4--first-safe-connectors)
-is paused at its live-access gate. Contributions may improve authoritative
-documentation or the non-live implementation when explicitly authorized. Do
-not register OAuth, request a live scope, authorize an account, or access live
-Calendar data without Brad's explicit approval. Do not begin a later milestone
-before its dependencies and acceptance gate are satisfied.
+included one explicitly approved, bounded Google Calendar live trial.
+Contributions may improve authoritative documentation or the non-live
+implementation when explicitly authorized. Do not repeat live Calendar
+retrieval, broaden its boundary, refresh authorization, or begin another
+connector without new explicit approval. Do not begin a later milestone before
+its dependencies and acceptance gate are satisfied.
 
 ## Python environment
 
@@ -67,7 +68,7 @@ validated, non-secret runtime configuration. Current variables are limited to:
 - `CHIEF_OF_STAFF_DATABASE_PATH`
 
 Do not place tokens, credentials, or private source content in environment
-configuration. Future connector secrets belong in macOS Keychain under
+configuration. Connector secrets belong in macOS Keychain under
 [ADR-0005](docs/decisions/0005-adopt-oauth-and-macos-keychain.md).
 
 Application logs are newline-delimited JSON. The logging boundary emits only

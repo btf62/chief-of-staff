@@ -1,17 +1,21 @@
 """Application-owned domain models."""
 
 from chief_of_staff.domain.models import (
+    AuthorizationStatus,
     BriefingRun,
     BriefingStatus,
     Classification,
     Conclusion,
     ConclusionKind,
     ConclusionState,
+    ConnectorAuthorizationMetadata,
     ConnectorRun,
     ConnectorStatus,
     CoverageStatus,
+    CredentialHealth,
     DispositionEvent,
     DispositionKind,
+    OAuthClientMetadata,
     RecurrenceAction,
     RecurrenceDecision,
     SourceEvidence,
@@ -19,17 +23,21 @@ from chief_of_staff.domain.models import (
 )
 
 __all__ = (
+    "AuthorizationStatus",
     "BriefingRun",
     "BriefingStatus",
     "Classification",
     "Conclusion",
     "ConclusionKind",
     "ConclusionState",
+    "ConnectorAuthorizationMetadata",
     "ConnectorRun",
     "ConnectorStatus",
     "CoverageStatus",
+    "CredentialHealth",
     "DispositionEvent",
     "DispositionKind",
+    "OAuthClientMetadata",
     "RecurrenceAction",
     "RecurrenceDecision",
     "SourceEvidence",

@@ -34,7 +34,7 @@ decisions for each future connector specification.
 | Source | Specification | Status |
 | --- | --- | --- |
 | Approved repository context | [Repository context](repository-context.md) | Accepted and implemented |
-| Google Calendar | [Google Calendar](google-calendar.md) | Proposed; mocked implementation awaiting live-access approval |
+| Google Calendar | [Google Calendar](google-calendar.md) | Accepted; bounded live trial complete and stopped |
 
 ## Planned specifications
 

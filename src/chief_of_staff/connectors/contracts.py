@@ -55,6 +55,7 @@ class SourceCoverage:
     freshness_at: datetime | None = None
     warnings: tuple[str, ...] = ()
     error_category: str | None = None
+    page_count: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

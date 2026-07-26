@@ -26,6 +26,10 @@ class CalendarAuthorizationUnavailable(RuntimeError):
     """Raised by an authorization boundary with no usable approved grant."""
 
 
+class CalendarAuthenticationError(RuntimeError):
+    """Raised when a provider rejects an otherwise present authorization."""
+
+
 class CalendarRetrievalError(RuntimeError):
     """Expected provider retrieval failure without private response content."""
 
@@ -155,6 +159,7 @@ class GoogleCalendarConnector:
                 retrieved_at=retrieved_at,
                 status=CoverageStatus.UNAUTHORIZED,
                 error_category="CalendarAuthorizationUnavailable",
+                page_count=0,
             )
 
         if (
@@ -166,6 +171,7 @@ class GoogleCalendarConnector:
                 retrieved_at=retrieved_at,
                 status=CoverageStatus.UNAUTHORIZED,
                 error_category="CalendarAuthorizationScopeMismatch",
+                page_count=0,
             )
 
         items: list[SourceItem] = []
@@ -184,6 +190,18 @@ class GoogleCalendarConnector:
             )
             try:
                 page = self.transport.list_events(authorization, list_request)
+            except CalendarAuthenticationError:
+                return self._coverage_result(
+                    retrieved_at=retrieved_at,
+                    status=CoverageStatus.UNAUTHORIZED,
+                    items=tuple(items),
+                    warnings=(
+                        *warnings,
+                        f"calendar authorization failed before page {page_number}",
+                    ),
+                    error_category="CalendarAuthenticationError",
+                    page_count=page_number - 1,
+                )
             except CalendarRetrievalError:
                 return self._coverage_result(
                     retrieved_at=retrieved_at,
@@ -196,6 +214,7 @@ class GoogleCalendarConnector:
                         f"calendar retrieval stopped before page {page_number}",
                     ),
                     error_category="CalendarRetrievalError",
+                    page_count=page_number - 1,
                 )
 
             for event in page.events:
@@ -224,6 +243,7 @@ class GoogleCalendarConnector:
                     error_category=(
                         "CalendarEventValidationError" if warnings else None
                     ),
+                    page_count=page_number,
                 )
             if not next_page_token:
                 warnings.append("calendar pagination returned an empty page token")
@@ -233,6 +253,7 @@ class GoogleCalendarConnector:
                     items=tuple(items),
                     warnings=tuple(warnings),
                     error_category="CalendarPaginationTokenInvalid",
+                    page_count=page_number,
                 )
             if next_page_token in seen_page_tokens:
                 warnings.append("calendar pagination returned a repeated page token")
@@ -242,6 +263,7 @@ class GoogleCalendarConnector:
                     items=tuple(items),
                     warnings=tuple(warnings),
                     error_category="CalendarPaginationLoop",
+                    page_count=page_number,
                 )
             seen_page_tokens.add(next_page_token)
             page_token = next_page_token
@@ -253,6 +275,7 @@ class GoogleCalendarConnector:
             items=tuple(items),
             warnings=tuple(warnings),
             error_category="CalendarPageLimit",
+            page_count=page_number,
         )
 
     def _coverage_result(
@@ -263,6 +286,7 @@ class GoogleCalendarConnector:
         items: tuple[SourceItem, ...] = (),
         warnings: tuple[str, ...] = (),
         error_category: str | None = None,
+        page_count: int | None = None,
     ) -> ConnectorResult:
         freshness_values = tuple(
             item.freshness_at for item in items if item.freshness_at is not None
@@ -278,6 +302,7 @@ class GoogleCalendarConnector:
                 freshness_at=max(freshness_values) if freshness_values else None,
                 warnings=warnings,
                 error_category=error_category,
+                page_count=page_count,
             ),
         )
 

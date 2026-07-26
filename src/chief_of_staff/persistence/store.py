@@ -6,14 +6,18 @@ import sqlite3
 from datetime import UTC, datetime
 
 from chief_of_staff.domain.models import (
+    AuthorizationStatus,
     BriefingRun,
     Classification,
     Conclusion,
     ConclusionKind,
     ConclusionState,
+    ConnectorAuthorizationMetadata,
     ConnectorRun,
+    CredentialHealth,
     DispositionEvent,
     DispositionKind,
+    OAuthClientMetadata,
     RecurrenceAction,
     RecurrenceDecision,
     SourceEvidence,
@@ -55,9 +59,10 @@ class StateStore:
                     status,
                     coverage_status,
                     freshness_at,
-                    error_category
+                    error_category,
+                    page_count
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     run.id,
@@ -71,7 +76,195 @@ class StateStore:
                     run.coverage_status.value,
                     _serialize_optional_datetime(run.freshness_at),
                     run.error_category,
+                    run.page_count,
                 ),
+            )
+
+    def save_oauth_client(self, metadata: OAuthClientMetadata) -> None:
+        """Persist non-secret OAuth client metadata and Keychain references."""
+
+        with self.database.transaction() as connection:
+            connection.execute(
+                """
+                INSERT INTO oauth_clients(
+                    connector,
+                    oauth_project_id,
+                    oauth_client_id,
+                    credential_service,
+                    client_secret_account,
+                    configured_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(connector) DO UPDATE SET
+                    oauth_project_id = excluded.oauth_project_id,
+                    oauth_client_id = excluded.oauth_client_id,
+                    credential_service = excluded.credential_service,
+                    client_secret_account = excluded.client_secret_account,
+                    configured_at = excluded.configured_at
+                """,
+                (
+                    metadata.connector,
+                    metadata.oauth_project_id,
+                    metadata.oauth_client_id,
+                    metadata.credential_service,
+                    metadata.client_secret_account,
+                    _serialize_datetime(metadata.configured_at),
+                ),
+            )
+
+    def get_oauth_client(self, connector: str) -> OAuthClientMetadata | None:
+        """Return non-secret OAuth client metadata."""
+
+        row = self.database.connection.execute(
+            "SELECT * FROM oauth_clients WHERE connector = ?",
+            (connector,),
+        ).fetchone()
+        if row is None:
+            return None
+        return OAuthClientMetadata(
+            connector=str(row["connector"]),
+            oauth_project_id=str(row["oauth_project_id"]),
+            oauth_client_id=str(row["oauth_client_id"]),
+            credential_service=str(row["credential_service"]),
+            client_secret_account=str(row["client_secret_account"]),
+            configured_at=_parse_datetime(str(row["configured_at"])),
+        )
+
+    def save_connector_authorization(
+        self,
+        metadata: ConnectorAuthorizationMetadata,
+    ) -> None:
+        """Persist non-secret authorization health and Keychain references."""
+
+        with self.database.transaction() as connection:
+            connection.execute(
+                """
+                INSERT INTO connector_authorizations(
+                    connector,
+                    account_reference,
+                    account_identity,
+                    granted_scope,
+                    credential_service,
+                    access_token_account,
+                    authorization_status,
+                    credential_health,
+                    token_expires_at,
+                    authorized_at,
+                    last_used_at,
+                    updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(connector) DO UPDATE SET
+                    account_reference = excluded.account_reference,
+                    account_identity = excluded.account_identity,
+                    granted_scope = excluded.granted_scope,
+                    credential_service = excluded.credential_service,
+                    access_token_account = excluded.access_token_account,
+                    authorization_status = excluded.authorization_status,
+                    credential_health = excluded.credential_health,
+                    token_expires_at = excluded.token_expires_at,
+                    authorized_at = excluded.authorized_at,
+                    last_used_at = excluded.last_used_at,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    metadata.connector,
+                    metadata.account_reference,
+                    metadata.account_identity,
+                    metadata.granted_scope,
+                    metadata.credential_service,
+                    metadata.access_token_account,
+                    metadata.authorization_status.value,
+                    metadata.credential_health.value,
+                    _serialize_datetime(metadata.token_expires_at),
+                    _serialize_datetime(metadata.authorized_at),
+                    _serialize_optional_datetime(metadata.last_used_at),
+                    _serialize_datetime(metadata.updated_at),
+                ),
+            )
+
+    def get_connector_authorization(
+        self,
+        connector: str,
+    ) -> ConnectorAuthorizationMetadata | None:
+        """Return inspectable authorization metadata without secret values."""
+
+        row = self.database.connection.execute(
+            "SELECT * FROM connector_authorizations WHERE connector = ?",
+            (connector,),
+        ).fetchone()
+        if row is None:
+            return None
+        return ConnectorAuthorizationMetadata(
+            connector=str(row["connector"]),
+            account_reference=str(row["account_reference"]),
+            account_identity=str(row["account_identity"]),
+            granted_scope=str(row["granted_scope"]),
+            credential_service=str(row["credential_service"]),
+            access_token_account=str(row["access_token_account"]),
+            authorization_status=AuthorizationStatus(str(row["authorization_status"])),
+            credential_health=CredentialHealth(str(row["credential_health"])),
+            token_expires_at=_parse_datetime(str(row["token_expires_at"])),
+            authorized_at=_parse_datetime(str(row["authorized_at"])),
+            last_used_at=_parse_optional_datetime(
+                None if row["last_used_at"] is None else str(row["last_used_at"])
+            ),
+            updated_at=_parse_datetime(str(row["updated_at"])),
+        )
+
+    def mark_connector_authorization_used(
+        self,
+        connector: str,
+        *,
+        used_at: datetime,
+    ) -> None:
+        """Record successful use without changing or reading a credential."""
+
+        timestamp = _serialize_datetime(used_at)
+        with self.database.transaction() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE connector_authorizations
+                SET last_used_at = ?, updated_at = ?
+                WHERE connector = ?
+                """,
+                (timestamp, timestamp, connector),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError("connector authorization metadata is missing")
+
+    def set_connector_authorization_health(
+        self,
+        connector: str,
+        *,
+        status: AuthorizationStatus,
+        health: CredentialHealth,
+        updated_at: datetime,
+    ) -> None:
+        """Update non-secret health after expiry or provider rejection."""
+
+        timestamp = _serialize_datetime(updated_at)
+        with self.database.transaction() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE connector_authorizations
+                SET authorization_status = ?,
+                    credential_health = ?,
+                    updated_at = ?
+                WHERE connector = ?
+                """,
+                (status.value, health.value, timestamp, connector),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError("connector authorization metadata is missing")
+
+    def delete_connector_configuration(self, connector: str) -> None:
+        """Delete non-secret metadata after credentials are removed."""
+
+        with self.database.transaction() as connection:
+            connection.execute(
+                "DELETE FROM oauth_clients WHERE connector = ?",
+                (connector,),
             )
 
     def add_briefing_run(self, run: BriefingRun) -> None:
@@ -345,6 +538,11 @@ class StateStore:
             source_evidence=_table_count(connection, "source_evidence"),
             conclusions=_table_count(connection, "conclusions"),
             disposition_events=_table_count(connection, "disposition_events"),
+            oauth_clients=_table_count(connection, "oauth_clients"),
+            connector_authorizations=_table_count(
+                connection,
+                "connector_authorizations",
+            ),
         )
 
     def delete_disposition_history(self, conclusion_id: str) -> int:
@@ -499,6 +697,10 @@ def _table_count(connection: sqlite3.Connection, table: str) -> int:
         "conclusions": "SELECT COUNT(*) AS count FROM conclusions",
         "connector_runs": "SELECT COUNT(*) AS count FROM connector_runs",
         "disposition_events": "SELECT COUNT(*) AS count FROM disposition_events",
+        "oauth_clients": "SELECT COUNT(*) AS count FROM oauth_clients",
+        "connector_authorizations": (
+            "SELECT COUNT(*) AS count FROM connector_authorizations"
+        ),
         "source_evidence": "SELECT COUNT(*) AS count FROM source_evidence",
     }
     query = queries.get(table)

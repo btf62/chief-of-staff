@@ -137,7 +137,7 @@ def test_fresh_database_applies_all_migrations_and_enforces_foreign_keys(
     with Database.open(tmp_path / "state.sqlite3") as database:
         inspection = StateStore(database).inspect_state()
 
-        assert inspection.schema_versions == (1, 2)
+        assert inspection.schema_versions == (1, 2, 3)
         assert database.connection.execute("PRAGMA foreign_keys").fetchone()[0] == 1
 
 
@@ -165,7 +165,7 @@ def test_database_upgrades_from_first_migration_and_is_idempotent(
             "SELECT version FROM schema_migrations ORDER BY version"
         )
     ]
-    assert upgraded_versions == [1, 2]
+    assert upgraded_versions == [1, 2, 3]
     connection.close()
 
 
@@ -404,12 +404,14 @@ def test_reset_removes_product_state_but_preserves_migrations(tmp_path: Path) ->
 
         inspection = store.reset()
 
-        assert inspection.schema_versions == (1, 2)
+        assert inspection.schema_versions == (1, 2, 3)
         assert inspection.connector_runs == 0
         assert inspection.briefing_runs == 0
         assert inspection.source_evidence == 0
         assert inspection.conclusions == 0
         assert inspection.disposition_events == 0
+        assert inspection.oauth_clients == 0
+        assert inspection.connector_authorizations == 0
 
 
 def test_timezone_naive_timestamps_and_oversized_excerpts_are_rejected(

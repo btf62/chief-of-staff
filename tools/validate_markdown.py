@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 EXCLUDED_DIRECTORIES = frozenset(
     {
         ".git",
+        ".local",
         ".mypy_cache",
         ".pytest_cache",
         ".ruff_cache",

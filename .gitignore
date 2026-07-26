@@ -45,3 +45,6 @@ __pycache__/
 
 # Local agent state
 .codex/
+
+# Private local application state and generated briefings
+.local/

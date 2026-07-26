@@ -48,6 +48,7 @@ class Database:
 
         path.parent.mkdir(parents=True, exist_ok=True)
         connection = sqlite3.connect(path, isolation_level=None)
+        path.chmod(0o600)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON")
         if connection.execute("PRAGMA foreign_keys").fetchone()[0] != 1:

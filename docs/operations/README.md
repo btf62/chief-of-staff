@@ -35,5 +35,5 @@ because the system is not deployed or approved for operational use.
   invocation, source coverage, composition, validation, and current
   limitations
 - [First safe connector operations](first-safe-connectors.md) — approved
-  repository reads, mocked Calendar behavior, validation, and the live-access
-  gate
+  repository reads, OAuth and Keychain boundaries, bounded Calendar trial,
+  validation, and mandatory stop

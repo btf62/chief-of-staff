@@ -7,9 +7,10 @@
 
 This roadmap sequences implementation of the accepted
 [Daily Briefing v1](product/features/daily-briefing-v1.md) design. Milestones 0
-through 3 are complete. The authorized non-live portion of Milestone 4 is
-implemented and awaiting explicit live-access approval. Dates and estimates
-remain intentionally omitted until implementation evidence supports them.
+through 4 are complete. Milestone 4 concluded with one explicitly approved,
+bounded primary-calendar trial; work is stopped before Milestone 5. Dates and
+estimates remain intentionally omitted until implementation evidence supports
+them.
 
 Acceptance of this roadmap does not expand product scope. The
 [Product Requirements](product/requirements.md), feature specification,
@@ -126,7 +127,7 @@ boundaries.
 
 ## Milestone 4 — First Safe Connectors
 
-- **Status:** In progress — live-access approval required
+- **Status:** Complete
 - **Intended user-visible outcome:** Brad can request a factual briefing that
   accurately shows approved repository context, today's calendar, and source
   coverage without hosted inference.
@@ -149,19 +150,19 @@ boundaries.
   inference, external writes, broad repository access, scheduled generation,
   and unapproved accounts or paths.
 
-### Current checkpoint
+### Completion checkpoint
 
 The accepted exact-path repository-context connector is implemented. The
-Google Calendar connector has a retrieval-only interface, proposed exact
-read-only scope, mocked OAuth metadata boundary, synthetic normalization,
-pagination, partial-failure handling, and no-write contract tests. An
-on-demand no-network demonstration combines repository-owned context with
-mocked Calendar data and discloses partial coverage.
+Google Calendar connector has a retrieval-only interface, exact read-only
+scope enforcement, installed-app OAuth with state and PKCE, native macOS
+Keychain storage, primary-only live transport, pagination, partial-failure
+handling, and no-write contract tests. An approved on-demand trial combined
+repository-owned context with a bounded live primary-calendar window,
+preserved minimal provenance and coverage, stayed within its presentation
+budget, and used no hosted inference.
 
-No OAuth application, account authorization, Keychain credential, live
-transport, or live Calendar access exists. Continue only after Brad approves
-the
-[Google Calendar live-access gate](architecture/connectors/google-calendar.md#live-access-approval-gate).
+The trial is complete and live access is stopped. Continue only after a new
+explicit approval for another Calendar retrieval or any later connector.
 
 ## Milestone 5 — Task-System Connectors
 

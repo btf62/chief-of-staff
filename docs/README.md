@@ -7,11 +7,11 @@ documents should link to it instead of duplicating governing content.
 ## Current baseline
 
 The Version 1 design baseline for Daily Briefing v1 is accepted. The
-[implementation roadmap](roadmap.md) records Milestones 0 through 3 as
-complete. Milestone 4 has reached its live-access approval gate after the
-authorized repository connector and mocked Calendar boundary. Design
+[implementation roadmap](roadmap.md) records Milestones 0 through 4 as
+complete after an explicitly approved, bounded primary-calendar trial.
+Milestone 5 and any additional live access remain unauthorized. Design
 acceptance authorizes implementation within the accepted scope; it does not
-mean the feature has passed operational acceptance.
+mean the complete Daily Briefing has passed operational acceptance.
 
 ## Index
 
@@ -44,7 +44,7 @@ mean the feature has passed operational acceptance.
 - [Repository context connector](architecture/connectors/repository-context.md)
   — accepted exact-path local repository retrieval contract
 - [Google Calendar connector](architecture/connectors/google-calendar.md) —
-  proposed live boundary and implemented mock contract
+  accepted primary-calendar read boundary and bounded live-trial contract
 - [Decision records](decisions/README.md) — architecture and significant
   product decisions
 
@@ -59,7 +59,8 @@ mean the feature has passed operational acceptance.
 - [Deterministic briefing operations](operations/deterministic-briefing.md) —
   synthetic invocation, pipeline behavior, validation, and limitations
 - [First safe connector operations](operations/first-safe-connectors.md) —
-  safe demonstration, mocked Calendar boundary, and live-access gate
+  safe demonstration, OAuth/Keychain boundaries, and bounded live-trial
+  procedure
 - [Runbooks](operations/runbooks/README.md) — step-by-step operational
   procedures
 

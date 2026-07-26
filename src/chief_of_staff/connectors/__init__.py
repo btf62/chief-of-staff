@@ -10,6 +10,7 @@ from chief_of_staff.connectors.contracts import (
 )
 from chief_of_staff.connectors.google_calendar import (
     GOOGLE_CALENDAR_EVENTS_OWNED_READONLY_SCOPE,
+    CalendarAuthenticationError,
     CalendarAuthorization,
     CalendarAuthorizationProvider,
     CalendarAuthorizationUnavailable,
@@ -20,11 +21,16 @@ from chief_of_staff.connectors.google_calendar import (
     GoogleCalendarPage,
     GoogleCalendarTransport,
 )
+from chief_of_staff.connectors.google_calendar_live import (
+    GoogleCalendarHttpTransport,
+    StoredGoogleCalendarAuthorizationProvider,
+)
 from chief_of_staff.connectors.repository import RepositoryContextConnector
 from chief_of_staff.connectors.static import StaticConnector
 
 __all__ = (
     "GOOGLE_CALENDAR_EVENTS_OWNED_READONLY_SCOPE",
+    "CalendarAuthenticationError",
     "CalendarAuthorization",
     "CalendarAuthorizationProvider",
     "CalendarAuthorizationUnavailable",
@@ -33,6 +39,7 @@ __all__ = (
     "ConnectorResult",
     "GoogleCalendarConnector",
     "GoogleCalendarEvent",
+    "GoogleCalendarHttpTransport",
     "GoogleCalendarListRequest",
     "GoogleCalendarPage",
     "GoogleCalendarTransport",
@@ -42,4 +49,5 @@ __all__ = (
     "SourceCoverage",
     "SourceItem",
     "StaticConnector",
+    "StoredGoogleCalendarAuthorizationProvider",
 )
