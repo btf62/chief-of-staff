@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections import Counter
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 
 from chief_of_staff.connectors import (
@@ -18,12 +19,19 @@ from chief_of_staff.pipeline.briefing import (
     render_briefing,
     validate_briefing,
 )
-from chief_of_staff.pipeline.context import InvocationContext
+from chief_of_staff.pipeline.context import (
+    InvocationContext,
+    reconcile_calendar_workday_context,
+)
 from chief_of_staff.pipeline.deduplication import (
     DeduplicationResult,
     deduplicate_records,
 )
-from chief_of_staff.pipeline.normalization import NormalizedRecord, normalize_item
+from chief_of_staff.pipeline.normalization import (
+    NormalizedRecord,
+    RecordKind,
+    normalize_item,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,10 +95,20 @@ class DeterministicBriefingPipeline:
             )
 
         deduplication = deduplicate_records(tuple(normalized))
+        context = _reconcile_workday_context(context, deduplication.records)
         plan = build_reduced_plan(
             context,
             deduplication.records,
             tuple(coverage),
+        )
+        coverage_with_display_counts = _coverage_with_display_counts(
+            plan,
+            tuple(coverage),
+        )
+        plan = build_reduced_plan(
+            context,
+            deduplication.records,
+            coverage_with_display_counts,
         )
         rendered = render_briefing(plan)
         validate_briefing(plan, rendered)
@@ -99,3 +117,61 @@ class DeterministicBriefingPipeline:
             plan=plan,
             rendered=rendered,
         )
+
+
+def _reconcile_workday_context(
+    context: InvocationContext,
+    records: tuple[NormalizedRecord, ...],
+) -> InvocationContext:
+    timed = tuple(
+        record
+        for record in records
+        if record.kind is RecordKind.CALENDAR_EVENT
+        and (record.status or "").casefold() == "confirmed"
+        and (record.event_type or "").casefold()
+        not in {"workinglocation", "outofoffice"}
+        and not record.all_day
+        and record.start_at is not None
+        and record.end_at is not None
+        and record.start_at.date() == context.briefing_date
+    )
+    scheduled_minutes = sum(
+        max(0, int((record.end_at - record.start_at).total_seconds() // 60))
+        for record in timed
+        if record.start_at is not None and record.end_at is not None
+    )
+    return reconcile_calendar_workday_context(
+        context,
+        fixed_commitment_count=len(timed),
+        scheduled_minutes=scheduled_minutes,
+    )
+
+
+def _coverage_with_display_counts(
+    plan: BriefingPlan,
+    coverage: tuple[SourceCoverage, ...],
+) -> tuple[SourceCoverage, ...]:
+    displayed = Counter(
+        source.source
+        for section in plan.sections
+        if section.name.value != "Source Coverage"
+        for item in section.items
+        for source in item.sources
+    )
+    return tuple(
+        replace(
+            report,
+            retrieved_count=(
+                report.record_count
+                if report.retrieved_count is None
+                else report.retrieved_count
+            ),
+            selected_count=(
+                report.record_count
+                if report.selected_count is None
+                else report.selected_count
+            ),
+            displayed_count=displayed[report.source],
+        )
+        for report in coverage
+    )

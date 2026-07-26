@@ -15,7 +15,12 @@ from chief_of_staff.pipeline.briefing import (
     render_briefing,
     validate_briefing,
 )
-from chief_of_staff.pipeline.context import InvocationContext, resolve_context
+from chief_of_staff.pipeline.context import (
+    InvocationContext,
+    WorkdayType,
+    reconcile_calendar_workday_context,
+    resolve_context,
+)
 from chief_of_staff.pipeline.deduplication import (
     DeduplicationResult,
     RecordCluster,
@@ -50,10 +55,12 @@ __all__ = (
     "RecordKind",
     "RenderedBriefing",
     "SourceLink",
+    "WorkdayType",
     "build_reduced_plan",
     "classify_calendar_event",
     "deduplicate_records",
     "normalize_item",
+    "reconcile_calendar_workday_context",
     "render_briefing",
     "resolve_context",
     "validate_briefing",

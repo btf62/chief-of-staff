@@ -163,6 +163,14 @@ It:
 - Uses no hosted inference, other live connector, external write, scheduling,
   or persistent source cache.
 
+During the authorization setup, Todoist's browser interface displayed an
+existing personal API-token field unrelated to this connector. The connector
+did not copy, use, log, or persist that value. A transient app-verification
+value exposed during setup was rotated immediately and is not recorded here.
+Brad may review whether any existing integrations depend on the personal token
+before deciding whether to rotate it; this trial does not authorize reading or
+rotating that token.
+
 The private result and local SQLite state must not be copied into Git or a
 public report.
 

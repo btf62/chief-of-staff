@@ -1,7 +1,7 @@
 # Feature: Daily Briefing v1
 
 - **Status:** Accepted
-- **Version:** 3
+- **Version:** 4
 - **Owner:** Brad
 - **Last updated:** 2026-07-26
 
@@ -319,8 +319,11 @@ future task list.
 ### Operational Appendix: Source Coverage
 
 After the canonical content sections, show compact operational metadata for
-every approved source used in the run. Include status and record count, plus
-safe warnings or error categories when relevant.
+every approved source used in the run. Distinguish records retrieved,
+selected, persisted, and displayed. For source-specific context collections,
+such as Todoist projects, sections, and labels, distinguish retrieved and
+persisted counts with unambiguous resource labels. Include safe warnings or
+error categories when relevant.
 
 Keep this appendix out of the Chief of Staff Note. It exists to make
 completeness, partial retrieval, authorization failures, and empty results
@@ -330,6 +333,26 @@ inspectable without displacing the note's synthesis.
 
 A non-workday briefing should protect the day from ordinary work pressure
 rather than present a normal workday plan with a different label.
+
+The default weekly work pattern is:
+
+- Monday through Thursday: full workdays.
+- Friday: normal non-workday.
+- Saturday: flexible half-workday.
+- Sunday: ministry workday.
+
+Friday and Saturday may switch through explicit date configuration. Workday
+authority follows this order:
+
+1. Brad's explicit current instruction or explicit date configuration.
+2. Explicit PTO, vacation, retreat, day-off, or workday configuration.
+3. The recurring weekly pattern.
+4. Calendar evidence as a conflict signal only.
+
+Routine Home, Office, and working-location signals never determine whether a
+day is a workday. If a configured non-workday contains substantial fixed work,
+surface the inconsistency and retain the most authoritative workday context
+rather than silently relabeling it.
 
 By default it should:
 
@@ -350,6 +373,11 @@ time-sensitive exception on a non-workday only when direct evidence supports
 it, the reason is explained, and the exception is presented without quietly
 normalizing work on protected time. The deterministic reduced mode does not
 infer such exceptions.
+
+Sunday's normal Online Campus commitments are ministry work, not evidence that
+a day off was interrupted. The deterministic note should synthesize an early
+or tightly sequenced ministry block, place necessary preparation before it,
+and protect the remainder of Sunday from unrelated ordinary project work.
 
 ## Prioritization and Conflict Handling
 
@@ -558,17 +586,17 @@ The following sources and capabilities are outside Daily Briefing v1:
 | AC-15 | Representative, human-reviewed scenarios evaluate People Waiting on Brad and Commitments at Risk separately, with precision treated as the primary trust measure and false positives explicitly reviewed. |
 | AC-16 | After reading the briefing, Brad can identify what to do, what can wait, and what is approaching. |
 | AC-17 | Governing context constrains briefing behavior but is not rendered as a daily item merely because it was retrieved. |
-| AC-18 | A non-workday briefing preserves fixed commitments, explicit preparation, concise looking-ahead context, and source coverage while suppressing ordinary task-driven work sections unless Brad explicitly overrides the workday classification. |
+| AC-18 | Workday classification follows explicit current or date configuration, explicit leave or workday configuration, the recurring weekly pattern, and Calendar conflict evidence in that order. A non-workday briefing preserves fixed commitments, explicit preparation, concise looking-ahead context, and source coverage while suppressing ordinary task-driven work sections. A Sunday ministry briefing treats the scheduled ministry period as normal work and protects the remainder from unrelated ordinary project work. |
 | AC-19 | Calendar events are classified from provider status, event type, and time shape; cancelled events are omitted, routine working-location signals remain contextual but are suppressed from visible sections, materially relevant status signals may appear, tentative events are not called fixed, and all-day events are not treated as full-day occupancy without additional evidence. |
 | AC-20 | Timestamp-derived overlaps, back-to-back commitments, transitions of 15 minutes or less, confirmed schedule span, and tomorrow-morning sequences are synthesized deterministically without unsupported implications. |
-| AC-21 | Source status, counts, safe warnings, and error categories appear in a final Source Coverage appendix rather than the Chief of Staff Note. |
+| AC-21 | Source status; retrieved, selected, persisted, and displayed counts; supporting-context counts; safe warnings; and error categories appear in a final Source Coverage appendix rather than the Chief of Staff Note. |
 
 ## Open Questions
 
 The following questions require later product or architecture decisions:
 
 - At what time and through which interface should the briefing be delivered?
-- Where should configured workdays and one-off exceptions be maintained?
+- Where should private one-off workday exceptions be maintained operationally?
 - What Gmail search window and labels should be used?
 - How should commitments in sent mail be detected?
 - What freshness threshold applies to each source?

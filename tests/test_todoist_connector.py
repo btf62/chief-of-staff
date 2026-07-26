@@ -116,7 +116,12 @@ class _ReadOnlyTransport:
     ) -> TodoistProject:
         del authorization
         self.project_calls.append(project_id)
-        return TodoistProject(id=project_id, name="Synthetic project")
+        return TodoistProject(
+            id=project_id,
+            name="Synthetic project",
+            is_shared=project_id != "project-personal",
+            can_assign_tasks=project_id != "project-personal",
+        )
 
     def get_section(
         self,
@@ -146,50 +151,58 @@ def _boundary_tasks() -> tuple[TodoistTask, ...]:
         TodoistTask(
             id="overdue",
             content="Overdue synthetic",
-            priority=4,
+            priority=1,
             due_date="2026-07-24",
             project_id="project-1",
         ),
         TodoistTask(
             id="today",
             content="Today synthetic",
-            priority=4,
+            priority=1,
             due_date="2026-07-25",
             section_id="section-1",
         ),
         TodoistTask(
             id="day-14",
             content="Boundary synthetic",
-            priority=4,
+            priority=1,
             due_date="2026-08-08",
             label_names=("Selected",),
         ),
         TodoistTask(
             id="day-15",
             content="Outside synthetic",
-            priority=4,
+            priority=1,
             due_date="2026-08-09",
         ),
         TodoistTask(
             id="p1",
             content="P1 synthetic",
-            priority=1,
+            priority=4,
         ),
         TodoistTask(
             id="p2",
             content="P2 synthetic",
-            priority=2,
+            priority=3,
         ),
         TodoistTask(
             id="assigned",
             content="Assigned synthetic",
-            priority=4,
+            priority=1,
+            project_id="project-shared",
             responsible_user_id="primary-user-id",
         ),
         TodoistTask(
             id="ordinary",
             content="Ordinary synthetic",
-            priority=3,
+            priority=1,
+        ),
+        TodoistTask(
+            id="assigned-personal",
+            content="Personal assignment is not distinguishing",
+            priority=1,
+            project_id="project-personal",
+            responsible_user_id="primary-user-id",
         ),
     )
 
@@ -254,15 +267,52 @@ def test_todoist_enforces_selection_boundary_and_resolves_minimum_context() -> N
         "task-page-2",
     ]
     assert all(call.limit == 200 for call in transport.task_calls)
-    assert transport.project_calls == ["project-1"]
+    assert transport.project_calls == [
+        "project-1",
+        "project-personal",
+        "project-shared",
+    ]
     assert transport.section_calls == ["section-1"]
     assert len(transport.label_calls) == 2
     assert connector.last_audit is not None
-    assert connector.last_audit.active_task_count == 8
+    assert connector.last_audit.active_task_count == 9
     assert connector.last_audit.selected_task_count == 6
     assert connector.last_audit.labels_retrieved == 2
     assert len(connector.last_audit.labels) == 1
     assert connector.last_audit.pagination_occurred
+    assert result.coverage.retrieved_count == 9
+    assert result.coverage.selected_count == 6
+    assert tuple(
+        (resource.resource, resource.retrieved_count)
+        for resource in result.coverage.context_resources
+    ) == (("projects", 3), ("sections", 1), ("labels", 2))
+
+
+def test_todoist_explicit_active_priority_link_selects_undated_task() -> None:
+    transport = _ReadOnlyTransport(
+        pages=(
+            TodoistTaskPage(
+                tasks=(
+                    TodoistTask(
+                        id="linked-priority",
+                        content="Explicit active priority",
+                        priority=1,
+                    ),
+                )
+            ),
+        )
+    )
+    connector = TodoistConnector(
+        account_reference="primary-user",
+        authorization_provider=_MockAuthorizationProvider(),
+        transport=transport,
+        relevant_task_ids=frozenset({"linked-priority"}),
+        clock=lambda: NOW,
+    )
+
+    result = connector.retrieve(_request(connector.approved_scope))
+
+    assert [item.source_record_id for item in result.items] == ["linked-priority"]
 
 
 def test_todoist_priority_is_source_signal_with_current_api_mapping() -> None:
@@ -273,14 +323,14 @@ def test_todoist_priority_is_source_signal_with_current_api_mapping() -> None:
                     TodoistTask(
                         id="p1",
                         content="P1 synthetic",
-                        priority=1,
+                        priority=4,
                         updated_at=datetime(2026, 7, 24, 15, 0, tzinfo=UTC),
                         due_date="2026-07-25",
                     ),
                     TodoistTask(
                         id="p2",
                         content="P2 synthetic",
-                        priority=2,
+                        priority=3,
                         due_datetime="2026-07-27T09:00:00-04:00",
                     ),
                 )
@@ -312,7 +362,7 @@ def test_todoist_priority_is_source_signal_with_current_api_mapping() -> None:
         0,
         tzinfo=ZoneInfo("America/New_York"),
     )
-    assert result.items[0].facts["provider_priority"] == 1
+    assert result.items[0].facts["provider_priority"] == 4
 
 
 def test_todoist_rejects_scope_expansion_and_filter_broadening() -> None:
@@ -372,7 +422,7 @@ def test_todoist_retains_first_page_during_partial_failure() -> None:
                     TodoistTask(
                         id="p1",
                         content="P1 synthetic",
-                        priority=1,
+                        priority=4,
                     ),
                 ),
                 next_cursor="task-page-2",

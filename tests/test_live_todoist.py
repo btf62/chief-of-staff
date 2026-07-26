@@ -416,7 +416,14 @@ def test_todoist_http_transport_reaches_only_approved_get_resources() -> None:
                     "next_cursor": None,
                 }
             ).encode(),
-            json.dumps({"id": "project-1", "name": "Synthetic project"}).encode(),
+            json.dumps(
+                {
+                    "id": "project-1",
+                    "name": "Synthetic project",
+                    "is_shared": True,
+                    "can_assign_tasks": True,
+                }
+            ).encode(),
             json.dumps(
                 {
                     "id": "section-1",
@@ -457,6 +464,8 @@ def test_todoist_http_transport_reaches_only_approved_get_resources() -> None:
     assert user.email == ACCOUNT_IDENTITY
     assert task_page.tasks[0].priority == 1
     assert project.id == "project-1"
+    assert project.is_shared
+    assert project.can_assign_tasks
     assert section.id == "section-1"
     assert label_page.labels[0].id == "label-1"
     assert all(request.get_method() == "GET" for request in opener.requests)

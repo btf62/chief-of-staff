@@ -9,7 +9,7 @@ from enum import StrEnum
 from itertools import pairwise
 
 from chief_of_staff.connectors import SourceCoverage
-from chief_of_staff.pipeline.context import InvocationContext
+from chief_of_staff.pipeline.context import InvocationContext, WorkdayType
 from chief_of_staff.pipeline.normalization import NormalizedRecord, RecordKind
 
 MAX_WORDS = 1000
@@ -197,6 +197,7 @@ def build_reduced_plan(
         if context.is_workday
         and record.kind is RecordKind.TASK
         and record.status != "completed"
+        and _task_is_material_for_workday(record, context)
     )
     prioritized_tasks = sorted(
         task_records,
@@ -324,7 +325,7 @@ def build_reduced_plan(
     sections.append(
         BriefingSection(
             name=BriefingSectionName.SOURCE_COVERAGE,
-            summary=_coverage_summary(coverage),
+            summary=_coverage_summary(context, coverage),
         )
     )
 
@@ -338,7 +339,7 @@ def build_reduced_plan(
 def render_briefing(plan: BriefingPlan) -> RenderedBriefing:
     """Render a structured plan as concise Markdown."""
 
-    workday_label = "workday" if plan.context.is_workday else "non-workday"
+    workday_label = plan.context.workday_type.value
     lines = [
         f"# Daily Briefing — {plan.context.briefing_date.isoformat()}",
         "",
@@ -439,16 +440,19 @@ def _chief_note(
     todays_calendar_context: tuple[NormalizedRecord, ...],
     tomorrow_sequence: tuple[NormalizedRecord, ...],
 ) -> str:
-    if context.is_workday:
-        return f"Today is a workday. {_schedule_summary(todays_calendar_context)}"
+    if context.workday_type is WorkdayType.MINISTRY_WORKDAY:
+        return _ministry_workday_note(todays_calendar_context)
 
-    day_label = (
-        "configured day off"
-        if context.workday_reason == "configured day off"
-        else "non-workday"
-    )
+    if context.is_workday:
+        day_label = (
+            "flexible half-workday"
+            if context.workday_type is WorkdayType.FLEXIBLE_HALF_WORKDAY
+            else "workday"
+        )
+        return f"Today is a {day_label}. {_schedule_summary(todays_calendar_context)}"
+
     parts = [
-        f"Today is a {day_label}; protect it from ordinary work demands.",
+        "Today is a configured non-workday; protect it from ordinary work demands.",
     ]
     fixed_today = tuple(
         record
@@ -458,6 +462,12 @@ def _chief_note(
     )
     if fixed_today:
         parts.append(_schedule_summary(fixed_today))
+    if context.workday_diagnostics:
+        parts.append(
+            "The fixed schedule is substantial enough to conflict with that "
+            "configuration; review the discrepancy without letting Calendar "
+            "silently redefine the day."
+        )
     if tomorrow_sequence:
         parts.append(_tomorrow_sequence_note(tomorrow_sequence))
     else:
@@ -468,23 +478,120 @@ def _chief_note(
     return " ".join(parts)
 
 
-def _coverage_summary(coverage: tuple[SourceCoverage, ...]) -> str:
+def _coverage_summary(
+    context: InvocationContext,
+    coverage: tuple[SourceCoverage, ...],
+) -> str:
     if not coverage:
         return "No approved source coverage was supplied."
 
     coverage_parts: list[str] = []
     for report in coverage:
-        record_label = "record" if report.record_count == 1 else "records"
+        retrieved = (
+            report.record_count
+            if report.retrieved_count is None
+            else report.retrieved_count
+        )
+        selected = (
+            report.record_count
+            if report.selected_count is None
+            else report.selected_count
+        )
+        persisted = (
+            "persistence not reported"
+            if report.persisted_count is None
+            else f"{report.persisted_count} persisted"
+        )
+        displayed = (
+            "display not reported"
+            if report.displayed_count is None
+            else f"{report.displayed_count} displayed"
+        )
         detail = (
             f"`{report.source}`: {report.status.value}; "
-            f"{report.record_count} {record_label}"
+            f"{retrieved} retrieved; {selected} selected; "
+            f"{persisted}; {displayed}"
         )
+        if report.context_resources:
+            resources = ", ".join(
+                (
+                    f"{resource.resource}: {resource.retrieved_count} retrieved, "
+                    + (
+                        "persistence not reported"
+                        if resource.persisted_count is None
+                        else f"{resource.persisted_count} persisted"
+                    )
+                )
+                for resource in report.context_resources
+            )
+            detail += f"; context ({resources})"
         if report.warnings:
             detail += f"; {'; '.join(report.warnings)}"
         if report.error_category:
             detail += f"; {report.error_category}"
         coverage_parts.append(detail)
+    if context.workday_diagnostics:
+        coverage_parts.append(
+            "Workday context: " + " ".join(context.workday_diagnostics)
+        )
     return ". ".join(coverage_parts) + "."
+
+
+def _ministry_workday_note(
+    todays_calendar_context: tuple[NormalizedRecord, ...],
+) -> str:
+    fixed = tuple(
+        sorted(
+            (
+                record
+                for record in todays_calendar_context
+                if classify_calendar_event(record)
+                is CalendarEventClassification.FIXED_COMMITMENT
+                and record.start_at is not None
+            ),
+            key=lambda record: record.start_at or datetime.max,
+        )
+    )
+    if not fixed:
+        return (
+            "Today is a scheduled ministry workday. Protect the remainder of the "
+            "day from unrelated ordinary project work."
+        )
+
+    starts = tuple(record.start_at for record in fixed if record.start_at is not None)
+    ends = tuple(record.end_at for record in fixed if record.end_at is not None)
+    label = (
+        "Online Campus ministry workday"
+        if _calendar_sequence_label(fixed) == "Online Campus sequence"
+        else "ministry workday"
+    )
+    noun = "commitment" if len(fixed) == 1 else "commitments"
+    span = _natural_time_span(min(starts), max(ends) if ends else None)
+    parts = [f"Today is a scheduled {label} with {len(fixed)} fixed {noun} from {span}"]
+    minimum_gap = _minimum_positive_transition(fixed)
+    if minimum_gap is not None and minimum_gap <= timedelta(minutes=15):
+        minutes = int(minimum_gap.total_seconds() // 60)
+        parts.append(
+            f"The shortest transition is {minutes} "
+            f"{'minute' if minutes == 1 else 'minutes'}, so the sequence is tight."
+        )
+    first_start = min(starts)
+    parts.append(f"Complete necessary preparation before {first_start:%-I:%M %p}.")
+    parts.append("Protect the remainder from unrelated ordinary project work.")
+    return " ".join(parts)
+
+
+def _minimum_positive_transition(
+    fixed_events: tuple[NormalizedRecord, ...],
+) -> timedelta | None:
+    gaps = tuple(
+        current.start_at - previous.end_at
+        for previous, current in pairwise(fixed_events)
+        if previous.end_at is not None
+        and current.start_at is not None
+        and current.start_at >= previous.end_at
+    )
+    return min(gaps) if gaps else None
 
 
 def classify_calendar_event(
@@ -555,9 +662,7 @@ def _schedule_summary(todays_calendar: tuple[NormalizedRecord, ...]) -> str:
             else ""
         )
         noun = "commitment" if len(fixed) == 1 else "commitments"
-        parts.append(
-            f"Retrieved Calendar facts show {len(fixed)} fixed {noun}{time_span}."
-        )
+        parts.append(f"Calendar shows {len(fixed)} fixed {noun}{time_span}.")
         parts.extend(_schedule_implications(fixed))
     if tentative_count:
         noun = "hold remains" if tentative_count == 1 else "holds remain"
@@ -653,6 +758,19 @@ def _is_outcome_candidate(record: NormalizedRecord, today: date) -> bool:
         record.explicit_commitment
         or record.importance >= 4
         or (record.due_at is not None and record.due_at.date() <= today)
+    )
+
+
+def _task_is_material_for_workday(
+    record: NormalizedRecord,
+    context: InvocationContext,
+) -> bool:
+    if context.workday_type is not WorkdayType.MINISTRY_WORKDAY:
+        return True
+    return (
+        record.explicit_commitment
+        or record.preparation is not None
+        or (record.due_at is not None and record.due_at.date() == context.briefing_date)
     )
 
 

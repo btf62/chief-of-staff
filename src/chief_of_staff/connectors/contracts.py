@@ -44,6 +44,15 @@ class SourceItem:
 
 
 @dataclass(frozen=True, slots=True)
+class ContextResourceCoverage:
+    """Retrieved and persisted counts for one supporting context resource."""
+
+    resource: str
+    retrieved_count: int
+    persisted_count: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class SourceCoverage:
     """What a connector did and did not retrieve."""
 
@@ -56,6 +65,11 @@ class SourceCoverage:
     warnings: tuple[str, ...] = ()
     error_category: str | None = None
     page_count: int | None = None
+    retrieved_count: int | None = None
+    selected_count: int | None = None
+    persisted_count: int | None = None
+    displayed_count: int | None = None
+    context_resources: tuple[ContextResourceCoverage, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

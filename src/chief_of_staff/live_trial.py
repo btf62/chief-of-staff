@@ -6,12 +6,13 @@ import hashlib
 import os
 import uuid
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from chief_of_staff.connectors import (
+    ContextResourceCoverage,
     GoogleCalendarConnector,
     RepositoryContextConnector,
     TodoistConnector,
@@ -29,7 +30,14 @@ from chief_of_staff.domain import (
     SourceEvidence,
 )
 from chief_of_staff.persistence import StateStore
-from chief_of_staff.pipeline import DeterministicBriefingPipeline, resolve_context
+from chief_of_staff.pipeline import (
+    DeterministicBriefingPipeline,
+    PipelineResult,
+    build_reduced_plan,
+    render_briefing,
+    resolve_context,
+    validate_briefing,
+)
 
 
 class LiveTrialError(RuntimeError):
@@ -121,12 +129,22 @@ class LiveCalendarTrialRunner:
         if client is None or authorization is None:
             raise LiveTrialError("Google Calendar authorization metadata is missing")
 
-        connector_run_ids, _evidence_ids = self._persist_run_graph(
+        connector_run_ids, evidence_ids = self._persist_run_graph(
             run_id=run_id,
             started_at=started_at,
             completed_at=completed_at,
             context=context,
             result=result,
+        )
+        result = _with_persistence_coverage(
+            result=result,
+            persisted_by_source={
+                source: sum(
+                    evidence_source == source
+                    for evidence_source, _source_record_id in evidence_ids
+                )
+                for source in connector_run_ids
+            },
         )
         output_path = self._write_briefing(
             briefing_date=briefing_date.isoformat(),
@@ -292,6 +310,7 @@ class LiveTodoistTrialReport:
     sections_persisted: int
     labels_retrieved: int
     labels_persisted: int
+    stale_task_count_removed: int
     task_page_count: int
     label_page_count: int
     calendar_event_count: int
@@ -392,6 +411,26 @@ class LiveTodoistTrialRunner:
         persisted_counts = self._persist_todoist_tasks(
             evidence_ids=evidence_ids,
             timezone=context.timezone,
+            prune_stale=(
+                coverage_by_source["todoist"].status is CoverageStatus.COMPLETE
+            ),
+        )
+        result = _with_persistence_coverage(
+            result=result,
+            persisted_by_source={
+                source: sum(
+                    evidence_source == source
+                    for evidence_source, _source_record_id in evidence_ids
+                )
+                for source in coverage_by_source
+            },
+            context_persisted_by_source={
+                "todoist": {
+                    "projects": persisted_counts[1],
+                    "sections": persisted_counts[2],
+                    "labels": persisted_counts[3],
+                }
+            },
         )
         output_path = helper._write_briefing(
             briefing_date=briefing_date.isoformat(),
@@ -441,6 +480,7 @@ class LiveTodoistTrialRunner:
             sections_persisted=persisted_counts[2],
             labels_retrieved=audit.labels_retrieved,
             labels_persisted=persisted_counts[3],
+            stale_task_count_removed=persisted_counts[4],
             task_page_count=audit.task_page_count,
             label_page_count=audit.label_page_count,
             calendar_event_count=len(calendar_records),
@@ -454,7 +494,8 @@ class LiveTodoistTrialRunner:
         *,
         evidence_ids: dict[tuple[str, str], str],
         timezone: str,
-    ) -> tuple[int, int, int, int]:
+        prune_stale: bool,
+    ) -> tuple[int, int, int, int, int]:
         audit = self.todoist_connector.last_audit
         if audit is None:
             raise LiveTrialError("Todoist lifecycle audit is unavailable")
@@ -502,9 +543,52 @@ class LiveTodoistTrialRunner:
             if section is not None:
                 persisted_sections.add(section.id)
             persisted_labels.update(label.id for label in resolved_labels)
+        stale_task_count_removed = (
+            self.state_store.prune_unselected_source_tasks(
+                source="todoist",
+                retained_source_record_ids=frozenset(
+                    task.id for task in audit.selected_tasks
+                ),
+            )
+            if prune_stale
+            else 0
+        )
         return (
             persisted_tasks,
             len(persisted_projects),
             len(persisted_sections),
             len(persisted_labels),
+            stale_task_count_removed,
         )
+
+
+def _with_persistence_coverage(
+    *,
+    result: PipelineResult,
+    persisted_by_source: dict[str, int],
+    context_persisted_by_source: dict[str, dict[str, int]] | None = None,
+) -> PipelineResult:
+    context = result.plan.context
+    context_counts = context_persisted_by_source or {}
+    coverage = tuple(
+        replace(
+            report,
+            persisted_count=persisted_by_source.get(report.source, 0),
+            context_resources=tuple(
+                ContextResourceCoverage(
+                    resource=resource.resource,
+                    retrieved_count=resource.retrieved_count,
+                    persisted_count=context_counts.get(report.source, {}).get(
+                        resource.resource,
+                        0,
+                    ),
+                )
+                for resource in report.context_resources
+            ),
+        )
+        for report in result.plan.coverage
+    )
+    plan = build_reduced_plan(context, result.deduplication.records, coverage)
+    rendered = render_briefing(plan)
+    validate_briefing(plan, rendered)
+    return replace(result, plan=plan, rendered=rendered)

@@ -71,12 +71,13 @@ def _evidence(
     evidence_id: str = "evidence-1",
     connector_run_id: str | None = "connector-run-1",
     fingerprint: str = "fingerprint-v1",
+    source_record_id: str = "task-1",
 ) -> SourceEvidence:
     return SourceEvidence(
         id=evidence_id,
         connector_run_id=connector_run_id,
         source="synthetic_tasks",
-        source_record_id="task-1",
+        source_record_id=source_record_id,
         display_url="https://example.invalid/tasks/1",
         excerpt="Prepare the synthetic planning agenda.",
         evidence_fingerprint=fingerprint,
@@ -207,6 +208,56 @@ def test_selected_normalized_task_persists_minimum_context_and_cascades(
         assert store.delete_source_evidence("evidence-1")
         assert store.inspect_state().normalized_source_tasks == 0
         assert store.inspect_state().normalized_source_task_labels == 0
+
+
+def test_task_cleanup_removes_stale_records_but_preserves_correction_evidence(
+    tmp_path: Path,
+) -> None:
+    with Database.open(tmp_path / "todoist-cleanup.sqlite3") as database:
+        store = StateStore(database)
+        store.add_connector_run(_connector_run())
+        store.add_briefing_run(_briefing_run())
+        for index in range(1, 4):
+            evidence_id = f"evidence-{index}"
+            store.add_source_evidence(
+                _evidence(
+                    evidence_id=evidence_id,
+                    fingerprint=f"fingerprint-{index}",
+                    source_record_id=f"task-{index}",
+                )
+            )
+            store.add_normalized_source_task(
+                NormalizedSourceTask(
+                    evidence_id=evidence_id,
+                    title=f"Synthetic task {index}",
+                    provider_priority=1,
+                    recurring=False,
+                    all_day=True,
+                    due_at=NOW,
+                )
+            )
+        store.add_conclusion(_conclusion())
+        store.append_disposition(_disposition(DispositionKind.DISMISSED))
+
+        removed = store.prune_unselected_source_tasks(
+            source="synthetic_tasks",
+            retained_source_record_ids=frozenset({"task-3"}),
+        )
+
+        assert removed == 1
+        remaining = database.connection.execute(
+            """
+            SELECT source_record_id
+            FROM source_evidence
+            ORDER BY source_record_id
+            """
+        ).fetchall()
+        assert [str(row["source_record_id"]) for row in remaining] == [
+            "task-1",
+            "task-3",
+        ]
+        assert store.inspect_conclusion("conclusion-1") is not None
+        assert store.inspect_state().normalized_source_tasks == 2
 
 
 def test_applied_migration_checksum_cannot_change(tmp_path: Path) -> None:

@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 from chief_of_staff.connectors.contracts import (
     ConnectorRequest,
     ConnectorResult,
+    ContextResourceCoverage,
     SourceCoverage,
     SourceItem,
 )
@@ -110,6 +111,8 @@ class TodoistProject:
 
     id: str
     name: str
+    is_shared: bool = False
+    can_assign_tasks: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -224,6 +227,7 @@ class TodoistConnector:
     authorization_provider: TodoistAuthorizationProvider
     transport: TodoistTransport
     filter_query: str = TODOIST_FILTER_QUERY
+    relevant_task_ids: frozenset[str] = frozenset()
     max_pages: int = DEFAULT_MAX_PAGES
     clock: Callable[[], datetime] = field(
         default=_utc_now,
@@ -317,13 +321,15 @@ class TodoistConnector:
                 "Todoist account timezone differs from the briefing timezone"
             )
 
-        tasks, active_task_count, task_pages, task_error = self._retrieve_tasks(
-            authorization,
-            request=request,
-            user=user,
-            warnings=warnings,
+        candidate_tasks, active_task_count, task_pages, task_error = (
+            self._retrieve_tasks(
+                authorization,
+                request=request,
+                user=user,
+                warnings=warnings,
+            )
         )
-        if task_error is not None and not tasks:
+        if task_error is not None and not candidate_tasks:
             status = (
                 CoverageStatus.UNAUTHORIZED
                 if task_error == "TodoistAuthenticationError"
@@ -335,15 +341,24 @@ class TodoistConnector:
                 warnings=tuple(warnings),
                 error_category=task_error,
                 page_count=task_pages,
+                retrieved_count=active_task_count,
+                selected_count=0,
             )
 
         try:
-            projects, sections, labels, label_pages, context_error = (
-                self._resolve_context(
-                    authorization,
-                    selected_tasks=tasks,
-                    warnings=warnings,
-                )
+            (
+                tasks,
+                projects,
+                sections,
+                labels,
+                label_pages,
+                context_error,
+            ) = self._resolve_context(
+                authorization,
+                candidate_tasks=candidate_tasks,
+                request=request,
+                user=user,
+                warnings=warnings,
             )
         except TodoistAuthenticationError:
             return self._coverage_result(
@@ -355,6 +370,8 @@ class TodoistConnector:
                 ),
                 error_category="TodoistAuthenticationError",
                 page_count=task_pages,
+                retrieved_count=active_task_count,
+                selected_count=0,
             )
         items: list[SourceItem] = []
         for task in tasks:
@@ -371,6 +388,8 @@ class TodoistConnector:
                 )
             except ValueError:
                 warnings.append("one selected Todoist task was invalid and omitted")
+        usable_task_ids = {item.source_record_id for item in items}
+        tasks = tuple(task for task in tasks if task.id in usable_task_ids)
 
         error_category = task_error or context_error
         status = (
@@ -403,6 +422,22 @@ class TodoistConnector:
             warnings=tuple(warnings),
             error_category=error_category,
             page_count=task_pages + label_pages,
+            retrieved_count=active_task_count,
+            selected_count=len(items),
+            context_resources=(
+                ContextResourceCoverage(
+                    resource="projects",
+                    retrieved_count=len(projects),
+                ),
+                ContextResourceCoverage(
+                    resource="sections",
+                    retrieved_count=len(sections),
+                ),
+                ContextResourceCoverage(
+                    resource="labels",
+                    retrieved_count=len(labels),
+                ),
+            ),
         )
 
     def _retrieve_tasks(
@@ -413,7 +448,7 @@ class TodoistConnector:
         user: TodoistUser,
         warnings: list[str],
     ) -> tuple[tuple[TodoistTask, ...], int, int, str | None]:
-        selected: dict[str, TodoistTask] = {}
+        candidates: dict[str, TodoistTask] = {}
         active_task_count = 0
         cursor: str | None = None
         seen_cursors: set[str] = set()
@@ -430,7 +465,7 @@ class TodoistConnector:
                     f"Todoist authorization failed before task page {page_number}"
                 )
                 return (
-                    tuple(selected.values()),
+                    tuple(candidates.values()),
                     active_task_count,
                     page_number - 1,
                     "TodoistAuthenticationError",
@@ -440,7 +475,7 @@ class TodoistConnector:
                     f"Todoist task retrieval stopped before page {page_number}"
                 )
                 return (
-                    tuple(selected.values()),
+                    tuple(candidates.values()),
                     active_task_count,
                     page_number - 1,
                     type(error).__name__,
@@ -448,13 +483,16 @@ class TodoistConnector:
 
             active_task_count += len(page.tasks)
             for task in page.tasks:
-                if _task_matches_boundary(
-                    task,
-                    briefing_date=request.briefing_date,
-                    timezone=request.timezone,
-                    user_id=user.id,
+                if (
+                    _task_is_primary_selection(
+                        task,
+                        briefing_date=request.briefing_date,
+                        timezone=request.timezone,
+                        relevant_task_ids=self.relevant_task_ids,
+                    )
+                    or task.responsible_user_id == user.id
                 ):
-                    selected[task.id] = task
+                    candidates[task.id] = task
 
             cursor_error = _next_cursor_error(
                 page.next_cursor,
@@ -462,7 +500,7 @@ class TodoistConnector:
             )
             if cursor_error is None and page.next_cursor is None:
                 return (
-                    tuple(selected.values()),
+                    tuple(candidates.values()),
                     active_task_count,
                     page_number,
                     None,
@@ -470,7 +508,7 @@ class TodoistConnector:
             if cursor_error is not None:
                 warnings.append(cursor_error)
                 return (
-                    tuple(selected.values()),
+                    tuple(candidates.values()),
                     active_task_count,
                     page_number,
                     "TodoistPaginationError",
@@ -481,7 +519,7 @@ class TodoistConnector:
             f"Todoist task retrieval reached the {self.max_pages}-page limit"
         )
         return (
-            tuple(selected.values()),
+            tuple(candidates.values()),
             active_task_count,
             page_number,
             "TodoistPageLimit",
@@ -491,9 +529,12 @@ class TodoistConnector:
         self,
         authorization: TodoistAuthorization,
         *,
-        selected_tasks: tuple[TodoistTask, ...],
+        candidate_tasks: tuple[TodoistTask, ...],
+        request: ConnectorRequest,
+        user: TodoistUser,
         warnings: list[str],
     ) -> tuple[
+        tuple[TodoistTask, ...],
         tuple[TodoistProject, ...],
         tuple[TodoistSection, ...],
         tuple[TodoistLabel, ...],
@@ -504,7 +545,7 @@ class TodoistConnector:
         sections: list[TodoistSection] = []
         context_error: str | None = None
         for project_id in sorted(
-            {task.project_id for task in selected_tasks if task.project_id}
+            {task.project_id for task in candidate_tasks if task.project_id}
         ):
             try:
                 projects.append(self.transport.get_project(authorization, project_id))
@@ -513,6 +554,19 @@ class TodoistConnector:
             except TodoistRetrievalError as error:
                 warnings.append("one selected Todoist project could not be resolved")
                 context_error = type(error).__name__
+        project_by_id = {project.id: project for project in projects}
+        selected_tasks = tuple(
+            task
+            for task in candidate_tasks
+            if _task_matches_boundary(
+                task,
+                briefing_date=request.briefing_date,
+                timezone=request.timezone,
+                user_id=user.id,
+                projects=project_by_id,
+                relevant_task_ids=self.relevant_task_ids,
+            )
+        )
         for section_id in sorted(
             {task.section_id for task in selected_tasks if task.section_id}
         ):
@@ -525,7 +579,14 @@ class TodoistConnector:
                 context_error = type(error).__name__
 
         if not any(task.label_names for task in selected_tasks):
-            return tuple(projects), tuple(sections), (), 0, context_error
+            return (
+                selected_tasks,
+                tuple(projects),
+                tuple(sections),
+                (),
+                0,
+                context_error,
+            )
 
         labels: list[TodoistLabel] = []
         cursor: str | None = None
@@ -545,6 +606,7 @@ class TodoistConnector:
                     f"Todoist label retrieval stopped before page {page_number}"
                 )
                 return (
+                    selected_tasks,
                     tuple(projects),
                     tuple(sections),
                     tuple(labels),
@@ -558,6 +620,7 @@ class TodoistConnector:
             )
             if cursor_error is None and page.next_cursor is None:
                 return (
+                    selected_tasks,
                     tuple(projects),
                     tuple(sections),
                     tuple(labels),
@@ -567,6 +630,7 @@ class TodoistConnector:
             if cursor_error is not None:
                 warnings.append(cursor_error)
                 return (
+                    selected_tasks,
                     tuple(projects),
                     tuple(sections),
                     tuple(labels),
@@ -578,6 +642,7 @@ class TodoistConnector:
             f"Todoist label retrieval reached the {self.max_pages}-page limit"
         )
         return (
+            selected_tasks,
             tuple(projects),
             tuple(sections),
             tuple(labels),
@@ -594,6 +659,9 @@ class TodoistConnector:
         warnings: tuple[str, ...] = (),
         error_category: str | None = None,
         page_count: int | None = None,
+        retrieved_count: int | None = None,
+        selected_count: int | None = None,
+        context_resources: tuple[ContextResourceCoverage, ...] = (),
     ) -> ConnectorResult:
         freshness_values = tuple(
             item.freshness_at for item in items if item.freshness_at is not None
@@ -610,6 +678,9 @@ class TodoistConnector:
                 warnings=warnings,
                 error_category=error_category,
                 page_count=page_count,
+                retrieved_count=retrieved_count,
+                selected_count=selected_count,
+                context_resources=context_resources,
             ),
         )
 
@@ -629,21 +700,63 @@ def _next_cursor_error(
     return None
 
 
+def _task_is_primary_selection(
+    task: TodoistTask,
+    *,
+    briefing_date: date,
+    timezone: str,
+    relevant_task_ids: frozenset[str],
+) -> bool:
+    if task.id in relevant_task_ids:
+        return True
+    if task.priority in {3, 4}:
+        return True
+    due_at, _all_day = _task_due_at(task, zone=ZoneInfo(timezone))
+    return due_at is not None and due_at.date() <= briefing_date + timedelta(
+        days=TODOIST_DUE_LOOKAHEAD_DAYS
+    )
+
+
 def _task_matches_boundary(
     task: TodoistTask,
     *,
     briefing_date: date,
     timezone: str,
     user_id: str,
+    projects: dict[str, TodoistProject],
+    relevant_task_ids: frozenset[str],
 ) -> bool:
-    if task.priority in {1, 2}:
+    if _task_is_primary_selection(
+        task,
+        briefing_date=briefing_date,
+        timezone=timezone,
+        relevant_task_ids=relevant_task_ids,
+    ):
         return True
-    if task.responsible_user_id == user_id:
+    if task.responsible_user_id != user_id or task.project_id is None:
+        return False
+    project = projects.get(task.project_id)
+    return bool(project is not None and project.is_shared and project.can_assign_tasks)
+
+
+def stored_task_matches_selection_boundary(
+    *,
+    source_record_id: str,
+    provider_priority: int,
+    due_at: datetime | None,
+    briefing_date: date,
+    relevant_task_ids: frozenset[str] = frozenset(),
+    assignment_is_distinguishing: bool = False,
+) -> bool:
+    """Evaluate minimal persisted facts without performing source retrieval."""
+
+    if source_record_id in relevant_task_ids or provider_priority in {3, 4}:
         return True
-    due_at, _all_day = _task_due_at(task, zone=ZoneInfo(timezone))
-    return due_at is not None and due_at.date() <= briefing_date + timedelta(
+    if due_at is not None and due_at.date() <= briefing_date + timedelta(
         days=TODOIST_DUE_LOOKAHEAD_DAYS
-    )
+    ):
+        return True
+    return assignment_is_distinguishing
 
 
 def _task_to_source_item(
@@ -695,7 +808,7 @@ def _task_to_source_item(
         "title": content,
         "summary": "; ".join(context_parts) or None,
         "status": "open",
-        "importance": {1: 5, 2: 4, 3: 2, 4: 1}[task.priority],
+        "importance": {1: 1, 2: 2, 3: 4, 4: 5}[task.priority],
         "provider_priority": task.priority,
         "explicit_commitment": False,
         "all_day": all_day,

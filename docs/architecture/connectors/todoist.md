@@ -1,7 +1,7 @@
 # Todoist Connector
 
 - **Status:** Accepted
-- **Version:** 2
+- **Version:** 3
 - **Owner:** Brad
 - **Last updated:** 2026-07-26
 
@@ -140,14 +140,24 @@ overdue | 15 days | p1 | p2 | assigned to: me
 ```
 
 Todoist defines `15 days` as the current date plus the following fourteen
-calendar days. The connector applies a second local check in Brad's configured
-timezone and retains only active tasks meeting at least one condition:
+calendar days. This provider filter may retrieve assignment candidates that
+the application later rejects; those candidates remain transient. The
+connector applies a second local check in Brad's configured timezone and
+retains only active tasks meeting at least one condition:
 
 - Overdue.
 - Due today.
 - Due within the next fourteen calendar days, inclusive.
-- Provider priority `1` or `2`, where the current API defines `1` as highest.
-- Assigned to the authenticated Brad account where assignment applies.
+- Provider priority P1 or P2. In the current API representation, `4` is P1 and
+  `3` is P2; `1` is the natural priority.
+- Explicitly linked to an approved active priority in local configuration.
+- Assigned to the authenticated Brad account in a shared project or workspace
+  where assignment meaningfully distinguishes ownership.
+
+Assignment to Brad is not by itself a selection signal in a personal project.
+An undated task is selected only when it is P1 or P2, explicitly linked to an
+approved active priority, or assigned under the distinguishing shared-project
+rule.
 
 This filter avoids retrieving the complete active-task corpus. Every page uses
 the same parameters, a maximum page size of 200, and an opaque cursor that is
@@ -155,9 +165,13 @@ never decoded or persisted.
 
 ## Context retrieval
 
-After task selection, the connector:
+To apply and explain task selection, the connector:
 
-- Retrieves each distinct referenced project by exact ID.
+- Retrieves each distinct referenced project by exact ID, including project
+  sharing and assignment-capability flags needed to evaluate assignment-only
+  candidates.
+- Discards assignment-only candidates whose project context does not prove
+  that assignment meaningfully distinguishes ownership.
 - Retrieves each distinct referenced section by exact ID.
 - Retrieves the paginated personal-label collection only when a selected task
   has labels, because the task payload supplies label names rather than label
@@ -191,9 +205,16 @@ transparent source signal in the deterministic explanation.
 
 ## Freshness, coverage, pagination, and failures
 
-Coverage reports the approved filter, retrieval time, selected record count,
-task and label page counts, source freshness when available, safe warnings,
-and an error category.
+Coverage reports the approved filter, retrieval time, task and label page
+counts, source freshness when available, safe warnings, and an error category.
+Counts use distinct labels for:
+
+- Tasks retrieved by the bounded provider filter.
+- Tasks selected by the application boundary.
+- Selected tasks persisted as minimized local facts.
+- Tasks displayed in the briefing.
+- Projects, sections, and labels retrieved for context.
+- Distinct projects, sections, and labels persisted for selected tasks.
 
 - Complete pagination, including zero selected tasks: `complete`.
 - Later-page or context failure after usable tasks: `partial`.
@@ -227,6 +248,10 @@ The connector follows
   payloads, authorization codes, and credentials are not persisted.
 - Connector and briefing runs use the accepted 30-day retention class;
   deleting source evidence cascades to its normalized task facts and labels.
+- After a complete retrieval and boundary re-evaluation, normalized tasks that
+  no longer qualify are deleted. Partial retrieval never drives absence-based
+  cleanup. Evidence needed by a prior correction or disposition is retained
+  so the correction loop remains effective.
 
 The private generated briefing is stored under ignored local state with
 restricted filesystem permissions.

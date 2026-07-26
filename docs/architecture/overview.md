@@ -1,7 +1,7 @@
 # Architecture Overview
 
 - **Status:** Accepted
-- **Version:** 1
+- **Version:** 2
 - **Owner:** Brad
 - **Last updated:** 2026-07-25
 
@@ -528,9 +528,15 @@ Every run receives:
 - Run identity
 
 Timezone and workday determination come from explicit configuration or current
-instruction, not from hidden inference. Google Calendar is authoritative for
-the day's scheduled commitments, but it does not alone determine whether a day
-is a workday.
+instruction, not from hidden inference. The default weekly pattern is full
+workdays Monday through Thursday, a Friday non-workday, a flexible Saturday
+half-workday, and a Sunday ministry workday. Explicit current or date
+configuration takes precedence over explicit leave or workday configuration,
+which takes precedence over that weekly pattern. Google Calendar is
+authoritative for the day's scheduled commitments, but it is only a conflict
+signal for workday determination and does not alone redefine whether a day is
+a workday. Home, Office, and similar status signals never determine the
+workday classification.
 
 A run coordinator prevents concurrent duplicate runs for the same briefing
 date and profile. An intentional refresh creates a new run version rather than

@@ -3,6 +3,7 @@
 from chief_of_staff.connectors.contracts import (
     ConnectorRequest,
     ConnectorResult,
+    ContextResourceCoverage,
     ReadOnlyConnector,
     RetrievalWindow,
     SourceCoverage,
@@ -48,6 +49,7 @@ from chief_of_staff.connectors.todoist import (
     TodoistTaskPage,
     TodoistTransport,
     TodoistUser,
+    stored_task_matches_selection_boundary,
     task_due_at,
 )
 from chief_of_staff.connectors.todoist_live import (
@@ -66,6 +68,7 @@ __all__ = (
     "CalendarRetrievalError",
     "ConnectorRequest",
     "ConnectorResult",
+    "ContextResourceCoverage",
     "GoogleCalendarConnector",
     "GoogleCalendarEvent",
     "GoogleCalendarHttpTransport",
@@ -99,5 +102,6 @@ __all__ = (
     "TodoistTaskPage",
     "TodoistTransport",
     "TodoistUser",
+    "stored_task_matches_selection_boundary",
     "task_due_at",
 )

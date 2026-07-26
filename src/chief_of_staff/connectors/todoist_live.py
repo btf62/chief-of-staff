@@ -229,6 +229,8 @@ class TodoistHttpTransport:
             return TodoistProject(
                 id=_required_identifier(payload.get("id")),
                 name=_required_string(payload.get("name")),
+                is_shared=_optional_bool(payload.get("is_shared")),
+                can_assign_tasks=_optional_bool(payload.get("can_assign_tasks")),
             )
         finally:
             payload.clear()
@@ -398,6 +400,14 @@ def _required_identifier(value: object) -> str:
     if not normalized:
         raise TodoistRetrievalError
     return normalized
+
+
+def _optional_bool(value: object) -> bool:
+    if value is None:
+        return False
+    if not isinstance(value, bool):
+        raise TodoistRetrievalError
+    return value
 
 
 def _optional_identifier(value: object) -> str | None:

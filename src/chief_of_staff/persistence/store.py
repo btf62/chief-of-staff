@@ -437,6 +437,43 @@ class StateStore:
                 ),
             )
 
+    def prune_unselected_source_tasks(
+        self,
+        *,
+        source: str,
+        retained_source_record_ids: frozenset[str],
+    ) -> int:
+        """Delete stale selected-task snapshots unless correction state needs them."""
+
+        if not source.strip():
+            raise ValueError("source must not be empty")
+        with self.database.transaction() as connection:
+            rows = connection.execute(
+                """
+                SELECT evidence.id, evidence.source_record_id
+                FROM source_evidence AS evidence
+                JOIN normalized_source_tasks AS task
+                    ON task.evidence_id = evidence.id
+                WHERE evidence.source = ?
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM conclusion_evidence AS link
+                      WHERE link.evidence_id = evidence.id
+                  )
+                """,
+                (source,),
+            ).fetchall()
+            stale_evidence_ids = tuple(
+                str(row["id"])
+                for row in rows
+                if str(row["source_record_id"]) not in retained_source_record_ids
+            )
+            connection.executemany(
+                "DELETE FROM source_evidence WHERE id = ?",
+                ((evidence_id,) for evidence_id in stale_evidence_ids),
+            )
+        return len(stale_evidence_ids)
+
     def add_conclusion(self, conclusion: Conclusion) -> None:
         """Persist a conclusion and its ordered source-evidence links."""
 

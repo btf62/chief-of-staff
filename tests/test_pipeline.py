@@ -10,6 +10,7 @@ import pytest
 from chief_of_staff.connectors import (
     ConnectorRequest,
     ConnectorResult,
+    ContextResourceCoverage,
     SourceCoverage,
     SourceItem,
     StaticConnector,
@@ -25,6 +26,7 @@ from chief_of_staff.pipeline import (
     DeterministicBriefingPipeline,
     RenderedBriefing,
     SourceLink,
+    WorkdayType,
     classify_calendar_event,
     deduplicate_records,
     normalize_item,
@@ -77,14 +79,24 @@ def _connector(
     )
 
 
-def test_context_resolves_workdays_weekends_and_explicit_overrides() -> None:
-    weekday = resolve_context(
-        run_id="weekday",
+def test_context_resolves_weekly_workday_types_and_explicit_overrides() -> None:
+    full_workday = resolve_context(
+        run_id="full-workday",
         briefing_date=date(2026, 7, 27),
         timezone="America/New_York",
     )
-    weekend = resolve_context(
-        run_id="weekend",
+    friday = resolve_context(
+        run_id="friday",
+        briefing_date=date(2026, 7, 31),
+        timezone="America/New_York",
+    )
+    saturday = resolve_context(
+        run_id="saturday",
+        briefing_date=date(2026, 8, 1),
+        timezone="America/New_York",
+    )
+    sunday = resolve_context(
+        run_id="sunday",
         briefing_date=date(2026, 7, 26),
         timezone="America/New_York",
     )
@@ -95,11 +107,54 @@ def test_context_resolves_workdays_weekends_and_explicit_overrides() -> None:
         workday_override=True,
     )
 
-    assert weekday.is_workday
-    assert not weekend.is_workday
+    assert full_workday.workday_type is WorkdayType.FULL_WORKDAY
+    assert not friday.is_workday
+    assert friday.workday_type is WorkdayType.NON_WORKDAY
+    assert saturday.workday_type is WorkdayType.FLEXIBLE_HALF_WORKDAY
+    assert sunday.workday_type is WorkdayType.MINISTRY_WORKDAY
     assert override.is_workday
-    assert override.workday_reason == "explicit invocation override"
-    assert weekday.retrieval_window.starts_at.utcoffset() is not None
+    assert override.workday_reason == "explicit current instruction"
+    assert full_workday.retrieval_window.starts_at.utcoffset() is not None
+
+
+def test_workday_override_precedence_and_friday_saturday_switches() -> None:
+    friday = date(2026, 7, 31)
+    saturday = date(2026, 8, 1)
+    friday_switched = resolve_context(
+        run_id="friday-switch",
+        briefing_date=friday,
+        timezone="America/New_York",
+        date_overrides={friday: WorkdayType.FULL_WORKDAY},
+    )
+    saturday_switched = resolve_context(
+        run_id="saturday-switch",
+        briefing_date=saturday,
+        timezone="America/New_York",
+        date_overrides={saturday: WorkdayType.NON_WORKDAY},
+    )
+    explicit_wins = resolve_context(
+        run_id="explicit-wins",
+        briefing_date=friday,
+        timezone="America/New_York",
+        workday_type_override=WorkdayType.NON_WORKDAY,
+        date_overrides={friday: WorkdayType.FULL_WORKDAY},
+        operating_overrides={friday: WorkdayType.MINISTRY_WORKDAY},
+    )
+
+    assert friday_switched.workday_type is WorkdayType.FULL_WORKDAY
+    assert friday_switched.workday_reason == "explicit date configuration"
+    assert saturday_switched.workday_type is WorkdayType.NON_WORKDAY
+    assert explicit_wins.workday_type is WorkdayType.NON_WORKDAY
+    assert explicit_wins.workday_reason == "explicit current instruction"
+
+    date_configuration_wins = resolve_context(
+        run_id="date-wins",
+        briefing_date=friday,
+        timezone="America/New_York",
+        date_overrides={friday: WorkdayType.FULL_WORKDAY},
+        operating_overrides={friday: WorkdayType.NON_WORKDAY},
+    )
+    assert date_configuration_wins.workday_type is WorkdayType.FULL_WORKDAY
 
 
 @pytest.mark.parametrize(
@@ -277,6 +332,38 @@ class _FailingConnector:
         raise TimeoutError("synthetic timeout")
 
 
+@dataclass(frozen=True, slots=True)
+class _DetailedCoverageConnector:
+    source_name: str = "todoist"
+    approved_scope: str = SCOPE
+
+    def retrieve(self, request: ConnectorRequest) -> ConnectorResult:
+        item = _item(
+            "task-1",
+            title="Material selected task",
+            status="open",
+            due_at=f"{request.briefing_date.isoformat()}T12:00:00-04:00",
+        )
+        return ConnectorResult(
+            items=(item,),
+            coverage=SourceCoverage(
+                source=self.source_name,
+                approved_scope=self.approved_scope,
+                status=CoverageStatus.COMPLETE,
+                retrieved_at=NOW,
+                record_count=1,
+                retrieved_count=12,
+                selected_count=1,
+                persisted_count=1,
+                context_resources=(
+                    ContextResourceCoverage("projects", 5, 1),
+                    ContextResourceCoverage("sections", 2, 1),
+                    ContextResourceCoverage("labels", 7, 3),
+                ),
+            ),
+        )
+
+
 def test_connector_failure_is_disclosed_without_aborting_the_briefing() -> None:
     context = resolve_context(
         run_id="failure-run",
@@ -307,6 +394,28 @@ def test_empty_static_connector_reports_complete_zero_record_coverage() -> None:
     assert result.plan.coverage[0].record_count == 0
     assert result.plan.coverage[0].status is CoverageStatus.COMPLETE
     assert "`empty_source`: complete" in result.rendered.text
+
+
+def test_source_coverage_distinguishes_funnel_and_context_resource_counts() -> None:
+    context = resolve_context(
+        run_id="detailed-coverage",
+        briefing_date=BRIEFING_DATE,
+        timezone="America/New_York",
+    )
+
+    result = DeterministicBriefingPipeline().run(
+        context,
+        (_DetailedCoverageConnector(),),
+    )
+
+    coverage = result.plan.sections[-1].summary or ""
+    assert (
+        "`todoist`: complete; 12 retrieved; 1 selected; 1 persisted; 1 displayed"
+        in coverage
+    )
+    assert "projects: 5 retrieved, 1 persisted" in coverage
+    assert "sections: 2 retrieved, 1 persisted" in coverage
+    assert "labels: 7 retrieved, 3 persisted" in coverage
 
 
 def test_governing_context_informs_the_run_without_becoming_display_content() -> None:
@@ -500,6 +609,68 @@ def test_material_out_of_office_status_signal_remains_visible() -> None:
     )
 
 
+def test_calendar_status_never_redefines_workday_and_schedule_conflict_is_disclosed() -> (
+    None
+):
+    briefing_date = date(2026, 7, 31)
+    status_only = _connector(
+        "status_calendar",
+        _item(
+            "office",
+            item_type="calendar_event",
+            title="Office",
+            status="confirmed",
+            event_type="workingLocation",
+            all_day=True,
+            start_at="2026-07-31T00:00:00-04:00",
+            end_at="2026-08-01T00:00:00-04:00",
+        ),
+        _item(
+            "all-day-context",
+            item_type="calendar_event",
+            title="All-day context",
+            status="confirmed",
+            all_day=True,
+            start_at="2026-07-31T00:00:00-04:00",
+            end_at="2026-08-01T00:00:00-04:00",
+        ),
+    )
+    fixed_work = _connector(
+        "work_calendar",
+        _item(
+            "first",
+            item_type="calendar_event",
+            title="First fixed commitment",
+            status="confirmed",
+            start_at="2026-07-31T09:00:00-04:00",
+            end_at="2026-07-31T10:00:00-04:00",
+        ),
+        _item(
+            "second",
+            item_type="calendar_event",
+            title="Second fixed commitment",
+            status="confirmed",
+            start_at="2026-07-31T10:30:00-04:00",
+            end_at="2026-07-31T11:30:00-04:00",
+        ),
+    )
+    context = resolve_context(
+        run_id="workday-conflict",
+        briefing_date=briefing_date,
+        timezone="America/New_York",
+    )
+
+    status_result = DeterministicBriefingPipeline().run(context, (status_only,))
+    conflict_result = DeterministicBriefingPipeline().run(context, (fixed_work,))
+
+    assert status_result.plan.context.workday_type is WorkdayType.NON_WORKDAY
+    assert status_result.plan.context.workday_diagnostics == ()
+    assert conflict_result.plan.context.workday_type is WorkdayType.NON_WORKDAY
+    assert conflict_result.plan.context.workday_diagnostics
+    assert "conflict with that configuration" in conflict_result.rendered.text
+    assert "Workday context:" in conflict_result.rendered.text
+
+
 def test_obvious_schedule_implications_are_synthesized_deterministically() -> None:
     calendar = _connector(
         "synthetic_calendar",
@@ -613,7 +784,10 @@ def test_tomorrows_early_online_campus_events_form_one_sequence() -> None:
     assert len(sequence.sources) == 3
     assert len(looking_ahead.items) == 1
     note = result.plan.sections[0].summary or ""
-    assert "Today is a non-workday; protect it from ordinary work demands." in note
+    assert (
+        "Today is a configured non-workday; protect it from ordinary work demands."
+        in note
+    )
     assert (
         "Tomorrow begins with an early Online Campus sequence from 8:00 a.m."
         f"{TIME_RANGE_SEPARATOR}12:00 p.m."
@@ -733,6 +907,7 @@ def test_july_25_non_workday_suppresses_routine_status_signals() -> None:
         run_id="july-25-redacted",
         briefing_date=briefing_date,
         timezone="America/New_York",
+        workday_type_override=WorkdayType.NON_WORKDAY,
     )
 
     result = DeterministicBriefingPipeline().run(
@@ -746,14 +921,20 @@ def test_july_25_non_workday_suppresses_routine_status_signals() -> None:
         BriefingSectionName.LOOKING_AHEAD,
         BriefingSectionName.SOURCE_COVERAGE,
     )
-    assert "Today is a configured day off" in result.rendered.text
+    assert "Today is a configured non-workday" in result.rendered.text
     assert f"8:00{TIME_RANGE_SEPARATOR}11:30 a.m." in result.rendered.text
     assert "Home" not in result.rendered.text
     assert "Office" not in result.rendered.text
     assert "Accepted project context" not in result.rendered.text
     assert "Calendar status signal" not in result.rendered.text
-    assert "`synthetic_repository`: complete; 1 record" in result.rendered.text
-    assert "`synthetic_calendar`: complete; 5 records" in result.rendered.text
+    assert (
+        "`synthetic_repository`: complete; 1 retrieved; 1 selected; "
+        "persistence not reported; 0 displayed"
+    ) in result.rendered.text
+    assert (
+        "`synthetic_calendar`: complete; 5 retrieved; 5 selected; "
+        "persistence not reported; 3 displayed"
+    ) in result.rendered.text
     assert result.rendered.word_count <= 800
     visible_items = tuple(
         item for section in result.plan.sections for item in section.items
@@ -772,6 +953,72 @@ def test_july_25_non_workday_suppresses_routine_status_signals() -> None:
         classify_calendar_event(record) is CalendarEventClassification.STATUS_SIGNAL
         for record in routine_statuses
     )
+
+
+def test_july_26_ministry_workday_is_synthesized_and_protected() -> None:
+    briefing_date = date(2026, 7, 26)
+    calendar = _connector(
+        "synthetic_calendar",
+        _item(
+            "run-through",
+            item_type="calendar_event",
+            title="ONL Run-Through",
+            status="confirmed",
+            start_at="2026-07-26T08:00:00-04:00",
+            end_at="2026-07-26T08:30:00-04:00",
+        ),
+        _item(
+            "first-service",
+            item_type="calendar_event",
+            title="ONL First Service",
+            status="confirmed",
+            start_at="2026-07-26T08:40:00-04:00",
+            end_at="2026-07-26T10:00:00-04:00",
+        ),
+        _item(
+            "second-service",
+            item_type="calendar_event",
+            title="ONL Second Service",
+            status="confirmed",
+            start_at="2026-07-26T10:10:00-04:00",
+            end_at="2026-07-26T11:30:00-04:00",
+        ),
+    )
+    todoist = _connector(
+        "todoist",
+        _item(
+            "ordinary-overdue",
+            title="Unrelated overdue project task",
+            status="open",
+            importance=5,
+            due_at="2026-07-24T00:00:00-04:00",
+        ),
+        _item(
+            "must-happen-today",
+            title="Necessary Sunday preparation",
+            status="open",
+            importance=4,
+            due_at="2026-07-26T00:00:00-04:00",
+        ),
+    )
+    context = resolve_context(
+        run_id="july-26-redacted",
+        briefing_date=briefing_date,
+        timezone="America/New_York",
+    )
+
+    result = DeterministicBriefingPipeline().run(context, (calendar, todoist))
+    note = result.plan.sections[0].summary or ""
+
+    assert result.plan.context.workday_type is WorkdayType.MINISTRY_WORKDAY
+    assert "scheduled Online Campus ministry workday" in note
+    assert f"8:00{TIME_RANGE_SEPARATOR}11:30 a.m." in note
+    assert "shortest transition is 10 minutes" in note
+    assert "Complete necessary preparation before 8:00 AM" in note
+    assert "Protect the remainder from unrelated ordinary project work" in note
+    assert "Necessary Sunday preparation" in result.rendered.text
+    assert "Unrelated overdue project task" not in result.rendered.text
+    assert result.rendered.word_count <= 800
 
 
 def test_coverage_metadata_is_separate_from_the_chief_of_staff_note() -> None:
@@ -865,12 +1112,16 @@ def test_non_workday_suppresses_todoist_tasks_but_keeps_coverage() -> None:
         run_id="todoist-non-workday",
         briefing_date=date(2026, 7, 26),
         timezone="America/New_York",
+        workday_type_override=WorkdayType.NON_WORKDAY,
     )
 
     result = DeterministicBriefingPipeline().run(context, (todoist,))
 
     assert "Synthetic ordinary work" not in result.rendered.text
-    assert "`todoist`: complete; 1 record" in result.rendered.text
+    assert (
+        "`todoist`: complete; 1 retrieved; 1 selected; "
+        "persistence not reported; 0 displayed"
+    ) in result.rendered.text
     assert tuple(section.name for section in result.plan.sections) == (
         BriefingSectionName.CHIEF_OF_STAFF_NOTE,
         BriefingSectionName.SOURCE_COVERAGE,
