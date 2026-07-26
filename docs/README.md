@@ -4,6 +4,14 @@ This directory is the source of truth for project discovery, design, planning,
 and future operations. Each subject has one authoritative location; other
 documents should link to it instead of duplicating governing content.
 
+## Current baseline
+
+The Version 1 design baseline for Daily Briefing v1 is accepted. The
+[implementation roadmap](roadmap.md) records Milestone 0 as complete and
+Milestone 1 — Python Project Foundation as the next milestone. Design
+acceptance authorizes implementation within the accepted scope; it does not
+mean the feature has passed operational acceptance.
+
 ## Index
 
 ### Product
@@ -37,7 +45,8 @@ documents should link to it instead of duplicating governing content.
 
 ### Delivery and operations
 
-- [Roadmap](roadmap.md) — phases, milestones, and exit criteria
+- [Implementation roadmap](roadmap.md) — Daily Briefing v1 milestones,
+  dependencies, deliverables, acceptance gates, and excluded work
 - [Operations](operations/README.md) — operational policies and deployment
   documentation
 - [Runbooks](operations/runbooks/README.md) — step-by-step operational

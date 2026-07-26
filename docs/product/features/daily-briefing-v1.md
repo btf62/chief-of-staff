@@ -1,6 +1,6 @@
 # Feature: Daily Briefing v1
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Version:** 1
 - **Owner:** Brad
 - **Last updated:** 2026-07-25
@@ -16,6 +16,11 @@ bounded, inspectable local state so Brad can correct or disposition inferred
 items. It should take approximately five minutes to read, present clarity
 rather than completeness, and help Brad direct his attention without replacing
 the systems where the underlying records live.
+
+The `Accepted` status approves this specification as the Version 1 design
+contract and authorizes implementation within its boundaries. It does not mean
+the implemented feature has passed the acceptance criteria below or is ready
+for operational use.
 
 ## User Outcome
 
@@ -293,17 +298,17 @@ source display. Daily Briefing v1 must therefore:
 - Track Brad's corrections and dispositions so the same mistake is not
   repeated from materially unchanged evidence.
 
-Before the feature is accepted, evaluate it against representative,
-human-reviewed scenarios. The evaluation set should include explicit and
-inferred commitments, false-positive candidates, cross-source duplicates,
-conflicting sources, source outages, priority tradeoffs, and previously
-corrected items.
+Before Daily Briefing v1 is accepted as ready for operational use, evaluate it
+against representative, human-reviewed scenarios. The evaluation set should
+include explicit and inferred commitments, false-positive candidates,
+cross-source duplicates, conflicting sources, source outages, priority
+tradeoffs, and previously corrected items.
 
 Measure precision separately for People Waiting on Brad and Commitments at
 Risk. Review false positives and repeated mistakes explicitly. Recall may be
 observed diagnostically, but it must not be improved by flooding the briefing
 with questionable inferences. Brad must review the representative results
-before the feature is accepted.
+before the implemented feature is accepted for operational use.
 
 Use synthetic, redacted, or access-controlled scenarios so evaluation does not
 place private source content in the repository.
@@ -453,7 +458,7 @@ The following questions require later product or architecture decisions:
 - How should local correction state be retained, secured, synchronized, and
   reconciled with later source changes?
 - What representative evaluation corpus and minimum precision threshold should
-  be required before acceptance?
+  be required before implementation acceptance?
 - What approved source scopes and access boundaries are required?
 
 Do not resolve these questions through implementation assumptions. Record

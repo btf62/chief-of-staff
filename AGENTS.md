@@ -2,15 +2,19 @@
 
 ## Project phase
 
-This is a documentation-first repository in its initialization phase. There is
-currently no approved application architecture, technology stack, or
-implementation plan.
+This is a documentation-first repository with an accepted Version 1 design
+baseline for Daily Briefing v1. The product requirements, feature
+specification, architecture, and ADR-0001 through ADR-0006 are accepted.
+Milestone 0 is complete, and Milestone 1 — Python Project Foundation is the
+next implementation milestone in `docs/roadmap.md`.
 
 ## Working rules
 
 - Do not add functional code, dependencies, build systems, generated projects,
   or deployment configuration unless the task explicitly authorizes
   implementation.
+- Keep implementation within the current roadmap milestone and its acceptance
+  gate. Do not begin a later milestone merely because its design is visible.
 - Start by reading `README.md` and `docs/README.md`.
 - Treat `docs/product/vision.md` as the source of truth for product purpose and
   `docs/product/requirements.md` as the top-level product requirements
@@ -52,16 +56,22 @@ primary user, but it must remain safe to share publicly.
 - Wrap lines at a readable width where practical.
 - Add new reusable document formats under `templates/`.
 
-## Before implementation
+## Implementation governance
 
-Implementation work should not begin until, at minimum:
+The Version 1 design-readiness requirements have been met:
 
-1. The vision and intended users are defined.
-2. The constitution and leadership model are reviewed.
-3. Initial requirements and non-goals are reviewed.
-4. Data, privacy, and security constraints are recorded.
-5. The high-level architecture is accepted.
-6. The first implementation milestone has clear acceptance criteria.
+1. The Vision, Constitution, and Leadership Model are accepted.
+2. The Product Requirements and Daily Briefing v1 specification are accepted.
+3. Data, privacy, security, agency, and source-authority constraints are
+   recorded.
+4. The Architecture Overview and ADR-0001 through ADR-0006 are accepted.
+5. The implementation roadmap defines milestone dependencies, deliverables,
+   acceptance gates, and exclusions.
+
+Implementation may proceed only when a task explicitly authorizes it. Start
+with Milestone 1, use synthetic data before approved live data, and satisfy a
+milestone's acceptance gate before beginning dependent work. Record material
+new product or architecture decisions before implementing them.
 
 ## Validation
 

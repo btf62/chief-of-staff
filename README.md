@@ -7,13 +7,12 @@ identifying priorities, commitments, and useful signals.
 
 ## Status
 
-**Phase:** Repository initialization and discovery
+**Phase:** Accepted Version 1 design baseline; implementation readiness
 
-There is no functional application, runtime, or selected technology stack yet.
-The first planned product milestone is a concise daily briefing, but its
-specification has not yet been written. Implementation should begin only after
-the foundational documents, product requirements, and architecture decisions
-are documented and accepted.
+There is no functional application yet. The product requirements, Daily
+Briefing v1 specification, architecture, and foundational ADRs are accepted.
+[Milestone 1 — Python Project Foundation](docs/roadmap.md#milestone-1--python-project-foundation)
+is the next implementation milestone.
 
 ## Repository map
 
@@ -47,13 +46,15 @@ are documented and accepted.
 1. Read [the product vision](docs/product/vision.md).
 2. Review the [assistant constitution](docs/foundations/constitution.md) and
    [leadership model](docs/foundations/leadership-model.md).
-3. Capture product scope in
+3. Review the accepted product scope in
    [the requirements document](docs/product/requirements.md).
-4. Define implementable behavior in
-   [feature specifications](docs/product/features/README.md).
+4. Use the accepted
+   [Daily Briefing v1 specification](docs/product/features/daily-briefing-v1.md)
+   as the first implementation contract.
 5. Record consequential technical or product choices in
    [decision records](docs/decisions/README.md).
-6. Use [the roadmap](docs/roadmap.md) to sequence approved work.
+6. Use [the implementation roadmap](docs/roadmap.md) to sequence approved work
+   and enforce milestone gates.
 
 ## Documentation principles
 

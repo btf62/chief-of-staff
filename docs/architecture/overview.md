@@ -1,6 +1,6 @@
 # Architecture Overview
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Version:** 1
 - **Owner:** Brad
 - **Last updated:** 2026-07-25
@@ -18,6 +18,12 @@ The architecture is subordinate to the accepted
 [Leadership Model](../foundations/leadership-model.md) as descriptive context
 and the [Product Requirements](../product/requirements.md) and feature
 specification as the product contract.
+
+Acceptance establishes the Version 1 architectural boundaries. Reversible
+implementation details may evolve within those boundaries. Material changes
+to system boundaries, security, privacy, data lifecycle, provider behavior, or
+other consequential architectural choices require review and an architecture
+decision record.
 
 ## Scope
 
@@ -576,8 +582,9 @@ The architecture supports:
   external writes.
 
 Evaluation artifacts record connector, rules, prompt, model, and policy
-versions. Precision thresholds remain a product acceptance decision, but the
-harness must make them measurable before the feature can be accepted.
+versions. Precision thresholds remain an implementation-acceptance decision,
+but the harness must make them measurable before the feature can be accepted
+for operational use.
 
 No production source content may be committed to the repository. Access-
 controlled scenarios need an explicit owner, retention policy, and deletion

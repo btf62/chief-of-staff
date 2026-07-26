@@ -5,8 +5,9 @@
 - **Last updated:** 2026-07-25
 
 This directory is the authoritative location for operational policies and
-deployment documentation. Content will be written once the architecture and
-deployment model are known.
+deployment documentation. The deployment model is now established; operational
+content should be added as implementation reaches the roadmap milestone that
+requires each policy or procedure.
 
 ## Topics to define
 

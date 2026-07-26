@@ -1,14 +1,19 @@
 # Product Requirements
 
-- **Status:** Draft
+- **Status:** Accepted
+- **Version:** 1
 - **Owner:** Brad
 - **Last updated:** 2026-07-25
 
 ## Responsibility
 
 This is the top-level product requirements document and requirements index. It
-will summarize product scope, delivery phases, cross-feature requirements, and
+summarizes product scope, delivery phases, cross-feature requirements, and
 links to detailed, implementable feature specifications.
+
+Acceptance of this PRD authorizes implementation of the linked Daily Briefing
+v1 scope within the accepted architecture and roadmap. It does not authorize
+future ideas, deferred capabilities, or work identified as out of scope.
 
 ## Product scope
 
@@ -29,7 +34,7 @@ repeated false recommendations.
 
 | Phase | Intended outcome | Status |
 | --- | --- | --- |
-| [Daily Briefing v1](features/daily-briefing-v1.md) | A trusted daily starting point that clarifies today's outcomes, commitments, preparation, relationships, and approaching work | Proposed |
+| [Daily Briefing v1](features/daily-briefing-v1.md) | A trusted daily starting point that clarifies today's outcomes, commitments, preparation, relationships, and approaching work | Accepted |
 
 ## Cross-feature requirements
 
@@ -51,28 +56,32 @@ All product capabilities must:
 
 | Feature | Specification | Status |
 | --- | --- | --- |
-| Daily Briefing v1 | [Specification](features/daily-briefing-v1.md) | Proposed |
+| Daily Briefing v1 | [Specification](features/daily-briefing-v1.md) | Accepted |
 
 Detailed feature specifications belong in the
 [feature specifications directory](features/README.md).
 
 ## Constraints
 
-- Technology choices are intentionally deferred to
+- Technology choices are governed by the accepted
   [technical architecture](../architecture/overview.md) and
   [decision records](../decisions/README.md).
-- No production data should be used during discovery.
+- Implementation begins with synthetic data. Live data may be used only after
+  the applicable connector, authorization, privacy, and retention boundaries
+  are documented, tested, and explicitly approved.
 
 ## Out of scope
 
-- Functional implementation during repository initialization.
+- Work outside the accepted
+  [Daily Briefing v1 implementation roadmap](../roadmap.md).
 - Rock RMS, Church Online Platform, ministry analytics, dashboards, and
   autonomous actions in Daily Briefing v1.
 - Ideas explicitly deferred in [future ideas](future-ideas.md).
 
 ## Acceptance
 
-This top-level PRD remains `Draft` until its cross-feature requirements,
-architecture dependencies, privacy and security decisions, and ownership are
-reviewed. Daily Briefing v1 may be reviewed independently through its linked
-feature specification.
+This PRD is accepted as the Version 1 design contract. Design acceptance
+authorizes implementation; it does not mean Daily Briefing v1 has passed its
+feature acceptance criteria or is ready for operational use. That judgment
+occurs after implementation and validation through the
+[roadmap](../roadmap.md).

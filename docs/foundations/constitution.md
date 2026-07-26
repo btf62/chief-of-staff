@@ -199,10 +199,12 @@ Source-system authority, integration boundaries, provenance, and technical
 conflict handling are defined in the
 [Architecture](../architecture/overview.md).
 
-> **TODO — Architecture Decisions:** Record and accept the material deployment,
-> persistence, authentication, privacy, and inference choices in
-> [architecture decision records](../decisions/README.md) before
-> implementation.
+The material Version 1 deployment, persistence, authentication, privacy, and
+inference boundaries are recorded in
+[ADR-0003](../decisions/0003-adopt-local-first-python-runtime.md),
+[ADR-0004](../decisions/0004-adopt-sqlite-and-bounded-local-data-lifecycle.md),
+[ADR-0005](../decisions/0005-adopt-oauth-and-macos-keychain.md), and
+[ADR-0006](../decisions/0006-adopt-provider-neutral-inference-with-openai.md).
 
 ## Article IX — Privacy and Affected Parties
 

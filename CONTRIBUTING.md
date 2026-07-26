@@ -2,10 +2,12 @@
 
 ## Current scope
 
-The project is in a documentation and discovery phase. Contributions should
-clarify the problem, requirements, constraints, decisions, or delivery plan.
-Functional code and dependency setup are out of scope until explicitly
-approved.
+The Version 1 design baseline is accepted, and
+[Milestone 1 — Python Project Foundation](docs/roadmap.md#milestone-1--python-project-foundation)
+is next. Contributions may improve authoritative documentation or implement
+the current roadmap milestone when the task explicitly authorizes
+implementation. Do not begin a later milestone before its dependencies and
+acceptance gate are satisfied.
 
 ## Workflow
 
