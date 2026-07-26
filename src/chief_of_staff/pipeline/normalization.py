@@ -41,6 +41,7 @@ class NormalizedRecord:
     importance: int
     explicit_commitment: bool
     preparation: str | None
+    all_day: bool
     start_at: datetime | None
     end_at: datetime | None
     due_at: datetime | None
@@ -75,6 +76,7 @@ def normalize_item(
         importance=importance,
         explicit_commitment=_boolean(item, "explicit_commitment", default=False),
         preparation=_optional_string(item, "preparation"),
+        all_day=_boolean(item, "all_day", default=False),
         start_at=_optional_datetime(item, "start_at", zone),
         end_at=_optional_datetime(item, "end_at", zone),
         due_at=_optional_datetime(item, "due_at", zone),

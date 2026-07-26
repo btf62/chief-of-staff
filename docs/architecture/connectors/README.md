@@ -31,19 +31,20 @@ decisions for each future connector specification.
 
 ## Connector index
 
-No connectors have been specified.
+| Source | Specification | Status |
+| --- | --- | --- |
+| Approved repository context | [Repository context](repository-context.md) | Accepted and implemented |
+| Google Calendar | [Google Calendar](google-calendar.md) | Proposed; mocked implementation awaiting live-access approval |
 
 ## Planned specifications
 
 | Source | Planned specification |
 | --- | --- |
-| Google Calendar | `google-calendar.md` |
 | Gmail | `gmail.md` |
 | Todoist | `todoist.md` |
 | Jira | `jira.md` |
 | Asana | `asana.md` |
 | Approved Google Drive content | `google-drive.md` |
-| Approved repository context | `repository-context.md` |
 
 Each future specification should implement the common read-only connector
 contract in the [Architecture Overview](../overview.md#4-connector-model)

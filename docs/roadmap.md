@@ -7,9 +7,9 @@
 
 This roadmap sequences implementation of the accepted
 [Daily Briefing v1](product/features/daily-briefing-v1.md) design. Milestones 0
-through 3 are complete, and Milestone 4 is the next implementation milestone.
-Dates and estimates remain intentionally omitted until implementation evidence
-supports them.
+through 3 are complete. The authorized non-live portion of Milestone 4 is
+implemented and awaiting explicit live-access approval. Dates and estimates
+remain intentionally omitted until implementation evidence supports them.
 
 Acceptance of this roadmap does not expand product scope. The
 [Product Requirements](product/requirements.md), feature specification,
@@ -126,7 +126,7 @@ boundaries.
 
 ## Milestone 4 — First Safe Connectors
 
-- **Status:** Next
+- **Status:** In progress — live-access approval required
 - **Intended user-visible outcome:** Brad can request a factual briefing that
   accurately shows approved repository context, today's calendar, and source
   coverage without hosted inference.
@@ -148,6 +148,20 @@ boundaries.
 - **Explicitly excluded work:** Gmail, Drive, task-system connectors, hosted
   inference, external writes, broad repository access, scheduled generation,
   and unapproved accounts or paths.
+
+### Current checkpoint
+
+The accepted exact-path repository-context connector is implemented. The
+Google Calendar connector has a retrieval-only interface, proposed exact
+read-only scope, mocked OAuth metadata boundary, synthetic normalization,
+pagination, partial-failure handling, and no-write contract tests. An
+on-demand no-network demonstration combines repository-owned context with
+mocked Calendar data and discloses partial coverage.
+
+No OAuth application, account authorization, Keychain credential, live
+transport, or live Calendar access exists. Continue only after Brad approves
+the
+[Google Calendar live-access gate](architecture/connectors/google-calendar.md#live-access-approval-gate).
 
 ## Milestone 5 — Task-System Connectors
 

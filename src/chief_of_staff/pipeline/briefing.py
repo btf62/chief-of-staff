@@ -135,6 +135,11 @@ def build_reduced_plan(
         BriefingSection(
             name=BriefingSectionName.CHIEF_OF_STAFF_NOTE,
             summary=_chief_note(context, records, coverage),
+            items=tuple(
+                _context_item(record)
+                for record in records
+                if record.kind is RecordKind.CONTEXT
+            )[:LIMITED_SECTION_ITEMS],
         )
     ]
 
@@ -444,9 +449,12 @@ def _outcome_item(record: NormalizedRecord, today: date) -> BriefingItem:
 def _calendar_item(record: NormalizedRecord) -> BriefingItem:
     if record.start_at is None:
         raise ValueError("calendar item requires a start time")
-    time_range = record.start_at.strftime("%-I:%M %p")
-    if record.end_at is not None:
-        time_range += f"-{record.end_at:%-I:%M %p}"
+    if record.all_day:
+        time_range = "All day"
+    else:
+        time_range = record.start_at.strftime("%-I:%M %p")
+        if record.end_at is not None:
+            time_range += f"-{record.end_at:%-I:%M %p}"
     return _record_item(
         record,
         key_prefix="calendar",
@@ -468,8 +476,20 @@ def _looking_ahead_item(record: NormalizedRecord) -> BriefingItem:
     when = record.start_at or record.due_at
     detail = "Approaching work."
     if when is not None:
-        detail = f"{when:%A, %B %-d at %-I:%M %p}."
+        detail = (
+            f"{when:%A, %B %-d} (all day)."
+            if record.all_day
+            else f"{when:%A, %B %-d at %-I:%M %p}."
+        )
     return _record_item(record, key_prefix="ahead", detail=detail)
+
+
+def _context_item(record: NormalizedRecord) -> BriefingItem:
+    return _record_item(
+        record,
+        key_prefix="context",
+        detail=record.summary or "Approved repository context was consulted.",
+    )
 
 
 def _record_item(

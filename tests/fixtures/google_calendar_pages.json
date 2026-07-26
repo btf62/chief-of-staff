@@ -1,0 +1,47 @@
+{
+  "pages": [
+    {
+      "events": [
+        {
+          "id": "synthetic-event-1",
+          "title": "Planning Session",
+          "start": "2026-07-27T09:00:00-04:00",
+          "end": "2026-07-27T10:00:00-04:00",
+          "updated_at": "2026-07-26T18:00:00Z",
+          "html_link": "https://example.invalid/calendar/synthetic-event-1",
+          "status": "confirmed",
+          "location": "Conference Room",
+          "all_day": false
+        },
+        {
+          "id": "synthetic-event-2",
+          "title": "Focus Day",
+          "start": "2026-07-27",
+          "end": "2026-07-28",
+          "updated_at": "2026-07-25T15:00:00Z",
+          "html_link": "https://example.invalid/calendar/synthetic-event-2",
+          "status": "confirmed",
+          "location": null,
+          "all_day": true
+        }
+      ],
+      "next_page_token": "synthetic-page-2"
+    },
+    {
+      "events": [
+        {
+          "id": "synthetic-event-3",
+          "title": "Project Review",
+          "start": "2026-07-28T13:00:00-04:00",
+          "end": "2026-07-28T14:00:00-04:00",
+          "updated_at": "2026-07-26T17:30:00Z",
+          "html_link": "https://example.invalid/calendar/synthetic-event-3",
+          "status": "confirmed",
+          "location": null,
+          "all_day": false
+        }
+      ],
+      "next_page_token": null
+    }
+  ]
+}

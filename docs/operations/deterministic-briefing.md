@@ -15,7 +15,7 @@ Create the supported development environment as described in
 [the contribution guide](../../CONTRIBUTING.md), then run:
 
 ```text
-make demo
+make demo-synthetic
 ```
 
 The command prints one repository-owned synthetic briefing to standard output.

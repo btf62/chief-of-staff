@@ -23,8 +23,8 @@ requires each policy or procedure.
 ## Runbooks
 
 Step-by-step operational procedures belong in
-[the runbooks directory](runbooks/README.md). No procedures exist because
-there is no implemented or deployed system.
+[the runbooks directory](runbooks/README.md). No deployment runbook exists
+because the system is not deployed or approved for operational use.
 
 ## Implemented foundations
 
@@ -34,3 +34,6 @@ there is no implemented or deployed system.
 - [Deterministic briefing operations](deterministic-briefing.md) — synthetic
   invocation, source coverage, composition, validation, and current
   limitations
+- [First safe connector operations](first-safe-connectors.md) — approved
+  repository reads, mocked Calendar behavior, validation, and the live-access
+  gate

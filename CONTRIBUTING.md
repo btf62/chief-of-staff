@@ -4,10 +4,11 @@
 
 The Version 1 design baseline and Milestones 1–3 are complete.
 [Milestone 4 — First Safe Connectors](docs/roadmap.md#milestone-4--first-safe-connectors)
-is next. Contributions may improve authoritative documentation or implement
-the current roadmap milestone when the task explicitly authorizes
-implementation. Do not begin a later milestone before its dependencies and
-acceptance gate are satisfied.
+is paused at its live-access gate. Contributions may improve authoritative
+documentation or the non-live implementation when explicitly authorized. Do
+not register OAuth, request a live scope, authorize an account, or access live
+Calendar data without Brad's explicit approval. Do not begin a later milestone
+before its dependencies and acceptance gate are satisfied.
 
 ## Python environment
 
@@ -49,7 +50,8 @@ Do not install project tools into the macOS system Python.
 | `make typecheck` | Run strict mypy checks against application, test, tool, and example Python |
 | `make test` | Run pytest |
 | `make docs-check` | Validate local Markdown links and anchors |
-| `make demo` | Print the repository-owned synthetic reduced briefing |
+| `make demo` | Print the repository-plus-mocked-Calendar briefing |
+| `make demo-synthetic` | Print the fully synthetic reduced briefing |
 | `make check` | Run the complete local quality gate |
 
 GitHub Actions runs the same `make bootstrap` and `make check` workflow on

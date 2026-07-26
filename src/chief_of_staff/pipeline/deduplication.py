@@ -76,6 +76,7 @@ def _semantic_signature(record: NormalizedRecord) -> tuple[object, ...]:
         record.importance,
         record.explicit_commitment,
         record.preparation,
+        record.all_day,
         record.start_at,
         record.end_at,
         record.due_at,

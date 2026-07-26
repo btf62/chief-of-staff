@@ -37,6 +37,13 @@ No strict versioning scheme is promised before a distributable product exists.
   presentation budgets.
 - A repository-owned synthetic briefing demonstration and full pipeline test
   coverage.
+- An accepted exact-path repository-context connector with bounded Markdown
+  extraction, relative provenance, and no source-content cache.
+- A mock-only Google Calendar connector contract with exact read-only scope
+  enforcement, pagination, all-day normalization, partial-failure retention,
+  and distinct unauthorized and empty coverage.
+- A safe on-demand connector demonstration combining repository-owned context
+  with a synthetic Calendar page.
 
 ### Changed
 
@@ -51,3 +58,5 @@ No strict versioning scheme is promised before a distributable product exists.
   Deterministic Briefing Pipeline as next.
 - Marked Milestone 3 — Deterministic Briefing Pipeline complete and Milestone
   4 — First Safe Connectors as next.
+- Recorded the authorized non-live Milestone 4 work as implemented and paused
+  before the Google Calendar live-access approval gate.

@@ -7,12 +7,13 @@ identifying priorities, commitments, and useful signals.
 
 ## Status
 
-**Phase:** Milestones 1–3 complete; Milestone 4 ready
+**Phase:** Milestones 1–3 complete; Milestone 4 at live-access gate
 
 The Python, local-state, and deterministic briefing foundations are complete.
-The next implementation milestone is
-[Milestone 4 — First Safe Connectors](docs/roadmap.md#milestone-4--first-safe-connectors).
-No live source authorization has occurred.
+The approved repository connector and mocked Google Calendar boundary are
+implemented. [Milestone 4](docs/roadmap.md#milestone-4--first-safe-connectors)
+is paused before OAuth registration, scope request, account authorization,
+Keychain storage, and live Calendar access.
 
 ## Repository map
 
@@ -64,15 +65,17 @@ No live source authorization has occurred.
 
 ## Safe demonstration
 
-After creating the supported development environment, generate the synthetic
-deterministic briefing with:
+After creating the supported development environment, generate a safe
+connector briefing with:
 
 ```text
 make demo
 ```
 
-The demonstration uses repository-owned synthetic records only. It performs no
-live source access, hosted inference, persistence, or external writes.
+The demonstration reads two exact repository-owned documentation paths and
+uses a mocked Calendar page. It performs no live source access, credential
+lookup, hosted inference, persistence, or external writes. Use
+`make demo-synthetic` for the fully synthetic Milestone 3 scenario.
 
 ## Documentation principles
 

@@ -8,12 +8,36 @@ from chief_of_staff.connectors.contracts import (
     SourceCoverage,
     SourceItem,
 )
+from chief_of_staff.connectors.google_calendar import (
+    GOOGLE_CALENDAR_EVENTS_OWNED_READONLY_SCOPE,
+    CalendarAuthorization,
+    CalendarAuthorizationProvider,
+    CalendarAuthorizationUnavailable,
+    CalendarRetrievalError,
+    GoogleCalendarConnector,
+    GoogleCalendarEvent,
+    GoogleCalendarListRequest,
+    GoogleCalendarPage,
+    GoogleCalendarTransport,
+)
+from chief_of_staff.connectors.repository import RepositoryContextConnector
 from chief_of_staff.connectors.static import StaticConnector
 
 __all__ = (
+    "GOOGLE_CALENDAR_EVENTS_OWNED_READONLY_SCOPE",
+    "CalendarAuthorization",
+    "CalendarAuthorizationProvider",
+    "CalendarAuthorizationUnavailable",
+    "CalendarRetrievalError",
     "ConnectorRequest",
     "ConnectorResult",
+    "GoogleCalendarConnector",
+    "GoogleCalendarEvent",
+    "GoogleCalendarListRequest",
+    "GoogleCalendarPage",
+    "GoogleCalendarTransport",
     "ReadOnlyConnector",
+    "RepositoryContextConnector",
     "RetrievalWindow",
     "SourceCoverage",
     "SourceItem",
