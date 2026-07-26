@@ -19,6 +19,7 @@ from chief_of_staff.domain import (
     CoverageStatus,
     DispositionEvent,
     DispositionKind,
+    NormalizedSourceTask,
     RecurrenceAction,
     SourceEvidence,
 )
@@ -137,7 +138,7 @@ def test_fresh_database_applies_all_migrations_and_enforces_foreign_keys(
     with Database.open(tmp_path / "state.sqlite3") as database:
         inspection = StateStore(database).inspect_state()
 
-        assert inspection.schema_versions == (1, 2, 3)
+        assert inspection.schema_versions == (1, 2, 3, 4)
         assert database.connection.execute("PRAGMA foreign_keys").fetchone()[0] == 1
 
 
@@ -165,8 +166,47 @@ def test_database_upgrades_from_first_migration_and_is_idempotent(
             "SELECT version FROM schema_migrations ORDER BY version"
         )
     ]
-    assert upgraded_versions == [1, 2, 3]
+    assert upgraded_versions == [1, 2, 3, 4]
     connection.close()
+
+
+def test_selected_normalized_task_persists_minimum_context_and_cascades(
+    tmp_path: Path,
+) -> None:
+    with Database.open(tmp_path / "todoist-state.sqlite3") as database:
+        store = StateStore(database)
+        store.add_connector_run(_connector_run())
+        store.add_source_evidence(_evidence())
+        store.add_normalized_source_task(
+            NormalizedSourceTask(
+                evidence_id="evidence-1",
+                title="Synthetic selected task",
+                provider_priority=1,
+                recurring=False,
+                all_day=True,
+                due_at=NOW,
+                project_id="project-1",
+                project_name="Synthetic project",
+                section_id="section-1",
+                section_name="Synthetic section",
+                responsible_user_id="primary-user",
+                labels=(("label-1", "Selected"),),
+            )
+        )
+
+        inspection = store.inspect_state()
+        assert inspection.normalized_source_tasks == 1
+        assert inspection.normalized_source_task_labels == 1
+        task_row = database.connection.execute(
+            "SELECT * FROM normalized_source_tasks"
+        ).fetchone()
+        assert task_row is not None
+        assert task_row["title"] == "Synthetic selected task"
+        assert task_row["project_name"] == "Synthetic project"
+        assert "description" not in task_row
+        assert store.delete_source_evidence("evidence-1")
+        assert store.inspect_state().normalized_source_tasks == 0
+        assert store.inspect_state().normalized_source_task_labels == 0
 
 
 def test_applied_migration_checksum_cannot_change(tmp_path: Path) -> None:
@@ -404,7 +444,7 @@ def test_reset_removes_product_state_but_preserves_migrations(tmp_path: Path) ->
 
         inspection = store.reset()
 
-        assert inspection.schema_versions == (1, 2, 3)
+        assert inspection.schema_versions == (1, 2, 3, 4)
         assert inspection.connector_runs == 0
         assert inspection.briefing_runs == 0
         assert inspection.source_evidence == 0

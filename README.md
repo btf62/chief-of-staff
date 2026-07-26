@@ -7,14 +7,15 @@ identifying priorities, commitments, and useful signals.
 
 ## Status
 
-**Phase:** Milestones 1–4 complete; Milestone 5 mock boundary in progress
+**Phase:** Milestones 1–4 complete; Milestone 5 Todoist trial complete
 
 The Python, local-state, deterministic briefing, repository connector, and
 read-only Google Calendar foundations are complete. An explicitly approved,
 bounded primary-calendar trial satisfied
-[Milestone 4](docs/roadmap.md#milestone-4--first-safe-connectors). Todoist now
-has a proposed specification, mock-only retrieval contract, and explicit
-live-access gate. No Todoist live access or broader Calendar access is
+[Milestone 4](docs/roadmap.md#milestone-4--first-safe-connectors). The accepted
+Todoist connector and one explicitly approved combined Calendar-and-Todoist
+trial now satisfy the Todoist portion of Milestone 5. Live retrieval is
+stopped before Jira or another connector; no repeat or broader access is
 authorized.
 
 ## Repository map

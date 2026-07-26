@@ -14,6 +14,13 @@ from chief_of_staff.auth.keychain import (
     KeychainSecretReference,
     MacOSKeychain,
 )
+from chief_of_staff.auth.todoist_oauth import (
+    TodoistAuthorizationResult,
+    TodoistInstalledAppOAuth,
+    TodoistOAuthClientRegistrar,
+    TodoistOAuthError,
+    TodoistOAuthTokenClient,
+)
 
 __all__ = (
     "GoogleInstalledAppOAuth",
@@ -26,4 +33,9 @@ __all__ = (
     "MacOSKeychain",
     "OAuthError",
     "OAuthImportResult",
+    "TodoistAuthorizationResult",
+    "TodoistInstalledAppOAuth",
+    "TodoistOAuthClientRegistrar",
+    "TodoistOAuthError",
+    "TodoistOAuthTokenClient",
 )

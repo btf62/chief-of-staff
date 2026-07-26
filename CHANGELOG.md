@@ -63,10 +63,18 @@ No strict versioning scheme is promised before a distributable product exists.
   coverage outside the Chief of Staff Note.
 - Provider-backed Calendar status signals and deterministic tomorrow-morning
   sequence synthesis that preserves individual event provenance.
-- A proposed Todoist connector specification and mock-only contract with exact
-  `data:read` scope enforcement, a fixed bounded filter, cursor pagination,
-  deterministic due normalization, partial-failure handling, and an explicit
-  live-access gate.
+- An accepted Todoist connector with exact `data:read` authorization,
+  state-protected loopback OAuth, Keychain-only client and token storage,
+  refresh rotation, revocation boundaries, and safe credential inspection.
+- A bounded Todoist live transport for current-user confirmation, selected
+  active tasks, referenced project and section context, necessary labels,
+  cursor pagination, partial failures, and no mutation operations.
+- Minimal normalized Todoist task persistence with source provenance,
+  authoritative links, freshness, resolved context, and cascading label
+  lifecycle.
+- A combined deterministic live-trial runner for approved repository context,
+  primary Calendar, and Todoist, with private output, transient raw payloads,
+  independent coverage, and no hosted inference.
 
 ### Changed
 
@@ -85,3 +93,5 @@ No strict versioning scheme is promised before a distributable product exists.
   before the Google Calendar live-access approval gate.
 - Completed the explicitly approved Milestone 4 bounded live Calendar trial
   and stopped before Milestone 5 or any additional live connector.
+- Completed the explicitly approved bounded Todoist trial and stopped before
+  Jira, another connector, or repeat Calendar or Todoist access.

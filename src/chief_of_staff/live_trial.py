@@ -7,13 +7,15 @@ import os
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from chief_of_staff.connectors import (
     GoogleCalendarConnector,
     RepositoryContextConnector,
+    TodoistConnector,
+    task_due_at,
 )
 from chief_of_staff.domain import (
     AuthorizationStatus,
@@ -23,6 +25,7 @@ from chief_of_staff.domain import (
     ConnectorStatus,
     CoverageStatus,
     CredentialHealth,
+    NormalizedSourceTask,
     SourceEvidence,
 )
 from chief_of_staff.persistence import StateStore
@@ -118,7 +121,7 @@ class LiveCalendarTrialRunner:
         if client is None or authorization is None:
             raise LiveTrialError("Google Calendar authorization metadata is missing")
 
-        connector_run_ids = self._persist_run_graph(
+        connector_run_ids, _evidence_ids = self._persist_run_graph(
             run_id=run_id,
             started_at=started_at,
             completed_at=completed_at,
@@ -163,7 +166,7 @@ class LiveCalendarTrialRunner:
         completed_at: datetime,
         context: object,
         result: object,
-    ) -> dict[str, str]:
+    ) -> tuple[dict[str, str], dict[tuple[str, str], str]]:
         from chief_of_staff.pipeline import InvocationContext, PipelineResult
 
         if not isinstance(context, InvocationContext) or not isinstance(
@@ -205,6 +208,7 @@ class LiveCalendarTrialRunner:
             )
             self.state_store.link_connector_run(run_id, connector_run_id)
 
+        evidence_ids: dict[tuple[str, str], str] = {}
         for record in result.deduplication.records:
             source = record.provenance.source
             fingerprint = _evidence_fingerprint(
@@ -226,7 +230,8 @@ class LiveCalendarTrialRunner:
                     freshness_at=record.provenance.freshness_at,
                 )
             )
-        return connector_run_ids
+            evidence_ids[(source, record.provenance.source_record_id)] = evidence_id
+        return connector_run_ids, evidence_ids
 
     def _write_briefing(
         self,
@@ -265,3 +270,241 @@ def _evidence_fingerprint(
     freshness = "" if freshness_at is None else freshness_at.isoformat()
     material = f"{source}\0{source_record_id}\0{freshness}"
     return hashlib.sha256(material.encode()).hexdigest()
+
+
+@dataclass(frozen=True, slots=True)
+class LiveTodoistTrialReport:
+    """Privacy-safe combined Calendar and Todoist trial facts."""
+
+    oauth_application_owner: str
+    account_identity: str
+    granted_scope: str
+    credential_health: str
+    refresh_health: str | None
+    retrieval_window_start: datetime
+    retrieval_window_end: datetime
+    active_task_count: int
+    selected_task_count: int
+    persisted_task_count: int
+    projects_retrieved: int
+    projects_persisted: int
+    sections_retrieved: int
+    sections_persisted: int
+    labels_retrieved: int
+    labels_persisted: int
+    task_page_count: int
+    label_page_count: int
+    calendar_event_count: int
+    calendar_page_count: int
+    output_path: Path
+    briefing_word_count: int
+    raw_payload_persisted: bool = False
+    hosted_inference_used: bool = False
+    other_live_source_used: bool = False
+
+    @property
+    def pagination_occurred(self) -> bool:
+        return (
+            self.task_page_count > 1
+            or self.label_page_count > 1
+            or self.calendar_page_count > 1
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class LiveTodoistTrialRunner:
+    """Run the approved repository, Calendar, and Todoist trial once."""
+
+    state_store: StateStore
+    repository_root: Path
+    repository_paths: tuple[Path, ...]
+    calendar_connector: GoogleCalendarConnector
+    todoist_connector: TodoistConnector
+    output_directory: Path
+    timezone: str = "America/New_York"
+    clock: Callable[[], datetime] = field(
+        default=lambda: datetime.now(UTC),
+        repr=False,
+        compare=False,
+    )
+
+    def run(self) -> LiveTodoistTrialReport:
+        """Generate one combined deterministic briefing and persist bounded facts."""
+
+        started_at = self.clock()
+        briefing_date = started_at.astimezone(ZoneInfo(self.timezone)).date()
+        run_id = f"live-todoist-{uuid.uuid4().hex}"
+        context = resolve_context(
+            run_id=run_id,
+            briefing_date=briefing_date,
+            timezone=self.timezone,
+            invocation_mode="bounded_todoist_live_trial",
+            lookahead_days=7,
+        )
+        repository_connector = RepositoryContextConnector(
+            root=self.repository_root,
+            approved_paths=self.repository_paths,
+            clock=self.clock,
+        )
+        result = DeterministicBriefingPipeline().run(
+            context,
+            (
+                repository_connector,
+                self.calendar_connector,
+                self.todoist_connector,
+            ),
+        )
+        completed_at = self.clock()
+        coverage_by_source = {
+            coverage.source: coverage for coverage in result.plan.coverage
+        }
+        for source in ("google_calendar", "todoist"):
+            coverage = coverage_by_source[source]
+            if coverage.status is CoverageStatus.UNAUTHORIZED:
+                raise LiveTrialError(f"{source} authorization failed")
+            if coverage.status is CoverageStatus.UNAVAILABLE:
+                raise LiveTrialError(f"{source} retrieval was unavailable")
+
+        audit = self.todoist_connector.last_audit
+        if audit is None:
+            raise LiveTrialError("Todoist lifecycle audit is unavailable")
+        client = self.state_store.get_oauth_client("todoist")
+        authorization = self.state_store.get_connector_authorization("todoist")
+        if client is None or authorization is None:
+            raise LiveTrialError("Todoist authorization metadata is missing")
+
+        helper = LiveCalendarTrialRunner(
+            state_store=self.state_store,
+            repository_root=self.repository_root,
+            repository_paths=self.repository_paths,
+            calendar_connector=self.calendar_connector,
+            output_directory=self.output_directory,
+            timezone=self.timezone,
+            clock=self.clock,
+        )
+        _connector_run_ids, evidence_ids = helper._persist_run_graph(
+            run_id=run_id,
+            started_at=started_at,
+            completed_at=completed_at,
+            context=context,
+            result=result,
+        )
+        persisted_counts = self._persist_todoist_tasks(
+            evidence_ids=evidence_ids,
+            timezone=context.timezone,
+        )
+        output_path = helper._write_briefing(
+            briefing_date=briefing_date.isoformat(),
+            run_id=run_id,
+            content=result.rendered.text,
+        )
+        self.state_store.mark_connector_authorization_used(
+            "google_calendar",
+            used_at=completed_at,
+        )
+        self.state_store.mark_connector_authorization_used(
+            "todoist",
+            used_at=completed_at,
+        )
+        calendar_coverage = coverage_by_source["google_calendar"]
+        calendar_records = tuple(
+            record
+            for record in result.deduplication.records
+            if record.provenance.source == "google_calendar"
+        )
+        return LiveTodoistTrialReport(
+            oauth_application_owner=client.application_owner or "unspecified",
+            account_identity=authorization.account_identity,
+            granted_scope=authorization.granted_scope,
+            credential_health=authorization.credential_health.value,
+            refresh_health=(
+                None
+                if authorization.refresh_health is None
+                else authorization.refresh_health.value
+            ),
+            retrieval_window_start=datetime.combine(
+                briefing_date,
+                datetime.min.time(),
+                tzinfo=ZoneInfo(context.timezone),
+            ),
+            retrieval_window_end=datetime.combine(
+                briefing_date + timedelta(days=15),
+                datetime.min.time(),
+                tzinfo=ZoneInfo(context.timezone),
+            ),
+            active_task_count=audit.active_task_count,
+            selected_task_count=audit.selected_task_count,
+            persisted_task_count=persisted_counts[0],
+            projects_retrieved=audit.projects_retrieved,
+            projects_persisted=persisted_counts[1],
+            sections_retrieved=audit.sections_retrieved,
+            sections_persisted=persisted_counts[2],
+            labels_retrieved=audit.labels_retrieved,
+            labels_persisted=persisted_counts[3],
+            task_page_count=audit.task_page_count,
+            label_page_count=audit.label_page_count,
+            calendar_event_count=len(calendar_records),
+            calendar_page_count=calendar_coverage.page_count or 0,
+            output_path=output_path,
+            briefing_word_count=result.rendered.word_count,
+        )
+
+    def _persist_todoist_tasks(
+        self,
+        *,
+        evidence_ids: dict[tuple[str, str], str],
+        timezone: str,
+    ) -> tuple[int, int, int, int]:
+        audit = self.todoist_connector.last_audit
+        if audit is None:
+            raise LiveTrialError("Todoist lifecycle audit is unavailable")
+        projects = {project.id: project for project in audit.projects}
+        sections = {section.id: section for section in audit.sections}
+        labels = {label.name.casefold(): label for label in audit.labels}
+        persisted_projects: set[str] = set()
+        persisted_sections: set[str] = set()
+        persisted_labels: set[str] = set()
+        persisted_tasks = 0
+        for task in audit.selected_tasks:
+            evidence_id = evidence_ids.get(("todoist", task.id))
+            if evidence_id is None:
+                continue
+            project = None if task.project_id is None else projects.get(task.project_id)
+            section = None if task.section_id is None else sections.get(task.section_id)
+            resolved_labels = tuple(
+                labels[name.casefold()]
+                for name in task.label_names
+                if name.casefold() in labels
+            )
+            due_at, all_day = task_due_at(task, timezone=timezone)
+            self.state_store.add_normalized_source_task(
+                NormalizedSourceTask(
+                    evidence_id=evidence_id,
+                    title=task.content,
+                    provider_priority=task.priority,
+                    recurring=task.recurring,
+                    all_day=all_day,
+                    due_at=due_at,
+                    project_id=None if project is None else project.id,
+                    project_name=None if project is None else project.name,
+                    section_id=None if section is None else section.id,
+                    section_name=None if section is None else section.name,
+                    responsible_user_id=task.responsible_user_id,
+                    parent_task_id=task.parent_id,
+                    created_at=task.created_at,
+                    updated_at=task.updated_at,
+                    labels=tuple((label.id, label.name) for label in resolved_labels),
+                )
+            )
+            persisted_tasks += 1
+            if project is not None:
+                persisted_projects.add(project.id)
+            if section is not None:
+                persisted_sections.add(section.id)
+            persisted_labels.update(label.id for label in resolved_labels)
+        return (
+            persisted_tasks,
+            len(persisted_projects),
+            len(persisted_sections),
+            len(persisted_labels),
+        )

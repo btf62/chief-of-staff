@@ -797,6 +797,112 @@ def test_coverage_metadata_is_separate_from_the_chief_of_staff_note() -> None:
     assert "one bounded page was unavailable" in (coverage.summary or "")
 
 
+def test_todoist_facts_remain_source_signals_without_people_waiting_or_duplicates() -> (
+    None
+):
+    todoist = _connector(
+        "todoist",
+        _item(
+            "task-1",
+            title="Synthetic priority task",
+            importance=5,
+            provider_priority=1,
+            explicit_commitment=False,
+            status="open",
+            due_at="2026-07-27T00:00:00-04:00",
+            all_day=True,
+        ),
+        _item(
+            "task-2",
+            title="Synthetic approaching task",
+            importance=1,
+            provider_priority=4,
+            explicit_commitment=False,
+            status="open",
+            due_at="2026-07-30T00:00:00-04:00",
+            all_day=True,
+        ),
+    )
+    context = resolve_context(
+        run_id="todoist-briefing",
+        briefing_date=BRIEFING_DATE,
+        timezone="America/New_York",
+    )
+
+    result = DeterministicBriefingPipeline().run(context, (todoist,))
+
+    names = {section.name for section in result.plan.sections}
+    assert BriefingSectionName.PEOPLE_WAITING not in names
+    assert BriefingSectionName.COMMITMENTS_AT_RISK not in names
+    visible_items = tuple(
+        item for section in result.plan.sections for item in section.items
+    )
+    visible_keys = tuple(item.key for item in visible_items)
+    assert len(visible_keys) == len(set(visible_keys))
+    assert all(
+        source.source == "todoist" for item in visible_items for source in item.sources
+    )
+    assert "source importance 5/5" in result.rendered.text
+    assert "People Waiting on Brad" not in result.rendered.text
+    assert result.rendered.word_count <= 800
+
+
+def test_non_workday_suppresses_todoist_tasks_but_keeps_coverage() -> None:
+    todoist = _connector(
+        "todoist",
+        _item(
+            "task-1",
+            title="Synthetic ordinary work",
+            importance=5,
+            provider_priority=1,
+            explicit_commitment=False,
+            status="open",
+            due_at="2026-07-26T00:00:00-04:00",
+            all_day=True,
+        ),
+    )
+    context = resolve_context(
+        run_id="todoist-non-workday",
+        briefing_date=date(2026, 7, 26),
+        timezone="America/New_York",
+    )
+
+    result = DeterministicBriefingPipeline().run(context, (todoist,))
+
+    assert "Synthetic ordinary work" not in result.rendered.text
+    assert "`todoist`: complete; 1 record" in result.rendered.text
+    assert tuple(section.name for section in result.plan.sections) == (
+        BriefingSectionName.CHIEF_OF_STAFF_NOTE,
+        BriefingSectionName.SOURCE_COVERAGE,
+    )
+
+
+def test_repository_calendar_and_todoist_failures_are_independently_disclosed() -> None:
+    repository = _connector("repository", status=CoverageStatus.COMPLETE)
+    calendar = _connector(
+        "google_calendar",
+        status=CoverageStatus.PARTIAL,
+        warnings=("one calendar page failed",),
+    )
+    todoist = _connector("todoist", status=CoverageStatus.UNAVAILABLE)
+    context = resolve_context(
+        run_id="independent-coverage",
+        briefing_date=BRIEFING_DATE,
+        timezone="America/New_York",
+    )
+
+    result = DeterministicBriefingPipeline().run(
+        context,
+        (repository, calendar, todoist),
+    )
+
+    coverage = result.plan.sections[-1].summary or ""
+    assert "`repository`: complete" in coverage
+    assert "`google_calendar`: partial" in coverage
+    assert "one calendar page failed" in coverage
+    assert "`todoist`: unavailable" in coverage
+
+
 def test_read_only_connector_surface_exposes_no_mutation_operations() -> None:
     connector = _connector("synthetic_tasks")
 

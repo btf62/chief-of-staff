@@ -129,8 +129,10 @@ def _save_authorization(
         access_token_account=(
             f"{GOOGLE_CALENDAR_CONNECTOR}:access-token:{ACCOUNT_REFERENCE}"
         ),
+        refresh_token_account=None,
         authorization_status=AuthorizationStatus.AUTHORIZED,
         credential_health=CredentialHealth.HEALTHY,
+        refresh_health=None,
         token_expires_at=expires_at,
         authorized_at=NOW,
         updated_at=NOW,

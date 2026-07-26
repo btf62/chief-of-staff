@@ -17,6 +17,7 @@ from chief_of_staff.domain.models import (
     CredentialHealth,
     DispositionEvent,
     DispositionKind,
+    NormalizedSourceTask,
     OAuthClientMetadata,
     RecurrenceAction,
     RecurrenceDecision,
@@ -92,15 +93,17 @@ class StateStore:
                     oauth_client_id,
                     credential_service,
                     client_secret_account,
-                    configured_at
+                    configured_at,
+                    application_owner
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(connector) DO UPDATE SET
                     oauth_project_id = excluded.oauth_project_id,
                     oauth_client_id = excluded.oauth_client_id,
                     credential_service = excluded.credential_service,
                     client_secret_account = excluded.client_secret_account,
-                    configured_at = excluded.configured_at
+                    configured_at = excluded.configured_at,
+                    application_owner = excluded.application_owner
                 """,
                 (
                     metadata.connector,
@@ -109,6 +112,7 @@ class StateStore:
                     metadata.credential_service,
                     metadata.client_secret_account,
                     _serialize_datetime(metadata.configured_at),
+                    metadata.application_owner,
                 ),
             )
 
@@ -128,6 +132,11 @@ class StateStore:
             credential_service=str(row["credential_service"]),
             client_secret_account=str(row["client_secret_account"]),
             configured_at=_parse_datetime(str(row["configured_at"])),
+            application_owner=(
+                None
+                if row["application_owner"] is None
+                else str(row["application_owner"])
+            ),
         )
 
     def save_connector_authorization(
@@ -146,22 +155,26 @@ class StateStore:
                     granted_scope,
                     credential_service,
                     access_token_account,
+                    refresh_token_account,
                     authorization_status,
                     credential_health,
+                    refresh_health,
                     token_expires_at,
                     authorized_at,
                     last_used_at,
                     updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(connector) DO UPDATE SET
                     account_reference = excluded.account_reference,
                     account_identity = excluded.account_identity,
                     granted_scope = excluded.granted_scope,
                     credential_service = excluded.credential_service,
                     access_token_account = excluded.access_token_account,
+                    refresh_token_account = excluded.refresh_token_account,
                     authorization_status = excluded.authorization_status,
                     credential_health = excluded.credential_health,
+                    refresh_health = excluded.refresh_health,
                     token_expires_at = excluded.token_expires_at,
                     authorized_at = excluded.authorized_at,
                     last_used_at = excluded.last_used_at,
@@ -174,8 +187,14 @@ class StateStore:
                     metadata.granted_scope,
                     metadata.credential_service,
                     metadata.access_token_account,
+                    metadata.refresh_token_account,
                     metadata.authorization_status.value,
                     metadata.credential_health.value,
+                    (
+                        None
+                        if metadata.refresh_health is None
+                        else metadata.refresh_health.value
+                    ),
                     _serialize_datetime(metadata.token_expires_at),
                     _serialize_datetime(metadata.authorized_at),
                     _serialize_optional_datetime(metadata.last_used_at),
@@ -202,8 +221,18 @@ class StateStore:
             granted_scope=str(row["granted_scope"]),
             credential_service=str(row["credential_service"]),
             access_token_account=str(row["access_token_account"]),
+            refresh_token_account=(
+                None
+                if row["refresh_token_account"] is None
+                else str(row["refresh_token_account"])
+            ),
             authorization_status=AuthorizationStatus(str(row["authorization_status"])),
             credential_health=CredentialHealth(str(row["credential_health"])),
+            refresh_health=(
+                None
+                if row["refresh_health"] is None
+                else CredentialHealth(str(row["refresh_health"]))
+            ),
             token_expires_at=_parse_datetime(str(row["token_expires_at"])),
             authorized_at=_parse_datetime(str(row["authorized_at"])),
             last_used_at=_parse_optional_datetime(
@@ -266,6 +295,16 @@ class StateStore:
                 "DELETE FROM oauth_clients WHERE connector = ?",
                 (connector,),
             )
+
+    def delete_connector_authorization(self, connector: str) -> bool:
+        """Delete only non-secret grant metadata after token cleanup."""
+
+        with self.database.transaction() as connection:
+            cursor = connection.execute(
+                "DELETE FROM connector_authorizations WHERE connector = ?",
+                (connector,),
+            )
+        return cursor.rowcount > 0
 
     def add_briefing_run(self, run: BriefingRun) -> None:
         """Persist one versioned briefing-run record."""
@@ -339,6 +378,62 @@ class StateStore:
                     evidence.evidence_fingerprint,
                     _serialize_datetime(evidence.retrieved_at),
                     _serialize_optional_datetime(evidence.freshness_at),
+                ),
+            )
+
+    def add_normalized_source_task(self, task: NormalizedSourceTask) -> None:
+        """Persist one selected task and only its minimal resolved context."""
+
+        with self.database.transaction() as connection:
+            connection.execute(
+                """
+                INSERT INTO normalized_source_tasks(
+                    evidence_id,
+                    title,
+                    provider_priority,
+                    recurring,
+                    all_day,
+                    due_at,
+                    project_id,
+                    project_name,
+                    section_id,
+                    section_name,
+                    responsible_user_id,
+                    parent_task_id,
+                    created_at,
+                    updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    task.evidence_id,
+                    task.title,
+                    task.provider_priority,
+                    int(task.recurring),
+                    int(task.all_day),
+                    _serialize_optional_datetime(task.due_at),
+                    task.project_id,
+                    task.project_name,
+                    task.section_id,
+                    task.section_name,
+                    task.responsible_user_id,
+                    task.parent_task_id,
+                    _serialize_optional_datetime(task.created_at),
+                    _serialize_optional_datetime(task.updated_at),
+                ),
+            )
+            connection.executemany(
+                """
+                INSERT INTO normalized_source_task_labels(
+                    evidence_id,
+                    label_id,
+                    label_name
+                )
+                VALUES (?, ?, ?)
+                """,
+                (
+                    (task.evidence_id, label_id, label_name)
+                    for label_id, label_name in task.labels
                 ),
             )
 
@@ -543,6 +638,14 @@ class StateStore:
                 connection,
                 "connector_authorizations",
             ),
+            normalized_source_tasks=_table_count(
+                connection,
+                "normalized_source_tasks",
+            ),
+            normalized_source_task_labels=_table_count(
+                connection,
+                "normalized_source_task_labels",
+            ),
         )
 
     def delete_disposition_history(self, conclusion_id: str) -> int:
@@ -702,6 +805,12 @@ def _table_count(connection: sqlite3.Connection, table: str) -> int:
             "SELECT COUNT(*) AS count FROM connector_authorizations"
         ),
         "source_evidence": "SELECT COUNT(*) AS count FROM source_evidence",
+        "normalized_source_tasks": (
+            "SELECT COUNT(*) AS count FROM normalized_source_tasks"
+        ),
+        "normalized_source_task_labels": (
+            "SELECT COUNT(*) AS count FROM normalized_source_task_labels"
+        ),
     }
     query = queries.get(table)
     if query is None:

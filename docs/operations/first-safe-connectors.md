@@ -2,11 +2,11 @@
 
 - **Status:** Accepted
 - **Owner:** Brad
-- **Last updated:** 2026-07-25
+- **Last updated:** 2026-07-26
 
-This document describes the implemented Milestone 4 connector boundary. The
-local repository-context connector, a synthetic Calendar demonstration, and
-one explicitly approved bounded live Google Calendar trial are complete. Live
+This document describes the implemented repository, Calendar, and Todoist
+connector boundaries. The synthetic demonstrations, one bounded Calendar
+trial, and one bounded combined Calendar-and-Todoist trial are complete. Live
 access is now stopped. None of the credential or live-retrieval commands below
 may be repeated without new explicit approval.
 
@@ -79,6 +79,39 @@ transient source and must not enter shell history. These commands exist for
 the completed trial boundary, not as continuing authorization to reconfigure
 or refresh credentials.
 
+## Todoist authorization and credential boundary
+
+The Todoist connector uses a Brad-owned confidential client named
+`Chief of Staff (Local)`, the fixed loopback callback documented in the
+[Todoist connector specification](../architecture/connectors/todoist.md), and
+exactly this scope:
+
+```text
+data:read
+```
+
+The client secret, access token, and rotated refresh token are stored only in
+macOS Keychain. SQLite stores only non-secret application ownership, account,
+scope, expiry, health, and lookup metadata. The completed authorization
+confirmed the selected current-user identity before persistence and
+immediately exercised one refresh-token rotation.
+
+The private local setup sequence was:
+
+```text
+python -m chief_of_staff.todoist_live_cli \
+  register-client-from-stdin \
+  --application-name "Chief of Staff (Local)" \
+  --application-owner "Brad" \
+  --client-id configured-non-secret-client-id
+python -m chief_of_staff.todoist_live_cli authorize
+python -m chief_of_staff.todoist_live_cli status
+```
+
+The client secret must enter the first command through controlled stdin, never
+through a command argument, shell history, configuration file, or repository
+file. Brad's personal API token is not an accepted fallback.
+
 ## Bounded live trial
 
 The completed trial was invoked on demand with:
@@ -105,6 +138,34 @@ The trial does not inspect secondary calendars, process attachments, follow
 external links, invoke another connector, or expose a Calendar mutation
 method.
 
+## Bounded combined Todoist trial
+
+The completed Todoist trial was invoked on demand with:
+
+```text
+python -m chief_of_staff.todoist_live_cli trial
+```
+
+It:
+
+- Confirms the authorized current Todoist user before task retrieval.
+- Retrieves only the exact accepted active-task filter and applies the local
+  selection boundary again in the configured timezone.
+- Resolves only project and section records referenced by selected tasks and
+  retrieves labels only when selected tasks require them.
+- Combines Todoist with the same two approved repository documents and one
+  bounded primary-Calendar retrieval.
+- Stores only selected normalized tasks, minimal referenced context, source
+  provenance, freshness, coverage, and the briefing-run graph.
+- Keeps provider pages, unused context, cursors, and other raw payloads
+  transient.
+- Writes the private deterministic briefing under ignored `.local/` state.
+- Uses no hosted inference, other live connector, external write, scheduling,
+  or persistent source cache.
+
+The private result and local SQLite state must not be copied into Git or a
+public report.
+
 ## Validation
 
 Run the complete quality gate:
@@ -118,6 +179,10 @@ Calendar pagination, all-day events, timezones, freshness, empty data,
 unauthorized access, rejected scope expansion, partial-page failure, exact
 primary-calendar HTTP requests, Keychain isolation, source provenance,
 presentation budgets, transient raw payloads, and absence of mutation methods.
+Todoist tests additionally cover exact scope and filter enforcement, current-
+user confirmation, refresh rotation, revocation and disconnection, task and
+context pagination, local selection, minimized persistence, independent
+failures, non-workday suppression, and no task-system mutation.
 
 ## Current limitations and stop condition
 
@@ -126,10 +191,12 @@ presentation budgets, transient raw payloads, and absence of mutation methods.
   contract tests enforce that boundary.
 - Authorization uses a short-lived access token without offline access or
   automatic refresh.
+- Todoist refresh credentials exist in Keychain, but their presence does not
+  authorize scheduled, unattended, or repeated retrieval.
 - Calendar events remain evidence for deterministic output; inference-only
   briefing sections are not implemented.
 - Daily Briefing v1 has not been accepted for operational use.
 
-The bounded trial is complete. Do not repeat live Calendar retrieval, refresh
-authorization, broaden the Calendar boundary, or begin another live connector
-without new explicit approval.
+The bounded trials are complete. Do not repeat live Calendar or Todoist
+retrieval, refresh authorization, broaden either boundary, or begin Jira or
+another live connector without new explicit approval.

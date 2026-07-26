@@ -251,6 +251,10 @@ than email age alone. Clearly label inferred expectations and prioritize
 precision over recall: omit a questionable inference rather than present a
 false relationship claim with unwarranted confidence.
 
+A task-system record alone does not establish that a person is waiting.
+Assignment, ownership, or a due date requires separate evidence of a human
+expectation before it may appear here.
+
 ### 7. Commitments at Risk
 
 Surface meaningful commitments that appear:
@@ -280,6 +284,10 @@ Needed, People Waiting on Brad, or Commitments at Risk.
 
 Source status and ownership must remain visible when they affect the
 recommendation.
+
+Task-system priority is a source-owned signal, not the final Chief of Staff
+priority. It may influence deterministic ordering, but it does not by itself
+prove an external commitment, relationship consequence, or required outcome.
 
 ### 9. Recommended Focus Block
 

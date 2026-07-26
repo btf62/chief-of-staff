@@ -200,6 +200,8 @@ class StateInspection:
     disposition_events: int
     oauth_clients: int
     connector_authorizations: int
+    normalized_source_tasks: int
+    normalized_source_task_labels: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -212,6 +214,7 @@ class OAuthClientMetadata:
     credential_service: str
     client_secret_account: str
     configured_at: datetime
+    application_owner: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -224,9 +227,32 @@ class ConnectorAuthorizationMetadata:
     granted_scope: str
     credential_service: str
     access_token_account: str
+    refresh_token_account: str | None
     authorization_status: AuthorizationStatus
     credential_health: CredentialHealth
+    refresh_health: CredentialHealth | None
     token_expires_at: datetime
     authorized_at: datetime
     updated_at: datetime
     last_used_at: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class NormalizedSourceTask:
+    """Minimal persisted task facts linked to authoritative evidence."""
+
+    evidence_id: str
+    title: str
+    provider_priority: int
+    recurring: bool
+    all_day: bool
+    due_at: datetime | None = None
+    project_id: str | None = None
+    project_name: str | None = None
+    section_id: str | None = None
+    section_name: str | None = None
+    responsible_user_id: str | None = None
+    parent_task_id: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    labels: tuple[tuple[str | None, str], ...] = ()
