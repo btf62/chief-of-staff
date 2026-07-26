@@ -29,6 +29,14 @@ No strict versioning scheme is promised before a distributable product exists.
   metadata, provenance, conclusions, and append-oriented dispositions.
 - Inspectable correction history, evidence-fingerprint recurrence projection,
   bounded run pruning, individual deletion, and complete local-state reset.
+- Retrieval-only connector contracts, explicit invocation context,
+  normalization, conservative exact deduplication, and source-coverage
+  reporting.
+- Structured deterministic briefing composition with canonical ordering,
+  provenance, transparent priority inputs, duplicate controls, and enforced
+  presentation budgets.
+- A repository-owned synthetic briefing demonstration and full pipeline test
+  coverage.
 
 ### Changed
 
@@ -41,3 +49,5 @@ No strict versioning scheme is promised before a distributable product exists.
   Core Domain and Persistence as next.
 - Marked Milestone 2 — Core Domain and Persistence complete and Milestone 3 —
   Deterministic Briefing Pipeline as next.
+- Marked Milestone 3 — Deterministic Briefing Pipeline complete and Milestone
+  4 — First Safe Connectors as next.

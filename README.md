@@ -7,11 +7,12 @@ identifying priorities, commitments, and useful signals.
 
 ## Status
 
-**Phase:** Milestones 1–2 complete; Milestone 3 ready
+**Phase:** Milestones 1–3 complete; Milestone 4 ready
 
-The Python and local-state foundations are complete, but there is no generated
-briefing yet. The next implementation milestone is
-[Milestone 3 — Deterministic Briefing Pipeline](docs/roadmap.md#milestone-3--deterministic-briefing-pipeline).
+The Python, local-state, and deterministic briefing foundations are complete.
+The next implementation milestone is
+[Milestone 4 — First Safe Connectors](docs/roadmap.md#milestone-4--first-safe-connectors).
+No live source authorization has occurred.
 
 ## Repository map
 
@@ -33,6 +34,7 @@ briefing yet. The next implementation milestone is
 │   │   └── vision.md       Product purpose and desired outcomes
 │   ├── README.md           Documentation index
 │   └── roadmap.md          Milestones and sequencing
+├── examples/               Safe synthetic demonstrations
 ├── src/chief_of_staff/     Python application package
 ├── templates/              Reusable documentation templates
 ├── tests/                  Synthetic foundation tests
@@ -59,6 +61,18 @@ briefing yet. The next implementation milestone is
    [decision records](docs/decisions/README.md).
 6. Use [the implementation roadmap](docs/roadmap.md) to sequence approved work
    and enforce milestone gates.
+
+## Safe demonstration
+
+After creating the supported development environment, generate the synthetic
+deterministic briefing with:
+
+```text
+make demo
+```
+
+The demonstration uses repository-owned synthetic records only. It performs no
+live source access, hosted inference, persistence, or external writes.
 
 ## Documentation principles
 

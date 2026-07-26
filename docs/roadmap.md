@@ -7,7 +7,7 @@
 
 This roadmap sequences implementation of the accepted
 [Daily Briefing v1](product/features/daily-briefing-v1.md) design. Milestones 0
-through 2 are complete, and Milestone 3 is the next implementation milestone.
+through 3 are complete, and Milestone 4 is the next implementation milestone.
 Dates and estimates remain intentionally omitted until implementation evidence
 supports them.
 
@@ -102,7 +102,7 @@ boundaries.
 
 ## Milestone 3 — Deterministic Briefing Pipeline
 
-- **Status:** Next
+- **Status:** Complete
 - **Intended user-visible outcome:** Brad can generate a reduced, factual,
   presentation-budget-compliant briefing from synthetic data without hosted
   inference.
@@ -126,7 +126,7 @@ boundaries.
 
 ## Milestone 4 — First Safe Connectors
 
-- **Status:** Planned
+- **Status:** Next
 - **Intended user-visible outcome:** Brad can request a factual briefing that
   accurately shows approved repository context, today's calendar, and source
   coverage without hosted inference.

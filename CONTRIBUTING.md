@@ -2,8 +2,8 @@
 
 ## Current scope
 
-The Version 1 design baseline and Milestones 1–2 are complete.
-[Milestone 3 — Deterministic Briefing Pipeline](docs/roadmap.md#milestone-3--deterministic-briefing-pipeline)
+The Version 1 design baseline and Milestones 1–3 are complete.
+[Milestone 4 — First Safe Connectors](docs/roadmap.md#milestone-4--first-safe-connectors)
 is next. Contributions may improve authoritative documentation or implement
 the current roadmap milestone when the task explicitly authorizes
 implementation. Do not begin a later milestone before its dependencies and
@@ -46,8 +46,10 @@ Do not install project tools into the macOS system Python.
 | `make bootstrap` | Create `.venv`, update pip, and install the package and exact-pinned development tools |
 | `make format` | Format Python and apply safe Ruff fixes |
 | `make lint` | Verify formatting and run Ruff lint rules |
-| `make typecheck` | Run strict mypy checks against `src` and `tests` |
+| `make typecheck` | Run strict mypy checks against application, test, tool, and example Python |
 | `make test` | Run pytest |
+| `make docs-check` | Validate local Markdown links and anchors |
+| `make demo` | Print the repository-owned synthetic reduced briefing |
 | `make check` | Run the complete local quality gate |
 
 GitHub Actions runs the same `make bootstrap` and `make check` workflow on

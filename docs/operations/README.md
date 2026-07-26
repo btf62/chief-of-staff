@@ -31,3 +31,6 @@ there is no implemented or deployed system.
 - [Local state operations](local-state.md) — SQLite migrations, inspection,
   recurrence projection, deletion, retention pruning, reset, and current
   limitations
+- [Deterministic briefing operations](deterministic-briefing.md) — synthetic
+  invocation, source coverage, composition, validation, and current
+  limitations

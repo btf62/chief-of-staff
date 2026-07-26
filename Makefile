@@ -6,7 +6,7 @@ RUFF := $(VENV)/bin/ruff
 MYPY := $(VENV)/bin/mypy
 PYTEST := $(VENV)/bin/pytest
 
-.PHONY: bootstrap format format-check lint typecheck test docs-check check
+.PHONY: bootstrap format format-check lint typecheck test docs-check demo check
 
 bootstrap:
 	$(PYTHON) -m venv $(VENV)
@@ -24,12 +24,15 @@ lint: format-check
 	$(RUFF) check .
 
 typecheck:
-	$(MYPY) src tests tools
+	$(MYPY) src tests tools examples
 
 test:
 	$(PYTEST)
 
 docs-check:
 	$(VENV_PYTHON) tools/validate_markdown.py
+
+demo:
+	$(VENV_PYTHON) examples/generate_reduced_briefing.py
 
 check: lint typecheck test docs-check
