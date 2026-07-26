@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 from enum import StrEnum
+from itertools import pairwise
 
 from chief_of_staff.connectors import SourceCoverage
 from chief_of_staff.pipeline.context import InvocationContext
@@ -16,6 +17,9 @@ PREFERRED_WORDS = 800
 MAX_NOTE_WORDS = 150
 MAX_OUTCOMES = 3
 LIMITED_SECTION_ITEMS = 3
+EARLY_MORNING_START = time(9)
+MAX_SEQUENCE_GAP = timedelta(minutes=60)
+TIME_RANGE_SEPARATOR = "\N{EN DASH}"
 
 
 class BriefingSectionName(StrEnum):
@@ -43,6 +47,7 @@ class CalendarEventClassification(StrEnum):
     FIXED_COMMITMENT = "Fixed commitment"
     TENTATIVE_HOLD = "Tentative hold"
     ALL_DAY_CONTEXT = "All-day context"
+    STATUS_SIGNAL = "Status signal"
     SCHEDULED_EVENT = "Scheduled event"
 
 
@@ -140,23 +145,49 @@ def build_reduced_plan(
 
     today = context.briefing_date
     used_record_ids: set[str] = set()
-    todays_calendar = tuple(
+    todays_calendar_context = tuple(
         sorted(
             (
                 record
                 for record in records
                 if record.kind is RecordKind.CALENDAR_EVENT
-                and _is_displayable_calendar_event(record)
+                and _is_active_calendar_event(record)
                 and record.start_at is not None
                 and record.start_at.date() == today
             ),
             key=lambda record: record.start_at or datetime.max,
         )
     )
+    todays_calendar = tuple(
+        record
+        for record in todays_calendar_context
+        if _is_displayable_calendar_event(record)
+    )
+    future_calendar_context = tuple(
+        sorted(
+            (
+                record
+                for record in records
+                if record.kind is RecordKind.CALENDAR_EVENT
+                and _is_active_calendar_event(record)
+                and record.start_at is not None
+                and record.start_at.date() > today
+            ),
+            key=_future_sort_key,
+        )
+    )
+    tomorrow_sequence = _tomorrow_morning_calendar_sequence(
+        future_calendar_context,
+        today,
+    )
     sections: list[BriefingSection] = [
         BriefingSection(
             name=BriefingSectionName.CHIEF_OF_STAFF_NOTE,
-            summary=_chief_note(context, todays_calendar),
+            summary=_chief_note(
+                context,
+                todays_calendar_context,
+                tomorrow_sequence,
+            ),
         )
     ]
 
@@ -254,7 +285,7 @@ def build_reduced_plan(
         )
         used_record_ids.update(record.id for record in important_tasks)
 
-    looking_ahead = tuple(
+    future_records = tuple(
         sorted(
             (
                 record
@@ -271,12 +302,22 @@ def build_reduced_plan(
             ),
             key=_future_sort_key,
         )
-    )[:LIMITED_SECTION_ITEMS]
-    if looking_ahead:
+    )
+    sequence_record_ids = {record.id for record in tomorrow_sequence}
+    looking_ahead_items: list[BriefingItem] = []
+    if tomorrow_sequence:
+        looking_ahead_items.append(_calendar_sequence_item(tomorrow_sequence))
+    for record in future_records:
+        if record.id in sequence_record_ids:
+            continue
+        looking_ahead_items.append(_looking_ahead_item(record))
+        if len(looking_ahead_items) == LIMITED_SECTION_ITEMS:
+            break
+    if looking_ahead_items:
         sections.append(
             BriefingSection(
                 name=BriefingSectionName.LOOKING_AHEAD,
-                items=tuple(_looking_ahead_item(record) for record in looking_ahead),
+                items=tuple(looking_ahead_items),
             )
         )
 
@@ -395,19 +436,36 @@ def validate_briefing(
 
 def _chief_note(
     context: InvocationContext,
-    todays_calendar: tuple[NormalizedRecord, ...],
+    todays_calendar_context: tuple[NormalizedRecord, ...],
+    tomorrow_sequence: tuple[NormalizedRecord, ...],
 ) -> str:
-    day_posture = (
-        "Today is a workday."
-        if context.is_workday
-        else (
-            "Today is a non-workday; protect it from ordinary work demands. "
-            "Only fixed schedule facts, explicit preparation, and concise "
-            "looking-ahead context are shown."
-        )
+    if context.is_workday:
+        return f"Today is a workday. {_schedule_summary(todays_calendar_context)}"
+
+    day_label = (
+        "configured day off"
+        if context.workday_reason == "configured day off"
+        else "non-workday"
     )
-    schedule = _schedule_summary(todays_calendar)
-    return f"{day_posture} {schedule}"
+    parts = [
+        f"Today is a {day_label}; protect it from ordinary work demands.",
+    ]
+    fixed_today = tuple(
+        record
+        for record in todays_calendar_context
+        if classify_calendar_event(record)
+        is CalendarEventClassification.FIXED_COMMITMENT
+    )
+    if fixed_today:
+        parts.append(_schedule_summary(fixed_today))
+    if tomorrow_sequence:
+        parts.append(_tomorrow_sequence_note(tomorrow_sequence))
+    else:
+        parts.append(
+            "Only a fixed commitment or preparation that truly cannot wait "
+            "should interrupt today."
+        )
+    return " ".join(parts)
 
 
 def _coverage_summary(coverage: tuple[SourceCoverage, ...]) -> str:
@@ -436,6 +494,11 @@ def classify_calendar_event(
 
     if record.kind is not RecordKind.CALENDAR_EVENT:
         raise ValueError("calendar classification requires a calendar event")
+    if (record.event_type or "").casefold() in {
+        "workinglocation",
+        "outofoffice",
+    }:
+        return CalendarEventClassification.STATUS_SIGNAL
     if record.all_day:
         return CalendarEventClassification.ALL_DAY_CONTEXT
 
@@ -448,26 +511,34 @@ def classify_calendar_event(
 
 
 def _schedule_summary(todays_calendar: tuple[NormalizedRecord, ...]) -> str:
-    if not todays_calendar:
-        return "No scheduled Calendar items were retrieved for today."
+    visible_calendar = tuple(
+        record for record in todays_calendar if _is_displayable_calendar_event(record)
+    )
+    if not visible_calendar:
+        return "No visible Calendar commitment requires attention today."
 
     fixed = tuple(
         record
-        for record in todays_calendar
+        for record in visible_calendar
         if classify_calendar_event(record)
         is CalendarEventClassification.FIXED_COMMITMENT
     )
     tentative_count = sum(
         classify_calendar_event(record) is CalendarEventClassification.TENTATIVE_HOLD
-        for record in todays_calendar
+        for record in visible_calendar
     )
     all_day_count = sum(
         classify_calendar_event(record) is CalendarEventClassification.ALL_DAY_CONTEXT
-        for record in todays_calendar
+        for record in visible_calendar
+    )
+    material_status = tuple(
+        record
+        for record in visible_calendar
+        if classify_calendar_event(record) is CalendarEventClassification.STATUS_SIGNAL
     )
     unclassified_count = sum(
         classify_calendar_event(record) is CalendarEventClassification.SCHEDULED_EVENT
-        for record in todays_calendar
+        for record in visible_calendar
     )
 
     parts: list[str] = []
@@ -502,6 +573,12 @@ def _schedule_summary(todays_calendar: tuple[NormalizedRecord, ...]) -> str:
         parts.append(
             f"{all_day_count} all-day {noun} treated as context, not full-day "
             "occupancy."
+        )
+    if material_status:
+        parts.append(
+            "An explicit Calendar status affects availability today."
+            if len(material_status) == 1
+            else "Explicit Calendar status changes affect availability today."
         )
     return " ".join(parts)
 
@@ -552,8 +629,23 @@ def _schedule_implications(
     return tuple(implications)
 
 
-def _is_displayable_calendar_event(record: NormalizedRecord) -> bool:
+def _is_active_calendar_event(record: NormalizedRecord) -> bool:
     return (record.status or "").casefold() != "cancelled"
+
+
+def _is_displayable_calendar_event(record: NormalizedRecord) -> bool:
+    if not _is_active_calendar_event(record):
+        return False
+    if classify_calendar_event(record) is not CalendarEventClassification.STATUS_SIGNAL:
+        return True
+    return _is_material_status_signal(record)
+
+
+def _is_material_status_signal(record: NormalizedRecord) -> bool:
+    """Require explicit provider or preparation evidence before display."""
+
+    event_type = (record.event_type or "").casefold()
+    return event_type == "outofoffice" or record.preparation is not None
 
 
 def _is_outcome_candidate(record: NormalizedRecord, today: date) -> bool:
@@ -598,6 +690,111 @@ def _future_sort_key(record: NormalizedRecord) -> tuple[datetime, str]:
     if future_at is None:
         future_at = datetime.max.replace(tzinfo=record.provenance.retrieved_at.tzinfo)
     return future_at, record.title.casefold()
+
+
+def _tomorrow_morning_calendar_sequence(
+    future_records: tuple[NormalizedRecord, ...],
+    today: date,
+) -> tuple[NormalizedRecord, ...]:
+    tomorrow = today + timedelta(days=1)
+    candidates = tuple(
+        record
+        for record in future_records
+        if record.kind is RecordKind.CALENDAR_EVENT
+        and classify_calendar_event(record)
+        is CalendarEventClassification.FIXED_COMMITMENT
+        and record.start_at is not None
+        and record.start_at.date() == tomorrow
+        and record.start_at.hour < 12
+    )
+    if len(candidates) < 2:
+        return ()
+
+    first_start = candidates[0].start_at
+    if first_start is None:
+        return ()
+    starts_early = first_start.timetz().replace(tzinfo=None) < EARLY_MORNING_START
+    tightly_sequenced = all(
+        previous.end_at is not None
+        and current.start_at is not None
+        and current.start_at - previous.end_at <= MAX_SEQUENCE_GAP
+        for previous, current in pairwise(candidates)
+    )
+    return candidates if starts_early or tightly_sequenced else ()
+
+
+def _calendar_sequence_item(
+    records: tuple[NormalizedRecord, ...],
+) -> BriefingItem:
+    starts = tuple(record.start_at for record in records if record.start_at is not None)
+    ends = tuple(record.end_at for record in records if record.end_at is not None)
+    if not starts:
+        raise ValueError("calendar sequence requires start times")
+
+    starts_early = min(starts).timetz().replace(tzinfo=None) < EARLY_MORNING_START
+    sequence_label = _calendar_sequence_label(records)
+    headline = (
+        f"Tomorrow's early {sequence_label}"
+        if starts_early
+        else f"Tomorrow's tightly sequenced {sequence_label}"
+    )
+    span = _natural_time_span(min(starts), max(ends) if ends else None)
+    titles = "; ".join(record.title for record in records)
+    return BriefingItem(
+        key="ahead-sequence:" + "|".join(record.id for record in records),
+        headline=headline,
+        detail=f"From {span}, in order: {titles}.",
+        sources=tuple(_source_link(record) for record in records),
+    )
+
+
+def _tomorrow_sequence_note(
+    records: tuple[NormalizedRecord, ...],
+) -> str:
+    starts = tuple(record.start_at for record in records if record.start_at is not None)
+    ends = tuple(record.end_at for record in records if record.end_at is not None)
+    if not starts:
+        raise ValueError("calendar sequence requires start times")
+
+    starts_early = min(starts).timetz().replace(tzinfo=None) < EARLY_MORNING_START
+    sequence_label = _calendar_sequence_label(records)
+    span = _natural_time_span(min(starts), max(ends) if ends else None)
+    if starts_early:
+        schedule_phrase = f"Tomorrow begins with an early {sequence_label} from {span}"
+    else:
+        schedule_phrase = (
+            f"Tomorrow contains a tightly sequenced {sequence_label} from {span}"
+        )
+    return (
+        f"{schedule_phrase}, so only preparation that must be completed before "
+        "then should interrupt today."
+    )
+
+
+def _calendar_sequence_label(records: tuple[NormalizedRecord, ...]) -> str:
+    online_campus = all(
+        re.search(r"\bonl\b", record.title, flags=re.IGNORECASE) is not None
+        for record in records
+    )
+    return "Online Campus sequence" if online_campus else "morning schedule"
+
+
+def _natural_time_span(start: datetime, end: datetime | None) -> str:
+    start_clock, start_period = _natural_clock(start)
+    if end is None:
+        return f"{start_clock} {start_period}"
+
+    end_clock, end_period = _natural_clock(end)
+    if start_period == end_period:
+        return f"{start_clock}{TIME_RANGE_SEPARATOR}{end_clock} {end_period}"
+    return f"{start_clock} {start_period}{TIME_RANGE_SEPARATOR}{end_clock} {end_period}"
+
+
+def _natural_clock(value: datetime) -> tuple[str, str]:
+    return (
+        value.strftime("%-I:%M"),
+        "a.m." if value.hour < 12 else "p.m.",
+    )
 
 
 def _outcome_item(record: NormalizedRecord, today: date) -> BriefingItem:
@@ -648,6 +845,16 @@ def _preparation_item(record: NormalizedRecord) -> BriefingItem:
 def _looking_ahead_item(record: NormalizedRecord) -> BriefingItem:
     when = record.start_at or record.due_at
     detail = "Approaching work."
+    if (
+        record.kind is RecordKind.CALENDAR_EVENT
+        and classify_calendar_event(record) is CalendarEventClassification.STATUS_SIGNAL
+    ):
+        detail = (
+            "Upcoming Calendar status signal."
+            if when is None
+            else f"{when:%A, %B %-d} · Status signal."
+        )
+        return _record_item(record, key_prefix="ahead", detail=detail)
     if when is not None:
         detail = (
             f"{when:%A, %B %-d} (all day)."

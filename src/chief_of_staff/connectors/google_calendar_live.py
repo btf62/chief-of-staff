@@ -222,6 +222,7 @@ def _event_from_payload(payload: object) -> GoogleCalendarEvent:
     updated = payload.get("updated")
     html_link = payload.get("htmlLink")
     status = payload.get("status", "confirmed")
+    event_type = payload.get("eventType", "default")
     location = payload.get("location")
     if not (
         isinstance(event_id, str)
@@ -231,6 +232,7 @@ def _event_from_payload(payload: object) -> GoogleCalendarEvent:
         and isinstance(updated, str)
         and (html_link is None or isinstance(html_link, str))
         and isinstance(status, str)
+        and isinstance(event_type, str)
         and (location is None or isinstance(location, str))
     ):
         return _invalid_event()
@@ -262,6 +264,7 @@ def _event_from_payload(payload: object) -> GoogleCalendarEvent:
         updated_at=updated_at,
         html_link=html_link,
         status=status,
+        event_type=event_type,
         location=location,
         all_day=all_day,
     )

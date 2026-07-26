@@ -1,9 +1,9 @@
 # Feature: Daily Briefing v1
 
 - **Status:** Accepted
-- **Version:** 2
+- **Version:** 3
 - **Owner:** Brad
-- **Last updated:** 2026-07-25
+- **Last updated:** 2026-07-26
 
 ## Summary
 
@@ -170,6 +170,8 @@ Classify Calendar records only from explicit provider facts:
 
 - A confirmed timed event is a **fixed commitment**.
 - A tentative timed event is a **tentative hold**, not a fixed commitment.
+- A provider-identified working-location or out-of-office event is a
+  **status signal**, not an appointment.
 - An all-day event is **all-day context** and does not, by itself, consume the
   entire day's capacity.
 - An event without sufficient status evidence is a **scheduled event** and
@@ -180,6 +182,16 @@ Classify Calendar records only from explicit provider facts:
 Do not infer classification, priority, preparation, travel, or immovability
 from an event title. Provider facts or additional authoritative evidence are
 required.
+
+Status signals are contextual inputs rather than ordinary calendar items.
+Routine working-location and availability signals may inform workday,
+location, availability, travel, and schedule reasoning, but should not appear
+in Today's Calendar, Looking Ahead, or another visible section merely because
+they were retrieved. Show one only when authoritative evidence makes it
+material to the day, such as an explicit out-of-office state, preparation
+requirement, location-dependent commitment, availability conflict, travel
+effect, or meaningful change from the normal pattern. If suppression leaves no
+visible commitment, omit the calendar section.
 
 The briefing may deterministically synthesize obvious schedule implications
 that follow directly from timestamps and classifications:
@@ -192,6 +204,13 @@ that follow directly from timestamps and classifications:
 
 Do not infer travel feasibility, meeting importance, cancellation likelihood,
 or usable focus time without the additional evidence needed for that claim.
+
+When tomorrow contains two or more confirmed morning commitments, Looking
+Ahead may combine them into one chronological sequence so the presentation
+budget does not hide later events. Preserve every source link and the
+individual event titles. A friendly sequence label may expand only an
+explicitly approved stable alias; the current approved mapping is `ONL` to
+`Online Campus`. Do not invent a shared purpose from unrelated titles.
 
 ### 5. Preparation Needed
 
@@ -312,6 +331,9 @@ By default it should:
   Recommended Focus Block.
 - Avoid treating an ordinary due date, importance flag, or accepted governing
   document as sufficient reason to turn the day off into a workday.
+- Use the Chief of Staff Note to protect the day in natural language and, when
+  supported, identify an unusually early or tightly sequenced next-day block
+  and the preparation cutoff it creates.
 - Continue retrieving approved sources and disclosing Source Coverage.
 
 Brad may explicitly override the workday classification for a particular
@@ -529,8 +551,8 @@ The following sources and capabilities are outside Daily Briefing v1:
 | AC-16 | After reading the briefing, Brad can identify what to do, what can wait, and what is approaching. |
 | AC-17 | Governing context constrains briefing behavior but is not rendered as a daily item merely because it was retrieved. |
 | AC-18 | A non-workday briefing preserves fixed commitments, explicit preparation, concise looking-ahead context, and source coverage while suppressing ordinary task-driven work sections unless Brad explicitly overrides the workday classification. |
-| AC-19 | Calendar events are classified from provider status and time shape; cancelled events are omitted, tentative events are not called fixed, and all-day events are not treated as full-day occupancy without additional evidence. |
-| AC-20 | Timestamp-derived overlaps, back-to-back commitments, transitions of 15 minutes or less, and confirmed schedule span are synthesized deterministically without title-based or unsupported implications. |
+| AC-19 | Calendar events are classified from provider status, event type, and time shape; cancelled events are omitted, routine working-location signals remain contextual but are suppressed from visible sections, materially relevant status signals may appear, tentative events are not called fixed, and all-day events are not treated as full-day occupancy without additional evidence. |
+| AC-20 | Timestamp-derived overlaps, back-to-back commitments, transitions of 15 minutes or less, confirmed schedule span, and tomorrow-morning sequences are synthesized deterministically without unsupported implications. |
 | AC-21 | Source status, counts, safe warnings, and error categories appear in a final Source Coverage appendix rather than the Chief of Staff Note. |
 
 ## Open Questions

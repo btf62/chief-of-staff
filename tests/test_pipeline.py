@@ -21,9 +21,11 @@ from chief_of_staff.pipeline import (
     BriefingSection,
     BriefingSectionName,
     BriefingValidationError,
+    CalendarEventClassification,
     DeterministicBriefingPipeline,
     RenderedBriefing,
     SourceLink,
+    classify_calendar_event,
     deduplicate_records,
     normalize_item,
     resolve_context,
@@ -33,6 +35,7 @@ from chief_of_staff.pipeline import (
 BRIEFING_DATE = date(2026, 7, 27)
 NOW = datetime(2026, 7, 27, 12, 0, tzinfo=UTC)
 SCOPE = "repository-owned synthetic fixtures"
+TIME_RANGE_SEPARATOR = "\N{EN DASH}"
 
 
 def _item(
@@ -430,6 +433,16 @@ def test_calendar_events_receive_evidence_bounded_classifications() -> None:
             end_at="2026-07-27T12:30:00-04:00",
         ),
         _item(
+            "status-signal",
+            item_type="calendar_event",
+            title="Home",
+            status="confirmed",
+            event_type="workingLocation",
+            all_day=True,
+            start_at="2026-07-27T00:00:00-04:00",
+            end_at="2026-07-28T00:00:00-04:00",
+        ),
+        _item(
             "cancelled",
             item_type="calendar_event",
             title="Cancelled Event",
@@ -450,7 +463,41 @@ def test_calendar_events_receive_evidence_bounded_classifications() -> None:
     assert "Tentative Event** — Tentative hold" in result.rendered.text
     assert "All-Day Context** — All-day context" in result.rendered.text
     assert "Unknown-Status Event** — Scheduled event" in result.rendered.text
+    home = next(
+        record for record in result.deduplication.records if record.title == "Home"
+    )
+    assert classify_calendar_event(home) is CalendarEventClassification.STATUS_SIGNAL
+    assert "Home" not in result.rendered.text
     assert "Cancelled Event" not in result.rendered.text
+
+
+def test_material_out_of_office_status_signal_remains_visible() -> None:
+    calendar = _connector(
+        "synthetic_calendar",
+        _item(
+            "out-of-office",
+            item_type="calendar_event",
+            title="Out of office",
+            status="confirmed",
+            event_type="outOfOffice",
+            all_day=True,
+            start_at="2026-07-27T00:00:00-04:00",
+            end_at="2026-07-28T00:00:00-04:00",
+        ),
+    )
+    context = resolve_context(
+        run_id="material-status",
+        briefing_date=BRIEFING_DATE,
+        timezone="America/New_York",
+    )
+
+    result = DeterministicBriefingPipeline().run(context, (calendar,))
+
+    assert "Out of office** — Status signal · All day" in result.rendered.text
+    assert "Calendar status affects availability today" in result.rendered.text
+    assert BriefingSectionName.TODAYS_CALENDAR in tuple(
+        section.name for section in result.plan.sections
+    )
 
 
 def test_obvious_schedule_implications_are_synthesized_deterministically() -> None:
@@ -505,6 +552,226 @@ def test_obvious_schedule_implications_are_synthesized_deterministically() -> No
     assert "1 schedule overlap requires attention" in note
     assert "1 back-to-back transition leaves no calendar margin" in note
     assert "1 tight transition has 15 minutes or less" in note
+
+
+def test_tomorrows_early_online_campus_events_form_one_sequence() -> None:
+    calendar = _connector(
+        "synthetic_calendar",
+        _item(
+            "working-location",
+            item_type="calendar_event",
+            title="Office",
+            status="confirmed",
+            event_type="workingLocation",
+            all_day=True,
+            start_at="2026-07-28T00:00:00-04:00",
+            end_at="2026-07-29T00:00:00-04:00",
+        ),
+        _item(
+            "run-through",
+            item_type="calendar_event",
+            title="ONL Service Run-Through",
+            status="confirmed",
+            start_at="2026-07-28T08:00:00-04:00",
+            end_at="2026-07-28T08:30:00-04:00",
+        ),
+        _item(
+            "first-service",
+            item_type="calendar_event",
+            title="9:00AM ONL Service",
+            status="confirmed",
+            start_at="2026-07-28T09:00:00-04:00",
+            end_at="2026-07-28T10:00:00-04:00",
+        ),
+        _item(
+            "second-service",
+            item_type="calendar_event",
+            title="11:00AM ONL Service",
+            status="confirmed",
+            start_at="2026-07-28T11:00:00-04:00",
+            end_at="2026-07-28T12:00:00-04:00",
+        ),
+    )
+    context = resolve_context(
+        run_id="tomorrow-sequence",
+        briefing_date=BRIEFING_DATE,
+        timezone="America/New_York",
+        workday_override=False,
+    )
+
+    result = DeterministicBriefingPipeline().run(context, (calendar,))
+
+    looking_ahead = next(
+        section
+        for section in result.plan.sections
+        if section.name is BriefingSectionName.LOOKING_AHEAD
+    )
+    sequence = looking_ahead.items[0]
+    assert sequence.headline == "Tomorrow's early Online Campus sequence"
+    assert f"From 8:00{TIME_RANGE_SEPARATOR}12:00 p.m." not in sequence.detail
+    assert f"From 8:00 a.m.{TIME_RANGE_SEPARATOR}12:00 p.m." in sequence.detail
+    assert len(sequence.sources) == 3
+    assert len(looking_ahead.items) == 1
+    note = result.plan.sections[0].summary or ""
+    assert "Today is a non-workday; protect it from ordinary work demands." in note
+    assert (
+        "Tomorrow begins with an early Online Campus sequence from 8:00 a.m."
+        f"{TIME_RANGE_SEPARATOR}12:00 p.m."
+    ) in note
+    assert (
+        "only preparation that must be completed before then should interrupt today"
+        in note
+    )
+    assert "Calendar status signal" not in note
+    assert "1 Calendar" not in note
+    assert "Office" not in result.rendered.text
+
+
+def test_non_workday_note_describes_tightly_sequenced_next_morning() -> None:
+    calendar = _connector(
+        "synthetic_calendar",
+        _item(
+            "first",
+            item_type="calendar_event",
+            title="First confirmed event",
+            status="confirmed",
+            start_at="2026-07-28T09:30:00-04:00",
+            end_at="2026-07-28T10:00:00-04:00",
+        ),
+        _item(
+            "second",
+            item_type="calendar_event",
+            title="Second confirmed event",
+            status="confirmed",
+            start_at="2026-07-28T10:15:00-04:00",
+            end_at="2026-07-28T11:00:00-04:00",
+        ),
+    )
+    context = resolve_context(
+        run_id="tight-tomorrow-sequence",
+        briefing_date=BRIEFING_DATE,
+        timezone="America/New_York",
+        workday_override=False,
+    )
+
+    result = DeterministicBriefingPipeline().run(context, (calendar,))
+
+    note = result.plan.sections[0].summary or ""
+    assert (
+        "Tomorrow contains a tightly sequenced morning schedule from "
+        f"9:30{TIME_RANGE_SEPARATOR}11:00 a.m."
+    ) in note
+    looking_ahead = next(
+        section
+        for section in result.plan.sections
+        if section.name is BriefingSectionName.LOOKING_AHEAD
+    )
+    assert (
+        looking_ahead.items[0].headline
+        == "Tomorrow's tightly sequenced morning schedule"
+    )
+
+
+def test_july_25_non_workday_suppresses_routine_status_signals() -> None:
+    briefing_date = date(2026, 7, 25)
+    repository = _connector(
+        "synthetic_repository",
+        _item(
+            "governing-context",
+            item_type="context",
+            title="Accepted project context",
+        ),
+    )
+    calendar = _connector(
+        "synthetic_calendar",
+        _item(
+            "home",
+            item_type="calendar_event",
+            title="Home",
+            status="confirmed",
+            event_type="workingLocation",
+            all_day=True,
+            start_at="2026-07-25T00:00:00-04:00",
+            end_at="2026-07-26T00:00:00-04:00",
+        ),
+        _item(
+            "office",
+            item_type="calendar_event",
+            title="Office",
+            status="confirmed",
+            event_type="workingLocation",
+            all_day=True,
+            start_at="2026-07-26T00:00:00-04:00",
+            end_at="2026-07-27T00:00:00-04:00",
+        ),
+        _item(
+            "run-through",
+            item_type="calendar_event",
+            title="ONL Run-Through",
+            status="confirmed",
+            start_at="2026-07-26T08:00:00-04:00",
+            end_at="2026-07-26T08:30:00-04:00",
+        ),
+        _item(
+            "first-service",
+            item_type="calendar_event",
+            title="ONL First Service",
+            status="confirmed",
+            start_at="2026-07-26T09:00:00-04:00",
+            end_at="2026-07-26T10:00:00-04:00",
+        ),
+        _item(
+            "second-service",
+            item_type="calendar_event",
+            title="ONL Second Service",
+            status="confirmed",
+            start_at="2026-07-26T10:30:00-04:00",
+            end_at="2026-07-26T11:30:00-04:00",
+        ),
+    )
+    context = resolve_context(
+        run_id="july-25-redacted",
+        briefing_date=briefing_date,
+        timezone="America/New_York",
+    )
+
+    result = DeterministicBriefingPipeline().run(
+        context,
+        (repository, calendar),
+    )
+
+    names = tuple(section.name for section in result.plan.sections)
+    assert names == (
+        BriefingSectionName.CHIEF_OF_STAFF_NOTE,
+        BriefingSectionName.LOOKING_AHEAD,
+        BriefingSectionName.SOURCE_COVERAGE,
+    )
+    assert "Today is a configured day off" in result.rendered.text
+    assert f"8:00{TIME_RANGE_SEPARATOR}11:30 a.m." in result.rendered.text
+    assert "Home" not in result.rendered.text
+    assert "Office" not in result.rendered.text
+    assert "Accepted project context" not in result.rendered.text
+    assert "Calendar status signal" not in result.rendered.text
+    assert "`synthetic_repository`: complete; 1 record" in result.rendered.text
+    assert "`synthetic_calendar`: complete; 5 records" in result.rendered.text
+    assert result.rendered.word_count <= 800
+    visible_items = tuple(
+        item for section in result.plan.sections for item in section.items
+    )
+    assert visible_items
+    assert all(item.sources for item in visible_items)
+    assert len(visible_items[0].sources) == 3
+
+    routine_statuses = tuple(
+        record
+        for record in result.deduplication.records
+        if record.title in {"Home", "Office"}
+    )
+    assert len(routine_statuses) == 2
+    assert all(
+        classify_calendar_event(record) is CalendarEventClassification.STATUS_SIGNAL
+        for record in routine_statuses
+    )
 
 
 def test_coverage_metadata_is_separate_from_the_chief_of_staff_note() -> None:

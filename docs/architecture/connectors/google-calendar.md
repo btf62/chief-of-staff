@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Version:** 2
 - **Owner:** Brad
-- **Last updated:** 2026-07-25
+- **Last updated:** 2026-07-26
 
 This specification defines the implemented read-only Google Calendar
 connector and the explicitly approved bounded live trial that completed
@@ -106,6 +106,8 @@ The live boundary reads only the provider fields needed to normalize:
 - Stable Google event ID.
 - Title.
 - Status.
+- Provider event type, used to distinguish working-location and out-of-office
+  status signals from appointments.
 - Timezone-aware start and end, including all-day dates.
 - Optional location summary.
 - Event update time as freshness.
@@ -115,6 +117,11 @@ The live boundary reads only the provider fields needed to normalize:
 Descriptions, attendees, attachments, conference payloads, and private
 extended properties are ignored. Invalid events are omitted with partial
 coverage rather than converted into unsupported facts.
+
+Working-location and similar routine status signals remain available to
+schedule interpretation but are normally suppressed from visible briefing
+sections. Provider-identified out-of-office events, explicit preparation, or
+other authoritative materiality evidence may make a status signal visible.
 
 ## Pagination and failure behavior
 

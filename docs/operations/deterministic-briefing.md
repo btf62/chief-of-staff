@@ -42,12 +42,19 @@ The reduced pipeline:
    identity and preserves conflicting records.
 6. Retains approved governing context for pipeline use without rendering
    context documents as standalone daily items.
-7. Classifies Calendar facts as fixed commitments, tentative holds, all-day
-   context, or scheduled events without title-based inference.
+7. Classifies Calendar facts as fixed commitments, tentative holds, provider
+   status signals, all-day context, or scheduled events without title-based
+   inference. Routine working-location signals remain available as context but
+   are suppressed from visible sections unless explicit evidence makes them
+   material.
 8. Selects factual items using visible deterministic priority inputs and
    applies the lighter non-workday presentation policy.
 9. Synthesizes only timestamp-obvious schedule implications: confirmed span,
-   overlaps, back-to-back events, and transitions of 15 minutes or less.
+   overlaps, back-to-back events, transitions of 15 minutes or less, and
+   tomorrow-morning sequences. `ONL` may be expanded to the approved
+   `Online Campus` label when every event in a sequence contains that alias.
+   On a non-workday, an unusually early or tightly sequenced next-day block
+   informs a concise preparation cutoff in the Chief of Staff Note.
 10. Builds a structured plan in the canonical Daily Briefing order, omitting
     content sections without material content and appending Source Coverage.
 11. Renders Markdown and validates provenance, duplicate keys, section order,

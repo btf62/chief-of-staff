@@ -367,6 +367,7 @@ def test_live_transport_calls_only_primary_events_list_and_minimizes_payload() -
                     "attendees": [{"email": "private-person@example.invalid"}],
                     "description": raw_private_marker,
                     "end": {"dateTime": "2026-07-25T11:00:00-04:00"},
+                    "eventType": "workingLocation",
                     "htmlLink": "https://calendar.google.com/calendar/event?eid=safe",
                     "id": "event-1",
                     "location": "Room",
@@ -407,6 +408,7 @@ def test_live_transport_calls_only_primary_events_list_and_minimizes_payload() -
     assert opener.request.get_method() == "GET"
     assert page.next_page_token == "next-page"
     assert page.events[0].id == "event-1"
+    assert page.events[0].event_type == "workingLocation"
     assert raw_private_marker not in repr(page)
     assert "private-person" not in repr(page)
     for mutation in ("create", "insert", "update", "patch", "delete", "write"):

@@ -38,6 +38,7 @@ class NormalizedRecord:
     title: str
     summary: str | None
     status: str | None
+    event_type: str | None
     importance: int
     explicit_commitment: bool
     preparation: str | None
@@ -73,6 +74,7 @@ def normalize_item(
         title=title,
         summary=_optional_string(item, "summary"),
         status=_optional_string(item, "status"),
+        event_type=_optional_string(item, "event_type"),
         importance=importance,
         explicit_commitment=_boolean(item, "explicit_commitment", default=False),
         preparation=_optional_string(item, "preparation"),
