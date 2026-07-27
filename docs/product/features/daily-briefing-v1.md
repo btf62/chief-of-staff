@@ -1,7 +1,7 @@
 # Feature: Daily Briefing v1
 
 - **Status:** Accepted
-- **Version:** 6
+- **Version:** 7
 - **Owner:** Brad
 - **Last updated:** 2026-07-27
 
@@ -327,9 +327,8 @@ display stage with inspectable deterministic reasons.
 Recommend one realistic deep-work block when the live calendar permits.
 Include:
 
-- Proposed time
-- Duration
-- Intended outcome
+- Available time window
+- Intended outcome and its expected duration when a source provides one
 - Why the work deserves Brad's best available energy
 
 Use the [Leadership Model](../../foundations/leadership-model.md) as descriptive
@@ -341,6 +340,14 @@ high-confidence objective. Do not assume a noon gap is suitable for deep work.
 When Calendar supports a focus window but degraded Todoist confidence leaves
 no sufficiently supported objective, identify the window without assigning an
 arbitrary task.
+
+Keep the available Calendar window distinct from the proposed task assignment.
+When a supported objective has no reliable source effort estimate, recommend
+beginning with it without implying that it will occupy or fit the entire
+window; leave the remainder intentionally unassigned. When a reliable estimate
+exists, size the proposed assignment to that estimate and preserve any
+remaining time. Never invent an estimate from the task title, priority, due
+date, or available window.
 
 ### 10. Looking Ahead
 
@@ -633,7 +640,7 @@ The following sources and capabilities are outside Daily Briefing v1:
 | AC-21 | Source status; retrieved, selected, persisted, and displayed counts; supporting-context counts; safe warnings; and error categories appear in a final Source Coverage appendix rather than the Chief of Staff Note. |
 | AC-22 | Todoist saturation uses documented aggregate thresholds; degraded relative-ranking confidence requires stronger current evidence, excludes overdue-only and priority-only tasks, preserves the selected background pool, and is disclosed concisely. |
 | AC-23 | Todoist titles omit control syntax in display without changing source data; all-day due dates never render as midnight; source priority uses transparent Todoist terminology only when material. |
-| AC-24 | Up Next excludes work more than fourteen days away without explicit current preparation, and a Recommended Focus Block requires Calendar margin plus a supported objective or explicitly leaves the objective unassigned. |
+| AC-24 | Up Next excludes work more than fourteen days away without explicit current preparation. A Recommended Focus Block requires Calendar margin, distinguishes the available window from the proposed task assignment, uses only source-supported effort estimates, and explicitly leaves unsupported or remaining time unassigned. |
 
 ## Open Questions
 

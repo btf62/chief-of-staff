@@ -50,6 +50,7 @@ class NormalizedRecord:
     provider_priority: int | None = None
     explicit_priority_link: bool = False
     calendar_dependency: bool = False
+    effort_minutes: int | None = None
 
 
 def normalize_item(
@@ -105,6 +106,7 @@ def normalize_item(
             "calendar_dependency",
             default=False,
         ),
+        effort_minutes=_optional_positive_integer(item, "effort_minutes"),
     )
 
 
@@ -140,6 +142,13 @@ def _optional_integer(item: SourceItem, key: str) -> int | None:
         raise ValueError(f"{key} must be an integer")
     if key == "provider_priority" and value not in {1, 2, 3, 4}:
         raise ValueError("provider_priority must be between 1 and 4")
+    return value
+
+
+def _optional_positive_integer(item: SourceItem, key: str) -> int | None:
+    value = _optional_integer(item, key)
+    if value is not None and value <= 0:
+        raise ValueError(f"{key} must be greater than zero")
     return value
 
 

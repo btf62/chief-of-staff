@@ -187,6 +187,7 @@ def test_normalization_requires_typed_facts_and_aware_timestamps() -> None:
             due_at="2026-07-27T16:00:00-04:00",
             importance=5,
             explicit_commitment=True,
+            effort_minutes=45,
         ),
         timezone="America/New_York",
     )
@@ -195,10 +196,21 @@ def test_normalization_requires_typed_facts_and_aware_timestamps() -> None:
     assert normalized.due_at is not None
     assert normalized.due_at.utcoffset() is not None
     assert normalized.explicit_commitment
+    assert normalized.effort_minutes == 45
 
     naive = replace(_item("naive"), retrieved_at=datetime(2026, 7, 27, 12, 0))
     with pytest.raises(ValueError, match="timezone-aware"):
         normalize_item("synthetic_tasks", naive, timezone="America/New_York")
+
+    for invalid_effort in (0, -5):
+        with pytest.raises(
+            ValueError, match="effort_minutes must be greater than zero"
+        ):
+            normalize_item(
+                "synthetic_tasks",
+                _item("invalid-effort", effort_minutes=invalid_effort),
+                timezone="America/New_York",
+            )
 
 
 def test_deduplication_collapses_only_exact_same_source_records() -> None:
@@ -1472,9 +1484,59 @@ def test_july_27_calendar_shape_and_focus_window_are_accurate() -> None:
         for section in result.plan.sections
         if section.name is BriefingSectionName.RECOMMENDED_FOCUS_BLOCK
     )
-    assert f"3:15{TIME_RANGE_SEPARATOR}4:45 p.m. focus block" == focus.items[0].headline
+    assert (
+        f"3:15{TIME_RANGE_SEPARATOR}4:45 p.m. available focus window"
+        == focus.items[0].headline
+    )
     assert "Finish the current deliverable" in focus.items[0].detail
+    assert "No source effort estimate is available" in focus.items[0].detail
+    assert (
+        "remainder of the window is intentionally unassigned" in focus.items[0].detail
+    )
+    assert "90-minute window for" not in focus.items[0].detail
+    assert "p.m.." not in result.rendered.text
     assert result.plan.coverage[1].displayed_count == 1
+
+
+def test_focus_assignment_uses_supported_estimate_and_preserves_remainder() -> None:
+    calendar = _connector(
+        "google_calendar",
+        _item(
+            "afternoon",
+            item_type="calendar_event",
+            status="confirmed",
+            start_at="2026-07-27T13:00:00-04:00",
+            end_at="2026-07-27T15:00:00-04:00",
+        ),
+    )
+    todoist = _connector(
+        "todoist",
+        _item(
+            "estimated-outcome",
+            title="Prepare the supported outline",
+            due_at="2026-07-27T00:00:00-04:00",
+            all_day=True,
+            effort_minutes=45,
+        ),
+    )
+    context = resolve_context(
+        run_id="focus-supported-estimate",
+        briefing_date=BRIEFING_DATE,
+        timezone="America/New_York",
+    )
+
+    result = DeterministicBriefingPipeline().run(context, (calendar, todoist))
+    focus = next(
+        section
+        for section in result.plan.sections
+        if section.name is BriefingSectionName.RECOMMENDED_FOCUS_BLOCK
+    )
+    detail = focus.items[0].detail
+
+    assert f"8:00{TIME_RANGE_SEPARATOR}8:45 a.m. (45 minutes)" in detail
+    assert "remaining 45 minutes intentionally unassigned" in detail
+    assert "Prepare the supported outline" in detail
+    assert "90-minute" not in detail
 
 
 def test_focus_block_is_withheld_without_transition_safe_time() -> None:

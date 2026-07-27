@@ -952,7 +952,7 @@ def _calendar_shape_summary(
     if first_start is not None:
         open_parts.append(f"before {_natural_clock_text(first_start)}")
     open_parts.append(f"after {_natural_clock_text(last_end)}")
-    open_time = "Open Calendar time remains " + " and ".join(open_parts) + "."
+    open_time = "Open Calendar time remains " + " and ".join(open_parts)
     if len(gap_minutes) == 1 and gap_minutes[0] <= 60:
         open_time += (
             f" Treat {_gap_phrase(gap_minutes[0])} as transition and margin "
@@ -1399,11 +1399,10 @@ def _recommended_focus_section(
         )
     )
     if primary_outcome is not None:
-        detail = (
-            f"Use this {int(FOCUS_BLOCK_DURATION.total_seconds() // 60)}-minute "
-            f"window for {_display_title(primary_outcome)}. "
-            f"{_source_due_sentence(primary_outcome, context.briefing_date)} "
-            "The proposal preserves Calendar transition margin."
+        detail = _focus_objective_detail(
+            primary_outcome,
+            focus_window,
+            context.briefing_date,
         )
     elif (
         todoist_confidence is not None and todoist_confidence.relative_ranking_degraded
@@ -1422,11 +1421,53 @@ def _recommended_focus_section(
         items=(
             BriefingItem(
                 key=f"focus:{context.briefing_date.isoformat()}",
-                headline=f"{span} focus block",
+                headline=f"{span} available focus window",
                 detail=detail,
                 sources=sources,
             ),
         ),
+    )
+
+
+def _focus_objective_detail(
+    objective: NormalizedRecord,
+    focus_window: FocusWindow,
+    today: date,
+) -> str:
+    """Describe a supported objective without inventing its required effort."""
+
+    title = _display_title(objective)
+    available_minutes = int(
+        (focus_window.ends_at - focus_window.starts_at).total_seconds() // 60
+    )
+    estimate = objective.effort_minutes
+    if estimate is None:
+        assignment = (
+            f"Begin with {title}. No source effort estimate is available, so the "
+            "remainder of the window is intentionally unassigned."
+        )
+    elif estimate < available_minutes:
+        objective_end = focus_window.starts_at + timedelta(minutes=estimate)
+        remaining_minutes = available_minutes - estimate
+        assignment = (
+            f"Use {_natural_time_span(focus_window.starts_at, objective_end)} "
+            f"({_duration_phrase(estimate)}) for {title}; keep the remaining "
+            f"{_duration_phrase(remaining_minutes)} intentionally unassigned."
+        )
+    elif estimate == available_minutes:
+        assignment = (
+            f"Use the available {_duration_phrase(estimate)} for {title}; the "
+            "source estimate supports the full window."
+        )
+    else:
+        assignment = (
+            f"Use the available {_duration_phrase(available_minutes)} to begin "
+            f"{title}; its source estimate is {_duration_phrase(estimate)}, so "
+            "do not imply the work will be completed in this window."
+        )
+    return (
+        f"{assignment} {_source_due_sentence(objective, today)} "
+        "The proposal preserves Calendar transition margin."
     )
 
 
