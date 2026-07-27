@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from chief_of_staff.domain.models import (
@@ -35,6 +36,19 @@ _SUPPRESSING_DISPOSITIONS = frozenset(
         DispositionKind.INTENTIONALLY_ABANDONED,
     }
 )
+
+
+@dataclass(frozen=True, slots=True)
+class SourceTaskReconciliation:
+    """Privacy-safe identity counts from replacing one source task snapshot."""
+
+    previous_unique_count: int
+    final_unique_count: int
+    newly_selected_count: int
+    retained_count: int
+    removed_count: int
+    superseded_snapshot_count: int
+    dependency_preserved_count: int
 
 
 class StateStore:
@@ -473,6 +487,81 @@ class StateStore:
                 ((evidence_id,) for evidence_id in stale_evidence_ids),
             )
         return len(stale_evidence_ids)
+
+    def reconcile_source_task_snapshot(
+        self,
+        *,
+        source: str,
+        current_evidence_ids: dict[str, str],
+    ) -> SourceTaskReconciliation:
+        """Replace source task snapshots while preserving conclusion evidence."""
+
+        if not source.strip():
+            raise ValueError("source must not be empty")
+        if any(
+            not key.strip() or not value.strip()
+            for key, value in current_evidence_ids.items()
+        ):
+            raise ValueError("current evidence identifiers must not be empty")
+        with self.database.transaction() as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    evidence.id,
+                    evidence.source_record_id,
+                    EXISTS (
+                        SELECT 1
+                        FROM conclusion_evidence AS link
+                        WHERE link.evidence_id = evidence.id
+                    ) AS has_dependency
+                FROM source_evidence AS evidence
+                JOIN normalized_source_tasks AS task
+                    ON task.evidence_id = evidence.id
+                WHERE evidence.source = ?
+                """,
+                (source,),
+            ).fetchall()
+            previous_ids = {
+                str(row["source_record_id"])
+                for row in rows
+                if str(row["id"]) not in current_evidence_ids.values()
+            }
+            current_ids = set(current_evidence_ids)
+            superseded = tuple(
+                row
+                for row in rows
+                if current_evidence_ids.get(str(row["source_record_id"]))
+                != str(row["id"])
+            )
+            deletable_ids = tuple(
+                str(row["id"]) for row in superseded if not bool(row["has_dependency"])
+            )
+            connection.executemany(
+                "DELETE FROM source_evidence WHERE id = ?",
+                ((evidence_id,) for evidence_id in deletable_ids),
+            )
+            final_rows = connection.execute(
+                """
+                SELECT DISTINCT evidence.source_record_id
+                FROM source_evidence AS evidence
+                JOIN normalized_source_tasks AS task
+                    ON task.evidence_id = evidence.id
+                WHERE evidence.source = ?
+                """,
+                (source,),
+            ).fetchall()
+            final_unique_count = len(
+                current_ids & {str(row["source_record_id"]) for row in final_rows}
+            )
+        return SourceTaskReconciliation(
+            previous_unique_count=len(previous_ids),
+            final_unique_count=final_unique_count,
+            newly_selected_count=len(current_ids - previous_ids),
+            retained_count=len(current_ids & previous_ids),
+            removed_count=len(previous_ids - current_ids),
+            superseded_snapshot_count=len(deletable_ids),
+            dependency_preserved_count=len(superseded) - len(deletable_ids),
+        )
 
     def add_conclusion(self, conclusion: Conclusion) -> None:
         """Persist a conclusion and its ordered source-evidence links."""

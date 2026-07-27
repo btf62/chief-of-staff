@@ -7,12 +7,13 @@ from chief_of_staff.persistence.database import (
     apply_migrations,
     load_migrations,
 )
-from chief_of_staff.persistence.store import StateStore
+from chief_of_staff.persistence.store import SourceTaskReconciliation, StateStore
 
 __all__ = (
     "Database",
     "Migration",
     "MigrationError",
+    "SourceTaskReconciliation",
     "StateStore",
     "apply_migrations",
     "load_migrations",

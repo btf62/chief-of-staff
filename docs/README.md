@@ -9,12 +9,12 @@ documents should link to it instead of duplicating governing content.
 The Version 1 design baseline for Daily Briefing v1 is accepted. The
 [implementation roadmap](roadmap.md) records Milestones 0 through 4 as
 complete after an explicitly approved, bounded primary-calendar trial.
-Milestone 5 has completed its accepted Todoist boundary and one explicitly
-approved combined Calendar-and-Todoist trial. Live retrieval is stopped before
-Jira or another connector, and no repeat Calendar or Todoist access is
-authorized. Design acceptance authorizes implementation within the accepted
-scope; it does not mean the complete Daily Briefing has passed operational
-acceptance.
+Milestone 5 has completed its accepted Todoist boundary, combined
+Calendar-and-Todoist trial, and one explicitly approved complete-retrieval and
+normal-workday quality validation. Live retrieval is stopped before Jira or
+another connector, and no repeat Calendar or Todoist access is authorized.
+Design acceptance authorizes implementation within the accepted scope; it does
+not mean the complete Daily Briefing has passed operational acceptance.
 
 ## Index
 

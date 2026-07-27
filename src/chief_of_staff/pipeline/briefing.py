@@ -111,12 +111,23 @@ class BriefingSection:
 
 
 @dataclass(frozen=True, slots=True)
+class TaskCandidateAudit:
+    """Deterministic task funnel between selection and presentation."""
+
+    source: str
+    available_count: int
+    candidate_count: int
+    excluded_reasons: tuple[tuple[str, int], ...]
+
+
+@dataclass(frozen=True, slots=True)
 class BriefingPlan:
     """Structured content selected before Markdown rendering."""
 
     context: InvocationContext
     coverage: tuple[SourceCoverage, ...]
     sections: tuple[BriefingSection, ...]
+    task_candidate_audits: tuple[TaskCandidateAudit, ...] = ()
     generation_mode: str = "deterministic_reduced"
 
 
@@ -191,14 +202,17 @@ def build_reduced_plan(
         )
     ]
 
-    task_records = tuple(
+    available_task_records = tuple(
         record
         for record in records
-        if context.is_workday
-        and record.kind is RecordKind.TASK
-        and record.status != "completed"
-        and _task_is_material_for_workday(record, context)
+        if record.kind is RecordKind.TASK and record.status != "completed"
     )
+    task_records = tuple(
+        record
+        for record in available_task_records
+        if _task_is_daily_candidate(record, context)
+    )
+    candidate_task_ids = {record.id for record in task_records}
     prioritized_tasks = sorted(
         task_records,
         key=lambda record: _priority_sort_key(record, today),
@@ -293,6 +307,10 @@ def build_reduced_plan(
                 for record in records
                 if record.id not in used_record_ids
                 and (
+                    record.kind is not RecordKind.TASK
+                    or record.id in candidate_task_ids
+                )
+                and (
                     record.kind is not RecordKind.CALENDAR_EVENT
                     or _is_displayable_calendar_event(record)
                 )
@@ -333,6 +351,11 @@ def build_reduced_plan(
         context=context,
         coverage=coverage,
         sections=tuple(sections),
+        task_candidate_audits=_task_candidate_audits(
+            available_task_records,
+            task_records,
+            context,
+        ),
     )
 
 
@@ -502,6 +525,11 @@ def _coverage_summary(
             if report.persisted_count is None
             else f"{report.persisted_count} persisted"
         )
+        candidates = (
+            "daily candidates not reported"
+            if report.candidate_count is None
+            else f"{report.candidate_count} daily candidates"
+        )
         displayed = (
             "display not reported"
             if report.displayed_count is None
@@ -510,7 +538,7 @@ def _coverage_summary(
         detail = (
             f"`{report.source}`: {report.status.value}; "
             f"{retrieved} retrieved; {selected} selected; "
-            f"{persisted}; {displayed}"
+            f"{persisted}; {candidates}; {displayed}"
         )
         if report.context_resources:
             resources = ", ".join(
@@ -754,24 +782,75 @@ def _is_material_status_signal(record: NormalizedRecord) -> bool:
 
 
 def _is_outcome_candidate(record: NormalizedRecord, today: date) -> bool:
-    return (
-        record.explicit_commitment
-        or record.importance >= 4
-        or (record.due_at is not None and record.due_at.date() <= today)
+    return record.explicit_commitment or (
+        record.due_at is not None and record.due_at.date() == today
     )
 
 
-def _task_is_material_for_workday(
+def _task_is_daily_candidate(
     record: NormalizedRecord,
     context: InvocationContext,
 ) -> bool:
-    if context.workday_type is not WorkdayType.MINISTRY_WORKDAY:
-        return True
+    if not context.is_workday:
+        return False
+    due_date = None if record.due_at is None else record.due_at.date()
+    if context.workday_type is WorkdayType.MINISTRY_WORKDAY:
+        return (
+            record.explicit_commitment
+            or record.preparation is not None
+            or due_date == context.briefing_date
+        )
     return (
         record.explicit_commitment
         or record.preparation is not None
-        or (record.due_at is not None and record.due_at.date() == context.briefing_date)
+        or record.importance >= 4
+        or (
+            due_date is not None
+            and due_date <= context.briefing_date + timedelta(days=7)
+        )
     )
+
+
+def _task_candidate_audits(
+    available: tuple[NormalizedRecord, ...],
+    candidates: tuple[NormalizedRecord, ...],
+    context: InvocationContext,
+) -> tuple[TaskCandidateAudit, ...]:
+    candidate_ids = {record.id for record in candidates}
+    sources = sorted({record.provenance.source for record in available})
+    audits: list[TaskCandidateAudit] = []
+    for source in sources:
+        source_records = tuple(
+            record for record in available if record.provenance.source == source
+        )
+        reasons: dict[str, int] = {}
+        for record in source_records:
+            if record.id in candidate_ids:
+                continue
+            reason = _task_candidate_exclusion_reason(record, context)
+            reasons[reason] = reasons.get(reason, 0) + 1
+        audits.append(
+            TaskCandidateAudit(
+                source=source,
+                available_count=len(source_records),
+                candidate_count=sum(
+                    record.id in candidate_ids for record in source_records
+                ),
+                excluded_reasons=tuple(sorted(reasons.items())),
+            )
+        )
+    return tuple(audits)
+
+
+def _task_candidate_exclusion_reason(
+    record: NormalizedRecord,
+    context: InvocationContext,
+) -> str:
+    if not context.is_workday:
+        return "configured non-workday"
+    if context.workday_type is WorkdayType.MINISTRY_WORKDAY:
+        return "unrelated to ministry workday"
+    return "outside seven-day daily horizon without another priority signal"
 
 
 def _priority_inputs(record: NormalizedRecord, today: date) -> PriorityInputs:
@@ -794,9 +873,9 @@ def _priority_sort_key(record: NormalizedRecord, today: date) -> tuple[object, .
         tzinfo=record.provenance.retrieved_at.tzinfo
     )
     return (
-        not inputs.overdue,
         not inputs.due_today,
         not inputs.explicit_commitment,
+        not inputs.overdue,
         -inputs.source_importance,
         due_at,
         record.title.casefold(),

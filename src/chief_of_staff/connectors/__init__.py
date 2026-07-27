@@ -29,6 +29,7 @@ from chief_of_staff.connectors.google_calendar_live import (
 from chief_of_staff.connectors.repository import RepositoryContextConnector
 from chief_of_staff.connectors.static import StaticConnector
 from chief_of_staff.connectors.todoist import (
+    TODOIST_ACTIVE_TASK_ENDPOINT,
     TODOIST_DATA_READ_SCOPE,
     TODOIST_FILTER_QUERY,
     TodoistAuthenticationError,
@@ -41,6 +42,7 @@ from chief_of_staff.connectors.todoist import (
     TodoistLabelPage,
     TodoistPageRequest,
     TodoistProject,
+    TodoistQualification,
     TodoistRateLimitError,
     TodoistRetrievalAudit,
     TodoistRetrievalError,
@@ -49,16 +51,21 @@ from chief_of_staff.connectors.todoist import (
     TodoistTaskPage,
     TodoistTransport,
     TodoistUser,
+    qualify_todoist_task,
     stored_task_matches_selection_boundary,
     task_due_at,
 )
 from chief_of_staff.connectors.todoist_live import (
     StoredTodoistAuthorizationProvider,
     TodoistHttpTransport,
+    TodoistPriorityProbeResult,
+    TodoistPrioritySemanticConflict,
+    verify_todoist_priority_semantics,
 )
 
 __all__ = (
     "GOOGLE_CALENDAR_EVENTS_OWNED_READONLY_SCOPE",
+    "TODOIST_ACTIVE_TASK_ENDPOINT",
     "TODOIST_DATA_READ_SCOPE",
     "TODOIST_FILTER_QUERY",
     "CalendarAuthenticationError",
@@ -93,7 +100,10 @@ __all__ = (
     "TodoistLabel",
     "TodoistLabelPage",
     "TodoistPageRequest",
+    "TodoistPriorityProbeResult",
+    "TodoistPrioritySemanticConflict",
     "TodoistProject",
+    "TodoistQualification",
     "TodoistRateLimitError",
     "TodoistRetrievalAudit",
     "TodoistRetrievalError",
@@ -102,6 +112,8 @@ __all__ = (
     "TodoistTaskPage",
     "TodoistTransport",
     "TodoistUser",
+    "qualify_todoist_task",
     "stored_task_matches_selection_boundary",
     "task_due_at",
+    "verify_todoist_priority_semantics",
 )

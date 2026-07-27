@@ -119,6 +119,25 @@ class DeterministicBriefingPipeline:
         )
 
 
+def recompose_pipeline_result(
+    result: PipelineResult,
+    context: InvocationContext,
+) -> PipelineResult:
+    """Compose another date from an already retrieved normalized snapshot."""
+
+    context = _reconcile_workday_context(context, result.deduplication.records)
+    plan = build_reduced_plan(
+        context,
+        result.deduplication.records,
+        result.plan.coverage,
+    )
+    coverage = _coverage_with_display_counts(plan, result.plan.coverage)
+    plan = build_reduced_plan(context, result.deduplication.records, coverage)
+    rendered = render_briefing(plan)
+    validate_briefing(plan, rendered)
+    return replace(result, plan=plan, rendered=rendered)
+
+
 def _reconcile_workday_context(
     context: InvocationContext,
     records: tuple[NormalizedRecord, ...],
@@ -158,6 +177,9 @@ def _coverage_with_display_counts(
         for item in section.items
         for source in item.sources
     )
+    candidates = {
+        audit.source: audit.candidate_count for audit in plan.task_candidate_audits
+    }
     return tuple(
         replace(
             report,
@@ -171,6 +193,7 @@ def _coverage_with_display_counts(
                 if report.selected_count is None
                 else report.selected_count
             ),
+            candidate_count=candidates.get(report.source, 0),
             displayed_count=displayed[report.source],
         )
         for report in coverage

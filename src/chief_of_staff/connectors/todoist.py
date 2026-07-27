@@ -20,6 +20,7 @@ from chief_of_staff.domain import CoverageStatus
 
 TODOIST_DATA_READ_SCOPE: Final = "data:read"
 TODOIST_FILTER_QUERY: Final = "overdue | 15 days | p1 | p2 | assigned to: me"
+TODOIST_ACTIVE_TASK_ENDPOINT: Final = "/api/v1/tasks"
 TODOIST_DUE_LOOKAHEAD_DAYS: Final = 14
 TODOIST_PAGE_LIMIT: Final = 200
 DEFAULT_MAX_PAGES: Final = 100
@@ -150,11 +151,16 @@ class TodoistRetrievalAudit:
     projects_retrieved: int
     sections_retrieved: int
     labels_retrieved: int
+    duplicate_task_id_count: int
+    qualification_counts: tuple[tuple[str, int], ...]
+    qualification_overlaps: tuple[tuple[str, int], ...]
+    retrieved_tasks: tuple[TodoistTask, ...] = field(repr=False)
     selected_tasks: tuple[TodoistTask, ...] = field(repr=False)
     projects: tuple[TodoistProject, ...] = field(repr=False)
     sections: tuple[TodoistSection, ...] = field(repr=False)
     labels: tuple[TodoistLabel, ...] = field(repr=False)
     full_active_task_collection_retrieved: bool = False
+    concurrent_changes_cannot_be_excluded: bool = False
 
     @property
     def selected_task_count(self) -> int:
@@ -186,12 +192,12 @@ class TodoistTransport(Protocol):
     ) -> TodoistUser:
         """Return only identity needed to confirm the connected account."""
 
-    def filter_tasks(
+    def list_tasks(
         self,
         authorization: TodoistAuthorization,
-        request: TodoistFilterRequest,
+        request: TodoistPageRequest,
     ) -> TodoistTaskPage:
-        """Return one active-task page for the approved provider filter."""
+        """Return one page from the complete active-task collection."""
 
     def get_project(
         self,
@@ -226,7 +232,7 @@ class TodoistConnector:
     account_reference: str
     authorization_provider: TodoistAuthorizationProvider
     transport: TodoistTransport
-    filter_query: str = TODOIST_FILTER_QUERY
+    task_endpoint: str = TODOIST_ACTIVE_TASK_ENDPOINT
     relevant_task_ids: frozenset[str] = frozenset()
     max_pages: int = DEFAULT_MAX_PAGES
     clock: Callable[[], datetime] = field(
@@ -249,13 +255,13 @@ class TodoistConnector:
             character.isspace() for character in self.account_reference
         ):
             raise ValueError("Todoist account reference must be an opaque alias")
-        if self.filter_query != TODOIST_FILTER_QUERY:
-            raise ValueError("the Todoist filter may not be broadened")
+        if self.task_endpoint != TODOIST_ACTIVE_TASK_ENDPOINT:
+            raise ValueError("the Todoist active-task endpoint may not be changed")
         if self.max_pages < 1:
             raise ValueError("Todoist max_pages must be positive")
         self.approved_scope = (
             f"Todoist account alias={self.account_reference}; "
-            f"filter={self.filter_query}"
+            f"endpoint={self.task_endpoint}; active tasks only"
         )
 
     def retrieve(self, request: ConnectorRequest) -> ConnectorResult:
@@ -321,15 +327,17 @@ class TodoistConnector:
                 "Todoist account timezone differs from the briefing timezone"
             )
 
-        candidate_tasks, active_task_count, task_pages, task_error = (
-            self._retrieve_tasks(
-                authorization,
-                request=request,
-                user=user,
-                warnings=warnings,
-            )
+        (
+            active_tasks,
+            active_task_count,
+            duplicate_task_id_count,
+            task_pages,
+            task_error,
+        ) = self._retrieve_tasks(
+            authorization,
+            warnings=warnings,
         )
-        if task_error is not None and not candidate_tasks:
+        if task_error is not None and not active_tasks:
             status = (
                 CoverageStatus.UNAUTHORIZED
                 if task_error == "TodoistAuthenticationError"
@@ -355,7 +363,7 @@ class TodoistConnector:
                 context_error,
             ) = self._resolve_context(
                 authorization,
-                candidate_tasks=candidate_tasks,
+                candidate_tasks=active_tasks,
                 request=request,
                 user=user,
                 warnings=warnings,
@@ -403,6 +411,18 @@ class TodoistConnector:
         used_labels = tuple(
             label for label in labels if label.name.casefold() in used_label_names
         )
+        project_by_id = {project.id: project for project in projects}
+        qualifications = tuple(
+            qualify_todoist_task(
+                task,
+                briefing_date=request.briefing_date,
+                timezone=request.timezone,
+                user_id=user.id,
+                projects=project_by_id,
+                relevant_task_ids=self.relevant_task_ids,
+            )
+            for task in active_tasks
+        )
         self.last_audit = TodoistRetrievalAudit(
             active_task_count=active_task_count,
             task_page_count=task_pages,
@@ -410,10 +430,16 @@ class TodoistConnector:
             projects_retrieved=len(projects),
             sections_retrieved=len(sections),
             labels_retrieved=len(labels),
+            duplicate_task_id_count=duplicate_task_id_count,
+            qualification_counts=_qualification_counts(qualifications),
+            qualification_overlaps=_qualification_overlaps(qualifications),
+            retrieved_tasks=active_tasks,
             selected_tasks=tasks,
             projects=projects,
             sections=sections,
             labels=used_labels,
+            full_active_task_collection_retrieved=task_error is None,
+            concurrent_changes_cannot_be_excluded=task_pages > 1,
         )
         return self._coverage_result(
             retrieved_at=retrieved_at,
@@ -444,29 +470,28 @@ class TodoistConnector:
         self,
         authorization: TodoistAuthorization,
         *,
-        request: ConnectorRequest,
-        user: TodoistUser,
         warnings: list[str],
-    ) -> tuple[tuple[TodoistTask, ...], int, int, str | None]:
-        candidates: dict[str, TodoistTask] = {}
-        active_task_count = 0
+    ) -> tuple[tuple[TodoistTask, ...], int, int, int, str | None]:
+        active_tasks: dict[str, TodoistTask] = {}
+        duplicate_task_id_count = 0
         cursor: str | None = None
         seen_cursors: set[str] = set()
         page_number = 0
         while page_number < self.max_pages:
             page_number += 1
             try:
-                page = self.transport.filter_tasks(
+                page = self.transport.list_tasks(
                     authorization,
-                    TodoistFilterRequest(query=self.filter_query, cursor=cursor),
+                    TodoistPageRequest(cursor=cursor),
                 )
             except TodoistAuthenticationError:
                 warnings.append(
                     f"Todoist authorization failed before task page {page_number}"
                 )
                 return (
-                    tuple(candidates.values()),
-                    active_task_count,
+                    tuple(active_tasks.values()),
+                    len(active_tasks),
+                    duplicate_task_id_count,
                     page_number - 1,
                     "TodoistAuthenticationError",
                 )
@@ -475,24 +500,17 @@ class TodoistConnector:
                     f"Todoist task retrieval stopped before page {page_number}"
                 )
                 return (
-                    tuple(candidates.values()),
-                    active_task_count,
+                    tuple(active_tasks.values()),
+                    len(active_tasks),
+                    duplicate_task_id_count,
                     page_number - 1,
                     type(error).__name__,
                 )
 
-            active_task_count += len(page.tasks)
             for task in page.tasks:
-                if (
-                    _task_is_primary_selection(
-                        task,
-                        briefing_date=request.briefing_date,
-                        timezone=request.timezone,
-                        relevant_task_ids=self.relevant_task_ids,
-                    )
-                    or task.responsible_user_id == user.id
-                ):
-                    candidates[task.id] = task
+                if task.id in active_tasks:
+                    duplicate_task_id_count += 1
+                active_tasks[task.id] = task
 
             cursor_error = _next_cursor_error(
                 page.next_cursor,
@@ -500,16 +518,18 @@ class TodoistConnector:
             )
             if cursor_error is None and page.next_cursor is None:
                 return (
-                    tuple(candidates.values()),
-                    active_task_count,
+                    tuple(active_tasks.values()),
+                    len(active_tasks),
+                    duplicate_task_id_count,
                     page_number,
                     None,
                 )
             if cursor_error is not None:
                 warnings.append(cursor_error)
                 return (
-                    tuple(candidates.values()),
-                    active_task_count,
+                    tuple(active_tasks.values()),
+                    len(active_tasks),
+                    duplicate_task_id_count,
                     page_number,
                     "TodoistPaginationError",
                 )
@@ -519,8 +539,9 @@ class TodoistConnector:
             f"Todoist task retrieval reached the {self.max_pages}-page limit"
         )
         return (
-            tuple(candidates.values()),
-            active_task_count,
+            tuple(active_tasks.values()),
+            len(active_tasks),
+            duplicate_task_id_count,
             page_number,
             "TodoistPageLimit",
         )
@@ -700,20 +721,66 @@ def _next_cursor_error(
     return None
 
 
-def _task_is_primary_selection(
+@dataclass(frozen=True, slots=True)
+class TodoistQualification:
+    """Independent deterministic reasons one active task may be selected."""
+
+    overdue: bool
+    due_today: bool
+    due_within_14_days: bool
+    p1: bool
+    p2: bool
+    shared_assignment: bool
+    explicit_priority_link: bool
+
+    @property
+    def selected(self) -> bool:
+        return any(self.as_pairs().values())
+
+    def as_pairs(self) -> dict[str, bool]:
+        return {
+            "overdue": self.overdue,
+            "due_today": self.due_today,
+            "due_within_14_days": self.due_within_14_days,
+            "p1": self.p1,
+            "p2": self.p2,
+            "shared_assignment": self.shared_assignment,
+            "explicit_priority_link": self.explicit_priority_link,
+        }
+
+
+def qualify_todoist_task(
     task: TodoistTask,
     *,
     briefing_date: date,
     timezone: str,
+    user_id: str,
+    projects: dict[str, TodoistProject],
     relevant_task_ids: frozenset[str],
-) -> bool:
-    if task.id in relevant_task_ids:
-        return True
-    if task.priority in {3, 4}:
-        return True
+) -> TodoistQualification:
+    """Attribute every accepted selection rule independently."""
+
     due_at, _all_day = _task_due_at(task, zone=ZoneInfo(timezone))
-    return due_at is not None and due_at.date() <= briefing_date + timedelta(
-        days=TODOIST_DUE_LOOKAHEAD_DAYS
+    due_date = None if due_at is None else due_at.date()
+    project = None if task.project_id is None else projects.get(task.project_id)
+    return TodoistQualification(
+        overdue=due_date is not None and due_date < briefing_date,
+        due_today=due_date == briefing_date,
+        due_within_14_days=(
+            due_date is not None
+            and briefing_date
+            < due_date
+            <= briefing_date + timedelta(days=TODOIST_DUE_LOOKAHEAD_DAYS)
+        ),
+        p1=task.priority == 4,
+        p2=task.priority == 3,
+        shared_assignment=bool(
+            task.responsible_user_id == user_id
+            and project is not None
+            and project.is_shared
+            and project.can_assign_tasks
+        ),
+        explicit_priority_link=task.id in relevant_task_ids,
     )
 
 
@@ -726,17 +793,46 @@ def _task_matches_boundary(
     projects: dict[str, TodoistProject],
     relevant_task_ids: frozenset[str],
 ) -> bool:
-    if _task_is_primary_selection(
+    return qualify_todoist_task(
         task,
         briefing_date=briefing_date,
         timezone=timezone,
+        user_id=user_id,
+        projects=projects,
         relevant_task_ids=relevant_task_ids,
-    ):
-        return True
-    if task.responsible_user_id != user_id or task.project_id is None:
-        return False
-    project = projects.get(task.project_id)
-    return bool(project is not None and project.is_shared and project.can_assign_tasks)
+    ).selected
+
+
+def _qualification_counts(
+    qualifications: tuple[TodoistQualification, ...],
+) -> tuple[tuple[str, int], ...]:
+    return tuple(
+        (rule, sum(qualification.as_pairs()[rule] for qualification in qualifications))
+        for rule in TodoistQualification(
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
+        ).as_pairs()
+    )
+
+
+def _qualification_overlaps(
+    qualifications: tuple[TodoistQualification, ...],
+) -> tuple[tuple[str, int], ...]:
+    overlaps: dict[str, int] = {}
+    for qualification in qualifications:
+        rules = tuple(
+            rule for rule, matched in qualification.as_pairs().items() if matched
+        )
+        if len(rules) < 2:
+            continue
+        key = "+".join(rules)
+        overlaps[key] = overlaps.get(key, 0) + 1
+    return tuple(sorted(overlaps.items()))
 
 
 def stored_task_matches_selection_boundary(

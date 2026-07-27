@@ -7,13 +7,12 @@ from datetime import UTC, date, datetime
 from zoneinfo import ZoneInfo
 
 from chief_of_staff.connectors import (
+    TODOIST_ACTIVE_TASK_ENDPOINT,
     TODOIST_DATA_READ_SCOPE,
-    TODOIST_FILTER_QUERY,
     ConnectorRequest,
     TodoistAuthorization,
     TodoistAuthorizationUnavailable,
     TodoistConnector,
-    TodoistFilterRequest,
     TodoistLabel,
     TodoistLabelPage,
     TodoistPageRequest,
@@ -79,7 +78,7 @@ class _ReadOnlyTransport:
     pages: tuple[TodoistTaskPage, ...]
     label_pages: tuple[TodoistLabelPage, ...] = ()
     fail_on_task_call: int | None = None
-    task_calls: list[TodoistFilterRequest] = field(default_factory=list, init=False)
+    task_calls: list[TodoistPageRequest] = field(default_factory=list, init=False)
     label_calls: list[TodoistPageRequest] = field(default_factory=list, init=False)
     project_calls: list[str] = field(default_factory=list, init=False)
     section_calls: list[str] = field(default_factory=list, init=False)
@@ -95,10 +94,10 @@ class _ReadOnlyTransport:
             timezone="America/New_York",
         )
 
-    def filter_tasks(
+    def list_tasks(
         self,
         authorization: TodoistAuthorization,
-        request: TodoistFilterRequest,
+        request: TodoistPageRequest,
     ) -> TodoistTaskPage:
         assert authorization.credential_reference == "mock-todoist-grant"
         self.task_calls.append(request)
@@ -258,10 +257,6 @@ def test_todoist_enforces_selection_boundary_and_resolves_minimum_context() -> N
         "p2",
         "assigned",
     }
-    assert [call.query for call in transport.task_calls] == [
-        TODOIST_FILTER_QUERY,
-        TODOIST_FILTER_QUERY,
-    ]
     assert [call.cursor for call in transport.task_calls] == [
         None,
         "task-page-2",
@@ -286,6 +281,51 @@ def test_todoist_enforces_selection_boundary_and_resolves_minimum_context() -> N
         (resource.resource, resource.retrieved_count)
         for resource in result.coverage.context_resources
     ) == (("projects", 3), ("sections", 1), ("labels", 2))
+    assert dict(connector.last_audit.qualification_counts) == {
+        "overdue": 1,
+        "due_today": 1,
+        "due_within_14_days": 1,
+        "p1": 1,
+        "p2": 1,
+        "shared_assignment": 1,
+        "explicit_priority_link": 0,
+    }
+
+
+def test_todoist_qualification_counts_preserve_rule_overlaps() -> None:
+    transport = _ReadOnlyTransport(
+        pages=(
+            TodoistTaskPage(
+                tasks=(
+                    TodoistTask(
+                        id="overlap",
+                        content="Overlapping qualification",
+                        priority=4,
+                        due_date="2026-07-25",
+                        project_id="project-shared",
+                        responsible_user_id="primary-user-id",
+                    ),
+                )
+            ),
+        )
+    )
+    connector = _connector(transport)
+
+    connector.retrieve(_request(connector.approved_scope))
+
+    assert connector.last_audit is not None
+    assert dict(connector.last_audit.qualification_counts) == {
+        "overdue": 0,
+        "due_today": 1,
+        "due_within_14_days": 0,
+        "p1": 1,
+        "p2": 0,
+        "shared_assignment": 1,
+        "explicit_priority_link": 0,
+    }
+    assert dict(connector.last_audit.qualification_overlaps) == {
+        "due_today+p1+shared_assignment": 1
+    }
 
 
 def test_todoist_explicit_active_priority_link_selects_undated_task() -> None:
@@ -313,6 +353,44 @@ def test_todoist_explicit_active_priority_link_selects_undated_task() -> None:
     result = connector.retrieve(_request(connector.approved_scope))
 
     assert [item.source_record_id for item in result.items] == ["linked-priority"]
+
+
+def test_todoist_deduplicates_stable_ids_across_cursor_pages() -> None:
+    transport = _ReadOnlyTransport(
+        pages=(
+            TodoistTaskPage(
+                tasks=(
+                    TodoistTask(
+                        id="duplicate",
+                        content="First observed version",
+                        priority=4,
+                    ),
+                ),
+                next_cursor="page-2",
+            ),
+            TodoistTaskPage(
+                tasks=(
+                    TodoistTask(
+                        id="duplicate",
+                        content="Second observed version",
+                        priority=4,
+                    ),
+                )
+            ),
+        )
+    )
+    connector = _connector(transport)
+
+    result = connector.retrieve(_request(connector.approved_scope))
+
+    assert result.coverage.retrieved_count == 1
+    assert result.coverage.selected_count == 1
+    assert [call.cursor for call in transport.task_calls] == [None, "page-2"]
+    assert all(call.limit == 200 for call in transport.task_calls)
+    assert connector.last_audit is not None
+    assert connector.last_audit.duplicate_task_id_count == 1
+    assert connector.last_audit.full_active_task_collection_retrieved
+    assert connector.last_audit.concurrent_changes_cannot_be_excluded
 
 
 def test_todoist_priority_is_source_signal_with_current_api_mapping() -> None:
@@ -365,7 +443,7 @@ def test_todoist_priority_is_source_signal_with_current_api_mapping() -> None:
     assert result.items[0].facts["provider_priority"] == 4
 
 
-def test_todoist_rejects_scope_expansion_and_filter_broadening() -> None:
+def test_todoist_rejects_scope_expansion_and_endpoint_changes() -> None:
     transport = _ReadOnlyTransport((TodoistTaskPage(tasks=()),))
     expanded = _connector(
         transport,
@@ -384,12 +462,13 @@ def test_todoist_rejects_scope_expansion_and_filter_broadening() -> None:
             account_reference="primary-user",
             authorization_provider=_MockAuthorizationProvider(),
             transport=transport,
-            filter_query="view all",
+            task_endpoint="/api/v1/tasks/filter",
         )
     except ValueError as error:
-        assert "may not be broadened" in str(error)
+        assert "may not be changed" in str(error)
     else:
-        raise AssertionError("TodoistConnector accepted a broader task filter")
+        raise AssertionError("TodoistConnector accepted another task endpoint")
+    assert expanded.task_endpoint == TODOIST_ACTIVE_TASK_ENDPOINT
 
 
 def test_todoist_distinguishes_unauthorized_from_empty() -> None:

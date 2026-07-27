@@ -10,6 +10,7 @@ from chief_of_staff.pipeline.briefing import (
     PriorityInputs,
     RenderedBriefing,
     SourceLink,
+    TaskCandidateAudit,
     build_reduced_plan,
     classify_calendar_event,
     render_briefing,
@@ -35,6 +36,7 @@ from chief_of_staff.pipeline.normalization import (
 from chief_of_staff.pipeline.runner import (
     DeterministicBriefingPipeline,
     PipelineResult,
+    recompose_pipeline_result,
 )
 
 __all__ = (
@@ -55,11 +57,13 @@ __all__ = (
     "RecordKind",
     "RenderedBriefing",
     "SourceLink",
+    "TaskCandidateAudit",
     "WorkdayType",
     "build_reduced_plan",
     "classify_calendar_event",
     "deduplicate_records",
     "normalize_item",
+    "recompose_pipeline_result",
     "reconcile_calendar_workday_context",
     "render_briefing",
     "resolve_context",

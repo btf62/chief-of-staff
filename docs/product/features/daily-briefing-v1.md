@@ -1,9 +1,9 @@
 # Feature: Daily Briefing v1
 
 - **Status:** Accepted
-- **Version:** 4
+- **Version:** 5
 - **Owner:** Brad
-- **Last updated:** 2026-07-26
+- **Last updated:** 2026-07-27
 
 ## Summary
 
@@ -289,6 +289,13 @@ Task-system priority is a source-owned signal, not the final Chief of Staff
 priority. It may influence deterministic ordering, but it does not by itself
 prove an external commitment, relationship consequence, or required outcome.
 
+Source selection and local persistence maintain a bounded background pool.
+A separate date-specific daily-candidate gate determines which records
+materially affect the briefing date, and section budgets determine which
+candidates are displayed. Do not shrink the selected or persisted pool merely
+to produce a concise briefing; omit background records at the candidate or
+display stage with inspectable deterministic reasons.
+
 ### 9. Recommended Focus Block
 
 Recommend one realistic deep-work block when the live calendar permits.
@@ -319,11 +326,11 @@ future task list.
 ### Operational Appendix: Source Coverage
 
 After the canonical content sections, show compact operational metadata for
-every approved source used in the run. Distinguish records retrieved,
-selected, persisted, and displayed. For source-specific context collections,
-such as Todoist projects, sections, and labels, distinguish retrieved and
-persisted counts with unambiguous resource labels. Include safe warnings or
-error categories when relevant.
+every approved source used in the run. Distinguish records retrieved, selected,
+persisted, considered as daily candidates, and displayed. For source-specific
+context collections, such as Todoist projects, sections, and labels,
+distinguish retrieved and persisted counts with unambiguous resource labels.
+Include safe warnings or error categories when relevant.
 
 Keep this appendix out of the Chief of Staff Note. It exists to make
 completeness, partial retrieval, authorization failures, and empty results

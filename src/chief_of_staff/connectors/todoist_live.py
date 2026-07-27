@@ -17,6 +17,7 @@ from chief_of_staff.auth.keychain import (
     MacOSKeychain,
 )
 from chief_of_staff.connectors.todoist import (
+    DEFAULT_MAX_PAGES,
     TODOIST_DATA_READ_SCOPE,
     TodoistAuthenticationError,
     TodoistAuthorization,
@@ -42,6 +43,27 @@ from chief_of_staff.persistence import StateStore
 
 TODOIST_API_ROOT: Final = "https://api.todoist.com/api/v1"
 MAX_TODOIST_RESPONSE_BYTES: Final = 4 * 1024 * 1024
+
+
+class TodoistPrioritySemanticConflict(RuntimeError):
+    """Raised when live endpoint values do not prove the accepted P1/P2 mapping."""
+
+
+@dataclass(frozen=True, slots=True)
+class TodoistPriorityProbeResult:
+    """Privacy-safe result of endpoint-specific P1/P2 semantic verification."""
+
+    p1_task_count: int
+    p2_task_count: int
+    p1_api_values: tuple[int, ...]
+    p2_api_values: tuple[int, ...]
+    page_count: int
+
+    @property
+    def mapping(self) -> tuple[tuple[str, int], ...]:
+        """Return the verified user-facing to API mapping."""
+
+        return (("P1", 4), ("P2", 3), ("P3", 2), ("P4", 1))
 
 
 class TodoistAuthorizationRefresher(Protocol):
@@ -216,6 +238,33 @@ class TodoistHttpTransport:
         finally:
             payload.clear()
 
+    def list_tasks(
+        self,
+        authorization: TodoistAuthorization,
+        request: TodoistPageRequest,
+    ) -> TodoistTaskPage:
+        query = {"limit": str(request.limit)}
+        if request.cursor is not None:
+            query["cursor"] = request.cursor
+        payload = self._get_json(
+            authorization,
+            "/tasks?" + urllib.parse.urlencode(query),
+        )
+        if not isinstance(payload, dict):
+            raise TodoistRetrievalError
+        try:
+            raw_results = payload.get("results")
+            next_cursor = payload.get("next_cursor")
+            if not isinstance(raw_results, list) or not (
+                next_cursor is None or isinstance(next_cursor, str)
+            ):
+                raise TodoistRetrievalError
+            tasks = tuple(_task_from_payload(item) for item in raw_results)
+            raw_results.clear()
+            return TodoistTaskPage(tasks=tasks, next_cursor=next_cursor)
+        finally:
+            payload.clear()
+
     def get_project(
         self,
         authorization: TodoistAuthorization,
@@ -324,6 +373,67 @@ class TodoistHttpTransport:
             raise TodoistRetrievalError from None
         finally:
             raw_response[:] = b"\x00" * len(raw_response)
+
+
+def verify_todoist_priority_semantics(
+    transport: TodoistHttpTransport,
+    authorization: TodoistAuthorization,
+    *,
+    max_pages: int = DEFAULT_MAX_PAGES,
+) -> TodoistPriorityProbeResult:
+    """Prove the API values returned by the endpoint's P1 and P2 filters."""
+
+    if max_pages < 1:
+        raise ValueError("Todoist priority probe max_pages must be positive")
+    p1_tasks, p1_pages = _collect_priority_filter(
+        transport,
+        authorization,
+        query="p1",
+        max_pages=max_pages,
+    )
+    p2_tasks, p2_pages = _collect_priority_filter(
+        transport,
+        authorization,
+        query="p2",
+        max_pages=max_pages,
+    )
+    result = TodoistPriorityProbeResult(
+        p1_task_count=len(p1_tasks),
+        p2_task_count=len(p2_tasks),
+        p1_api_values=tuple(sorted({task.priority for task in p1_tasks})),
+        p2_api_values=tuple(sorted({task.priority for task in p2_tasks})),
+        page_count=p1_pages + p2_pages,
+    )
+    if result.p1_api_values != (4,) or result.p2_api_values != (3,):
+        raise TodoistPrioritySemanticConflict(
+            "Todoist P1/P2 filter values do not prove the accepted endpoint mapping"
+        )
+    return result
+
+
+def _collect_priority_filter(
+    transport: TodoistHttpTransport,
+    authorization: TodoistAuthorization,
+    *,
+    query: str,
+    max_pages: int,
+) -> tuple[tuple[TodoistTask, ...], int]:
+    tasks: dict[str, TodoistTask] = {}
+    cursor: str | None = None
+    seen_cursors: set[str] = set()
+    for page_number in range(1, max_pages + 1):
+        page = transport.filter_tasks(
+            authorization,
+            TodoistFilterRequest(query=query, cursor=cursor),
+        )
+        tasks.update((task.id, task) for task in page.tasks)
+        if page.next_cursor is None:
+            return tuple(tasks.values()), page_number
+        if page.next_cursor in seen_cursors:
+            raise TodoistRetrievalError
+        seen_cursors.add(page.next_cursor)
+        cursor = page.next_cursor
+    raise TodoistRetrievalError
 
 
 def _task_from_payload(payload: object) -> TodoistTask:

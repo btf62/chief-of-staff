@@ -3,15 +3,16 @@
 - **Status:** Accepted
 - **Version:** 1
 - **Owner:** Brad
-- **Last updated:** 2026-07-26
+- **Last updated:** 2026-07-27
 
 This roadmap sequences implementation of the accepted
 [Daily Briefing v1](product/features/daily-briefing-v1.md) design. Milestones 0
 through 4 are complete. Milestone 4 concluded with one explicitly approved,
 bounded primary-calendar trial. Milestone 5 has completed its accepted Todoist
-boundary and one explicitly approved combined Calendar-and-Todoist trial. Work
-is stopped before Jira or another connector. Dates and estimates remain
-intentionally omitted until implementation evidence supports them.
+boundary, combined Calendar-and-Todoist trial, and one explicitly approved
+complete-retrieval and normal-workday quality validation. Work is stopped
+before Jira or another connector. Dates and estimates remain intentionally
+omitted until implementation evidence supports them.
 
 Acceptance of this roadmap does not expand product scope. The
 [Product Requirements](product/requirements.md), feature specification,
@@ -193,9 +194,9 @@ explicit approval for another Calendar retrieval or any later connector.
 The accepted [Todoist connector](architecture/connectors/todoist.md) now has a
 retrieval-only live transport, exact `data:read` OAuth enforcement,
 state-protected loopback authorization, Keychain-only client and token
-storage, tested refresh and revocation boundaries, fixed-filter retrieval,
-context resolution, normalized local persistence, cursor pagination,
-partial-failure handling, and no-write contract tests.
+storage, tested refresh and revocation boundaries, complete active-task
+retrieval, context resolution, normalized local persistence, cursor
+pagination, partial-failure handling, and no-write contract tests.
 
 One explicitly approved on-demand trial combined the approved repository
 context, bounded primary Calendar, and bounded Todoist sources. It generated a
@@ -203,9 +204,15 @@ private deterministic briefing, persisted only the accepted minimized facts
 and run graph, kept raw payloads transient, and used no hosted inference or
 other connector.
 
-The trial is complete and live access is stopped. No Jira specification,
-authorization, or implementation has begun. Continue only after a new
-explicit approval for another live retrieval or the next connector gate.
+A later approved validation retrieved all active tasks, verified endpoint
+priority semantics, reconciled the existing local snapshot, and generated
+Sunday ministry-workday and Monday normal-workday briefings from one live
+snapshot. The quality gate now distinguishes retrieval, selection,
+persistence, daily-candidate, and display counts.
+
+The validation is complete and live access is stopped. No Jira specification,
+authorization, or implementation has begun. Continue only after a new explicit
+approval for another live retrieval or the next connector gate.
 
 ## Milestone 6 — Gmail and Google Drive Connectors
 

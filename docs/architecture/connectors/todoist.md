@@ -1,9 +1,9 @@
 # Todoist Connector
 
 - **Status:** Accepted
-- **Version:** 3
+- **Version:** 4
 - **Owner:** Brad
-- **Last updated:** 2026-07-26
+- **Last updated:** 2026-07-27
 
 This specification defines the read-only Todoist connector and the approved
 bounded live trial for Daily Briefing v1. The trial does not authorize
@@ -118,7 +118,8 @@ The live transport exposes only these `GET` resources:
 | Resource | Purpose |
 | --- | --- |
 | `/api/v1/user` | Confirm the authenticated account identity and timezone |
-| `/api/v1/tasks/filter` | Retrieve the approved active-task subset |
+| `/api/v1/tasks` | Retrieve the complete active-task collection |
+| `/api/v1/tasks/filter` | Verify live P1/P2 response semantics before selection |
 | `/api/v1/projects/{project_id}` | Resolve a project referenced by a selected task |
 | `/api/v1/sections/{section_id}` | Resolve a section referenced by a selected task |
 | `/api/v1/labels` | Resolve label names and IDs for selected tasks |
@@ -133,23 +134,28 @@ are excluded.
 
 ## Bounded task retrieval
 
-The server-side task filter is exactly:
+The task endpoint is exactly:
 
 ```text
-overdue | 15 days | p1 | p2 | assigned to: me
+GET /api/v1/tasks
 ```
 
-Todoist defines `15 days` as the current date plus the following fourteen
-calendar days. This provider filter may retrieve assignment candidates that
-the application later rejects; those candidates remain transient. The
-connector applies a second local check in Brad's configured timezone and
-retains only active tasks meeting at least one condition:
+It returns the complete active-task collection. The connector follows each
+opaque `next_cursor` until the provider returns `null`, keeps the page size and
+all other request parameters identical, and deduplicates by stable Todoist task
+ID if concurrent source changes repeat a record across pages. Cursors are never
+decoded or persisted. Pagination across more than one page is reported as
+complete when every cursor succeeds, while also disclosing that concurrent
+source changes cannot be excluded.
+
+Every active task remains transient until the connector applies independent
+local qualification rules in Brad's configured timezone. It retains only
+active tasks meeting at least one condition:
 
 - Overdue.
 - Due today.
 - Due within the next fourteen calendar days, inclusive.
-- Provider priority P1 or P2. In the current API representation, `4` is P1 and
-  `3` is P2; `1` is the natural priority.
+- Provider priority P1 or P2.
 - Explicitly linked to an approved active priority in local configuration.
 - Assigned to the authenticated Brad account in a shared project or workspace
   where assignment meaningfully distinguishes ownership.
@@ -159,9 +165,40 @@ An undated task is selected only when it is P1 or P2, explicitly linked to an
 approved active priority, or assigned under the distinguishing shared-project
 rule.
 
-This filter avoids retrieving the complete active-task corpus. Every page uses
-the same parameters, a maximum page size of 200, and an opaque cursor that is
-never decoded or persisted.
+The complete active corpus is not persisted. Completed history remains
+excluded.
+
+### Endpoint-specific priority semantics
+
+For `GET /api/v1/tasks`, the returned `priority` value is an integer from 1
+through 4. Higher numbers are more urgent:
+
+| Todoist label | API value | Meaning |
+| --- | ---: | --- |
+| P1 | 4 | Very urgent |
+| P2 | 3 | Urgent |
+| P3 | 2 | Important |
+| P4 | 1 | Natural/default |
+
+This mapping follows Todoist's current unified API v1 task documentation. The
+validation gate also queries the read-only filter endpoint with `p1` and `p2`
+before applying priority selection; the live response must return only values
+4 and 3 respectively. Any mismatch stops the run before priority is used.
+
+Todoist's deprecated REST v1 and REST v2 task documentation uses the same
+1-normal-to-4-urgent API range. The older Sync API also stores the numeric API
+priority in this direction. The apparent inversion is between Todoist's
+user-facing ordinal labels and the API integer: user-facing P1 is API value 4,
+not API value 1. The connector does not translate according to a guessed or
+endpoint-independent convention.
+
+The current unified documentation also contains a generated create/update
+request-field description that says value 1 is highest. That write-schema text
+is internally inconsistent with the documented task object and is not the
+response contract used by this read-only connector. The live P1/P2 probe
+matched the task-object contract. If the observed `GET /api/v1/tasks` response
+or filter semantics ever cease to do so, the connector must stop before using
+priority for selection.
 
 ## Context retrieval
 
@@ -205,13 +242,14 @@ transparent source signal in the deterministic explanation.
 
 ## Freshness, coverage, pagination, and failures
 
-Coverage reports the approved filter, retrieval time, task and label page
+Coverage reports the approved endpoint, retrieval time, task and label page
 counts, source freshness when available, safe warnings, and an error category.
 Counts use distinct labels for:
 
-- Tasks retrieved by the bounded provider filter.
+- Active tasks retrieved from the complete collection.
 - Tasks selected by the application boundary.
 - Selected tasks persisted as minimized local facts.
+- Persisted tasks considered as date-specific daily candidates.
 - Tasks displayed in the briefing.
 - Projects, sections, and labels retrieved for context.
 - Distinct projects, sections, and labels persisted for selected tasks.
@@ -248,10 +286,12 @@ The connector follows
   payloads, authorization codes, and credentials are not persisted.
 - Connector and briefing runs use the accepted 30-day retention class;
   deleting source evidence cascades to its normalized task facts and labels.
-- After a complete retrieval and boundary re-evaluation, normalized tasks that
-  no longer qualify are deleted. Partial retrieval never drives absence-based
-  cleanup. Evidence needed by a prior correction or disposition is retained
-  so the correction loop remains effective.
+- After a complete retrieval and boundary re-evaluation, the current selected
+  task snapshot replaces superseded snapshots and tasks that no longer qualify
+  are deleted. Reconciliation reports previous, new, retained, removed, and
+  dependency-preserved identities separately. Partial retrieval never drives
+  absence-based cleanup. Evidence needed by a prior correction or disposition
+  is retained so the correction loop remains effective.
 
 The private generated briefing is stored under ignored local state with
 restricted filesystem permissions.
@@ -263,6 +303,13 @@ Looking Ahead, or a source-fact risk notice when deterministic evidence is
 sufficient. Visible items retain Todoist provenance and authoritative links.
 The same task is not repeated across ordinary sections without necessary new
 context.
+
+The selected and persisted pool is deliberately broader than one day's
+presentation. A deterministic daily-candidate gate narrows that pool for the
+briefing date, and section budgets narrow it again for display. On ordinary
+workdays, due or overdue tasks, tasks due within seven days, P1/P2 tasks,
+explicit commitments, and preparation items may be daily candidates. This
+presentation gate never changes source selection or persistence.
 
 The connector does not claim that a person is waiting, convert a due date into
 an external promise, or perform task mutations. On configured non-workdays,
@@ -280,8 +327,11 @@ Synthetic contract, integration, security, and lifecycle tests demonstrate:
   boundaries.
 - Distinct unauthorized, unavailable, partial, rate-limited, and empty
   results.
-- Exact filter and local overdue/today/fourteen-day/priority/assignment checks.
-- Cursor pagination and partial-page retention.
+- Complete active-task retrieval and independent
+  overdue/today/fourteen-day/priority/assignment checks.
+- Cursor pagination to `next_cursor = null`, stable page parameters,
+  duplicate-ID handling, and partial-page retention.
+- Endpoint-specific P1/P2 mapping verification.
 - Conservative project, section, and label resolution.
 - Minimal source persistence and cascade deletion.
 - Provider priority as a source signal.
@@ -296,14 +346,22 @@ retrieval in deterministic reduced mode. It invoked no other connector or
 hosted inference. The exact-scope, Keychain, refresh, endpoint, pagination,
 lifecycle, provenance, failure, and presentation-budget checks passed.
 
+One later explicitly approved validation exercised the complete active-task
+endpoint, live priority probe, identity-based reconciliation, and two
+date-specific briefing funnels from the same snapshot. Private source content
+and production-derived counts remain in ignored local state rather than this
+public specification.
+
 ## Bounded live-trial stop
 
 Brad approved and completed one bounded trial under this specification. The
 mandatory stop now applies.
 
-No further Todoist retrieval, refresh, reauthorization, account change, scope
-change, cache, mutation, or additional connector is authorized without a new
-explicit approval.
+The later bounded validation and workday-quality gate is separately authorized
+by Brad's explicit current instruction. After that gate, no further Todoist
+retrieval, refresh, reauthorization, account change, scope change, cache,
+mutation, or additional connector is authorized without a new explicit
+approval.
 
 ## Official references
 

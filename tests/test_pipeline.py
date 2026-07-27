@@ -410,8 +410,8 @@ def test_source_coverage_distinguishes_funnel_and_context_resource_counts() -> N
 
     coverage = result.plan.sections[-1].summary or ""
     assert (
-        "`todoist`: complete; 12 retrieved; 1 selected; 1 persisted; 1 displayed"
-        in coverage
+        "`todoist`: complete; 12 retrieved; 1 selected; 1 persisted; "
+        "1 daily candidates; 1 displayed" in coverage
     )
     assert "projects: 5 retrieved, 1 persisted" in coverage
     assert "sections: 2 retrieved, 1 persisted" in coverage
@@ -496,14 +496,13 @@ def test_non_workday_briefing_protects_time_off_and_keeps_fixed_context() -> Non
         BriefingSectionName.CHIEF_OF_STAFF_NOTE,
         BriefingSectionName.TODAYS_CALENDAR,
         BriefingSectionName.PREPARATION_NEEDED,
-        BriefingSectionName.LOOKING_AHEAD,
         BriefingSectionName.SOURCE_COVERAGE,
     )
     assert "non-workday; protect it" in result.rendered.text
     assert "Scheduled Ministry Commitment" in result.rendered.text
     assert "Bring the approved outline" in result.rendered.text
     assert "Ordinary work due today" not in result.rendered.text
-    assert "Prepare for the next workday" in result.rendered.text
+    assert "Prepare for the next workday" not in result.rendered.text
 
 
 def test_calendar_events_receive_evidence_bounded_classifications() -> None:
@@ -929,11 +928,11 @@ def test_july_25_non_workday_suppresses_routine_status_signals() -> None:
     assert "Calendar status signal" not in result.rendered.text
     assert (
         "`synthetic_repository`: complete; 1 retrieved; 1 selected; "
-        "persistence not reported; 0 displayed"
+        "persistence not reported; 0 daily candidates; 0 displayed"
     ) in result.rendered.text
     assert (
         "`synthetic_calendar`: complete; 5 retrieved; 5 selected; "
-        "persistence not reported; 3 displayed"
+        "persistence not reported; 0 daily candidates; 3 displayed"
     ) in result.rendered.text
     assert result.rendered.word_count <= 800
     visible_items = tuple(
@@ -1094,6 +1093,95 @@ def test_todoist_facts_remain_source_signals_without_people_waiting_or_duplicate
     assert result.rendered.word_count <= 800
 
 
+def test_workday_task_funnel_separates_selection_candidates_and_display() -> None:
+    todoist = _connector(
+        "todoist",
+        *(
+            _item(
+                f"today-{index}",
+                title=f"Synthetic due-today task {index}",
+                importance=1,
+                status="open",
+                due_at="2026-07-27T00:00:00-04:00",
+                all_day=True,
+            )
+            for index in range(8)
+        ),
+        _item(
+            "background",
+            title="Synthetic background task",
+            importance=1,
+            status="open",
+            due_at="2026-08-06T00:00:00-04:00",
+            all_day=True,
+        ),
+    )
+    context = resolve_context(
+        run_id="todoist-funnel",
+        briefing_date=BRIEFING_DATE,
+        timezone="America/New_York",
+    )
+
+    result = DeterministicBriefingPipeline().run(context, (todoist,))
+
+    assert len(result.plan.task_candidate_audits) == 1
+    audit = result.plan.task_candidate_audits[0]
+    assert audit.source == "todoist"
+    assert audit.available_count == 9
+    assert audit.candidate_count == 8
+    assert audit.excluded_reasons == (
+        ("outside seven-day daily horizon without another priority signal", 1),
+    )
+    coverage = result.plan.coverage[0]
+    assert coverage.selected_count == 9
+    assert coverage.candidate_count == 8
+    assert coverage.displayed_count == 6
+    assert "People Waiting on Brad" not in result.rendered.text
+
+
+def test_due_today_precedes_overdue_backlog_in_deterministic_order() -> None:
+    todoist = _connector(
+        "todoist",
+        _item(
+            "overdue-high",
+            title="Synthetic overdue backlog",
+            importance=5,
+            status="open",
+            due_at="2026-07-20T00:00:00-04:00",
+            all_day=True,
+        ),
+        _item(
+            "due-today",
+            title="Synthetic current-day task",
+            importance=1,
+            status="open",
+            due_at="2026-07-27T00:00:00-04:00",
+            all_day=True,
+        ),
+    )
+    context = resolve_context(
+        run_id="todoist-current-before-backlog",
+        briefing_date=BRIEFING_DATE,
+        timezone="America/New_York",
+    )
+
+    result = DeterministicBriefingPipeline().run(context, (todoist,))
+
+    outcomes = next(
+        section
+        for section in result.plan.sections
+        if section.name is BriefingSectionName.TODAYS_OUTCOMES
+    )
+    assert len(outcomes.items) == 1
+    assert outcomes.items[0].headline == "Complete Synthetic current-day task"
+    important = next(
+        section
+        for section in result.plan.sections
+        if section.name is BriefingSectionName.IMPORTANT_TASKS
+    )
+    assert important.items[0].headline == "Synthetic overdue backlog"
+
+
 def test_non_workday_suppresses_todoist_tasks_but_keeps_coverage() -> None:
     todoist = _connector(
         "todoist",
@@ -1120,7 +1208,7 @@ def test_non_workday_suppresses_todoist_tasks_but_keeps_coverage() -> None:
     assert "Synthetic ordinary work" not in result.rendered.text
     assert (
         "`todoist`: complete; 1 retrieved; 1 selected; "
-        "persistence not reported; 0 displayed"
+        "persistence not reported; 0 daily candidates; 0 displayed"
     ) in result.rendered.text
     assert tuple(section.name for section in result.plan.sections) == (
         BriefingSectionName.CHIEF_OF_STAFF_NOTE,

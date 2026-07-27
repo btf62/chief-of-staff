@@ -7,7 +7,7 @@ import os
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -29,11 +29,13 @@ from chief_of_staff.domain import (
     NormalizedSourceTask,
     SourceEvidence,
 )
-from chief_of_staff.persistence import StateStore
+from chief_of_staff.persistence import SourceTaskReconciliation, StateStore
 from chief_of_staff.pipeline import (
+    BriefingSectionName,
     DeterministicBriefingPipeline,
     PipelineResult,
     build_reduced_plan,
+    recompose_pipeline_result,
     render_briefing,
     resolve_context,
     validate_briefing,
@@ -291,6 +293,32 @@ def _evidence_fingerprint(
 
 
 @dataclass(frozen=True, slots=True)
+class BriefingValidationSummary:
+    """Privacy-safe deterministic briefing funnel for one date."""
+
+    briefing_date: date
+    output_path: Path
+    word_count: int
+    workday_type: str
+    available_task_count: int
+    candidate_task_count: int
+    excluded_reasons: tuple[tuple[str, int], ...]
+    displayed_task_count: int
+    displayed_sections: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class TodoistPersistenceResult:
+    """Bounded persisted context and source-identity reconciliation."""
+
+    tasks_persisted: int
+    projects_persisted: int
+    sections_persisted: int
+    labels_persisted: int
+    reconciliation: SourceTaskReconciliation
+
+
+@dataclass(frozen=True, slots=True)
 class LiveTodoistTrialReport:
     """Privacy-safe combined Calendar and Todoist trial facts."""
 
@@ -304,19 +332,29 @@ class LiveTodoistTrialReport:
     active_task_count: int
     selected_task_count: int
     persisted_task_count: int
+    previously_retained_task_count: int
+    newly_persisted_task_count: int
+    retained_task_count: int
+    removed_task_count: int
+    dependency_preserved_task_count: int
     projects_retrieved: int
     projects_persisted: int
     sections_retrieved: int
     sections_persisted: int
     labels_retrieved: int
     labels_persisted: int
-    stale_task_count_removed: int
+    superseded_snapshot_count_removed: int
+    duplicate_task_id_count: int
+    full_active_task_collection_retrieved: bool
+    concurrent_changes_cannot_be_excluded: bool
+    qualification_counts: tuple[tuple[str, int], ...]
+    qualification_overlaps: tuple[tuple[str, int], ...]
     task_page_count: int
     label_page_count: int
     calendar_event_count: int
     calendar_page_count: int
-    output_path: Path
-    briefing_word_count: int
+    briefings: tuple[BriefingValidationSummary, ...]
+    descriptions_persisted: bool = False
     raw_payload_persisted: bool = False
     hosted_inference_used: bool = False
     other_live_source_used: bool = False
@@ -340,6 +378,8 @@ class LiveTodoistTrialRunner:
     calendar_connector: GoogleCalendarConnector
     todoist_connector: TodoistConnector
     output_directory: Path
+    additional_briefing_dates: tuple[date, ...] = ()
+    briefing_date_override: date | None = None
     timezone: str = "America/New_York"
     clock: Callable[[], datetime] = field(
         default=lambda: datetime.now(UTC),
@@ -351,7 +391,10 @@ class LiveTodoistTrialRunner:
         """Generate one combined deterministic briefing and persist bounded facts."""
 
         started_at = self.clock()
-        briefing_date = started_at.astimezone(ZoneInfo(self.timezone)).date()
+        briefing_date = (
+            self.briefing_date_override
+            or started_at.astimezone(ZoneInfo(self.timezone)).date()
+        )
         run_id = f"live-todoist-{uuid.uuid4().hex}"
         context = resolve_context(
             run_id=run_id,
@@ -408,7 +451,7 @@ class LiveTodoistTrialRunner:
             context=context,
             result=result,
         )
-        persisted_counts = self._persist_todoist_tasks(
+        persistence = self._persist_todoist_tasks(
             evidence_ids=evidence_ids,
             timezone=context.timezone,
             prune_stale=(
@@ -426,16 +469,35 @@ class LiveTodoistTrialRunner:
             },
             context_persisted_by_source={
                 "todoist": {
-                    "projects": persisted_counts[1],
-                    "sections": persisted_counts[2],
-                    "labels": persisted_counts[3],
+                    "projects": persistence.projects_persisted,
+                    "sections": persistence.sections_persisted,
+                    "labels": persistence.labels_persisted,
                 }
             },
         )
-        output_path = helper._write_briefing(
-            briefing_date=briefing_date.isoformat(),
-            run_id=run_id,
-            content=result.rendered.text,
+        results_by_date = [(briefing_date, result)]
+        for additional_date in self.additional_briefing_dates:
+            additional_context = resolve_context(
+                run_id=f"{run_id}:{additional_date.isoformat()}",
+                briefing_date=additional_date,
+                timezone=self.timezone,
+                invocation_mode="bounded_todoist_live_validation",
+                lookahead_days=7,
+            )
+            results_by_date.append(
+                (
+                    additional_date,
+                    recompose_pipeline_result(result, additional_context),
+                )
+            )
+        briefing_summaries = tuple(
+            self._briefing_summary(
+                helper=helper,
+                briefing_date=output_date,
+                run_id=run_id,
+                result=output_result,
+            )
+            for output_date, output_result in results_by_date
         )
         self.state_store.mark_connector_authorization_used(
             "google_calendar",
@@ -473,20 +535,41 @@ class LiveTodoistTrialRunner:
             ),
             active_task_count=audit.active_task_count,
             selected_task_count=audit.selected_task_count,
-            persisted_task_count=persisted_counts[0],
+            persisted_task_count=persistence.reconciliation.final_unique_count,
+            previously_retained_task_count=(
+                persistence.reconciliation.previous_unique_count
+            ),
+            newly_persisted_task_count=(
+                persistence.reconciliation.newly_selected_count
+            ),
+            retained_task_count=persistence.reconciliation.retained_count,
+            removed_task_count=persistence.reconciliation.removed_count,
+            dependency_preserved_task_count=(
+                persistence.reconciliation.dependency_preserved_count
+            ),
             projects_retrieved=audit.projects_retrieved,
-            projects_persisted=persisted_counts[1],
+            projects_persisted=persistence.projects_persisted,
             sections_retrieved=audit.sections_retrieved,
-            sections_persisted=persisted_counts[2],
+            sections_persisted=persistence.sections_persisted,
             labels_retrieved=audit.labels_retrieved,
-            labels_persisted=persisted_counts[3],
-            stale_task_count_removed=persisted_counts[4],
+            labels_persisted=persistence.labels_persisted,
+            superseded_snapshot_count_removed=(
+                persistence.reconciliation.superseded_snapshot_count
+            ),
+            duplicate_task_id_count=audit.duplicate_task_id_count,
+            full_active_task_collection_retrieved=(
+                audit.full_active_task_collection_retrieved
+            ),
+            concurrent_changes_cannot_be_excluded=(
+                audit.concurrent_changes_cannot_be_excluded
+            ),
+            qualification_counts=audit.qualification_counts,
+            qualification_overlaps=audit.qualification_overlaps,
             task_page_count=audit.task_page_count,
             label_page_count=audit.label_page_count,
             calendar_event_count=len(calendar_records),
             calendar_page_count=calendar_coverage.page_count or 0,
-            output_path=output_path,
-            briefing_word_count=result.rendered.word_count,
+            briefings=briefing_summaries,
         )
 
     def _persist_todoist_tasks(
@@ -495,7 +578,7 @@ class LiveTodoistTrialRunner:
         evidence_ids: dict[tuple[str, str], str],
         timezone: str,
         prune_stale: bool,
-    ) -> tuple[int, int, int, int, int]:
+    ) -> TodoistPersistenceResult:
         audit = self.todoist_connector.last_audit
         if audit is None:
             raise LiveTrialError("Todoist lifecycle audit is unavailable")
@@ -543,22 +626,79 @@ class LiveTodoistTrialRunner:
             if section is not None:
                 persisted_sections.add(section.id)
             persisted_labels.update(label.id for label in resolved_labels)
-        stale_task_count_removed = (
-            self.state_store.prune_unselected_source_tasks(
+        current_evidence_ids = {
+            task.id: evidence_ids[("todoist", task.id)]
+            for task in audit.selected_tasks
+            if ("todoist", task.id) in evidence_ids
+        }
+        reconciliation = (
+            self.state_store.reconcile_source_task_snapshot(
                 source="todoist",
-                retained_source_record_ids=frozenset(
-                    task.id for task in audit.selected_tasks
-                ),
+                current_evidence_ids=current_evidence_ids,
             )
             if prune_stale
-            else 0
+            else SourceTaskReconciliation(
+                previous_unique_count=0,
+                final_unique_count=persisted_tasks,
+                newly_selected_count=persisted_tasks,
+                retained_count=0,
+                removed_count=0,
+                superseded_snapshot_count=0,
+                dependency_preserved_count=0,
+            )
         )
-        return (
-            persisted_tasks,
-            len(persisted_projects),
-            len(persisted_sections),
-            len(persisted_labels),
-            stale_task_count_removed,
+        return TodoistPersistenceResult(
+            tasks_persisted=persisted_tasks,
+            projects_persisted=len(persisted_projects),
+            sections_persisted=len(persisted_sections),
+            labels_persisted=len(persisted_labels),
+            reconciliation=reconciliation,
+        )
+
+    def _briefing_summary(
+        self,
+        *,
+        helper: LiveCalendarTrialRunner,
+        briefing_date: date,
+        run_id: str,
+        result: PipelineResult,
+    ) -> BriefingValidationSummary:
+        output_path = helper._write_briefing(
+            briefing_date=briefing_date.isoformat(),
+            run_id=run_id,
+            content=result.rendered.text,
+        )
+        audit = next(
+            (
+                item
+                for item in result.plan.task_candidate_audits
+                if item.source == "todoist"
+            ),
+            None,
+        )
+        displayed_sections = tuple(
+            section.name.value
+            for section in result.plan.sections
+            if section.name is not BriefingSectionName.SOURCE_COVERAGE
+            and any(
+                source.source == "todoist"
+                for item in section.items
+                for source in item.sources
+            )
+        )
+        coverage = next(
+            item for item in result.plan.coverage if item.source == "todoist"
+        )
+        return BriefingValidationSummary(
+            briefing_date=briefing_date,
+            output_path=output_path,
+            word_count=result.rendered.word_count,
+            workday_type=result.plan.context.workday_type.value,
+            available_task_count=0 if audit is None else audit.available_count,
+            candidate_task_count=0 if audit is None else audit.candidate_count,
+            excluded_reasons=() if audit is None else audit.excluded_reasons,
+            displayed_task_count=coverage.displayed_count or 0,
+            displayed_sections=displayed_sections,
         )
 
 

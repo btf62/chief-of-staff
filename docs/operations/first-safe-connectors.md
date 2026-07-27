@@ -2,11 +2,12 @@
 
 - **Status:** Accepted
 - **Owner:** Brad
-- **Last updated:** 2026-07-26
+- **Last updated:** 2026-07-27
 
 This document describes the implemented repository, Calendar, and Todoist
 connector boundaries. The synthetic demonstrations, one bounded Calendar
-trial, and one bounded combined Calendar-and-Todoist trial are complete. Live
+trial, one bounded combined Calendar-and-Todoist trial, and one approved
+complete-retrieval and normal-workday quality validation are complete. Live
 access is now stopped. None of the credential or live-retrieval commands below
 may be repeated without new explicit approval.
 
@@ -149,8 +150,8 @@ python -m chief_of_staff.todoist_live_cli trial
 It:
 
 - Confirms the authorized current Todoist user before task retrieval.
-- Retrieves only the exact accepted active-task filter and applies the local
-  selection boundary again in the configured timezone.
+- Retrieves the complete active-task collection and applies the local
+  selection boundary in the configured timezone.
 - Resolves only project and section records referenced by selected tasks and
   retrieves labels only when selected tasks require them.
 - Combines Todoist with the same two approved repository documents and one
@@ -162,6 +163,19 @@ It:
 - Writes the private deterministic briefing under ignored `.local/` state.
 - Uses no hosted inference, other live connector, external write, scheduling,
   or persistent source cache.
+
+The later workday-quality validation was invoked once with:
+
+```text
+python -m chief_of_staff.todoist_live_cli validate-workday
+```
+
+It first verifies live P1/P2 response semantics, then performs one complete
+active-task retrieval, reconciles the prior selected snapshot, and generates
+the July 26 ministry-workday regression and July 27 normal-workday briefing
+from the same normalized live snapshot. It reports retrieval, independent
+qualification, overlap, persistence, daily-candidate, and display funnels
+without printing private source content.
 
 During the authorization setup, Todoist's browser interface displayed an
 existing personal API-token field unrelated to this connector. The connector
@@ -187,9 +201,11 @@ Calendar pagination, all-day events, timezones, freshness, empty data,
 unauthorized access, rejected scope expansion, partial-page failure, exact
 primary-calendar HTTP requests, Keychain isolation, source provenance,
 presentation budgets, transient raw payloads, and absence of mutation methods.
-Todoist tests additionally cover exact scope and filter enforcement, current-
-user confirmation, refresh rotation, revocation and disconnection, task and
-context pagination, local selection, minimized persistence, independent
+Todoist tests additionally cover exact scope and endpoint enforcement,
+current-user confirmation, refresh rotation, revocation and disconnection,
+complete task and context pagination, duplicate-ID handling, priority
+semantics, independent selection attribution, snapshot reconciliation,
+candidate-versus-display accounting, minimized persistence, independent
 failures, non-workday suppression, and no task-system mutation.
 
 ## Current limitations and stop condition
@@ -205,6 +221,6 @@ failures, non-workday suppression, and no task-system mutation.
   briefing sections are not implemented.
 - Daily Briefing v1 has not been accepted for operational use.
 
-The bounded trials are complete. Do not repeat live Calendar or Todoist
-retrieval, refresh authorization, broaden either boundary, or begin Jira or
-another live connector without new explicit approval.
+The bounded trials and validation are complete. Do not repeat live Calendar or
+Todoist retrieval, refresh authorization, broaden either boundary, or begin
+Jira or another live connector without new explicit approval.

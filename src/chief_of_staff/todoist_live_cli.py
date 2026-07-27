@@ -6,8 +6,9 @@ import argparse
 import json
 import sys
 from dataclasses import asdict
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
+from typing import cast
 
 from chief_of_staff.auth import (
     KeychainSecretReference,
@@ -22,6 +23,7 @@ from chief_of_staff.connectors import (
     StoredTodoistAuthorizationProvider,
     TodoistConnector,
     TodoistHttpTransport,
+    verify_todoist_priority_semantics,
 )
 from chief_of_staff.live_trial import LiveTodoistTrialRunner
 from chief_of_staff.persistence import Database, StateStore
@@ -54,6 +56,7 @@ def main(arguments: list[str] | None = None) -> int:
     disconnect_parser = subparsers.add_parser("disconnect")
     disconnect_parser.add_argument("--without-revocation", action="store_true")
     subparsers.add_parser("trial")
+    subparsers.add_parser("validate-workday")
 
     parsed = parser.parse_args(arguments)
     LOCAL_ROOT.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -135,9 +138,20 @@ def main(arguments: list[str] | None = None) -> int:
             )
             return 0
 
-        if parsed.command == "trial":
+        if parsed.command in {"trial", "validate-workday"}:
             calendar = _calendar_connector(state_store, keychain)
             todoist = _todoist_connector(state_store, keychain, oauth)
+            priority_probe = None
+            if parsed.command == "validate-workday":
+                authorization = (
+                    todoist.authorization_provider.get_todoist_authorization(
+                        todoist.account_reference
+                    )
+                )
+                priority_probe = verify_todoist_priority_semantics(
+                    cast(TodoistHttpTransport, todoist.transport),
+                    authorization,
+                )
             report = LiveTodoistTrialRunner(
                 state_store=state_store,
                 repository_root=REPOSITORY_ROOT,
@@ -145,9 +159,21 @@ def main(arguments: list[str] | None = None) -> int:
                 calendar_connector=calendar,
                 todoist_connector=todoist,
                 output_directory=BRIEFING_DIRECTORY,
+                additional_briefing_dates=(
+                    (date(2026, 7, 27),) if parsed.command == "validate-workday" else ()
+                ),
+                briefing_date_override=(
+                    date(2026, 7, 26) if parsed.command == "validate-workday" else None
+                ),
             ).run()
+            priority_payload: dict[str, object] = {}
+            if priority_probe is not None:
+                priority_payload["priority_probe"] = asdict(priority_probe)
+                priority_payload["priority_mapping"] = priority_probe.mapping
             _print_json(
-                asdict(report) | {"pagination_occurred": report.pagination_occurred}
+                asdict(report)
+                | priority_payload
+                | {"pagination_occurred": report.pagination_occurred}
             )
             return 0
     raise RuntimeError("unsupported Todoist live command")
@@ -271,7 +297,7 @@ def _print_json(payload: dict[str, object]) -> None:
 
 
 def _json_default(value: object) -> str:
-    if isinstance(value, datetime):
+    if isinstance(value, date | datetime):
         return value.isoformat()
     if isinstance(value, Path):
         return str(value)

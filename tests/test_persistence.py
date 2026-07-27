@@ -260,6 +260,69 @@ def test_task_cleanup_removes_stale_records_but_preserves_correction_evidence(
         assert store.inspect_state().normalized_source_tasks == 2
 
 
+def test_task_snapshot_reconciliation_reports_identity_funnel_and_dependencies(
+    tmp_path: Path,
+) -> None:
+    with Database.open(tmp_path / "todoist-reconcile.sqlite3") as database:
+        store = StateStore(database)
+        store.add_connector_run(_connector_run())
+        store.add_briefing_run(_briefing_run())
+        for evidence_id, task_id in (
+            ("old-1", "task-1"),
+            ("old-2", "task-2"),
+            ("old-3", "task-3"),
+            ("current-3", "task-3"),
+            ("current-4", "task-4"),
+        ):
+            store.add_source_evidence(
+                _evidence(
+                    evidence_id=evidence_id,
+                    fingerprint=f"fingerprint-{evidence_id}",
+                    source_record_id=task_id,
+                )
+            )
+            store.add_normalized_source_task(
+                NormalizedSourceTask(
+                    evidence_id=evidence_id,
+                    title=f"Synthetic {task_id}",
+                    provider_priority=1,
+                    recurring=False,
+                    all_day=True,
+                    due_at=NOW,
+                )
+            )
+        store.add_conclusion(_conclusion(evidence_id="old-1"))
+
+        result = store.reconcile_source_task_snapshot(
+            source="synthetic_tasks",
+            current_evidence_ids={
+                "task-3": "current-3",
+                "task-4": "current-4",
+            },
+        )
+
+        assert result.previous_unique_count == 3
+        assert result.final_unique_count == 2
+        assert result.newly_selected_count == 1
+        assert result.retained_count == 1
+        assert result.removed_count == 2
+        assert result.superseded_snapshot_count == 2
+        assert result.dependency_preserved_count == 1
+        remaining = database.connection.execute(
+            """
+            SELECT id
+            FROM source_evidence
+            WHERE source = 'synthetic_tasks'
+            ORDER BY id
+            """
+        ).fetchall()
+        assert [str(row["id"]) for row in remaining] == [
+            "current-3",
+            "current-4",
+            "old-1",
+        ]
+
+
 def test_applied_migration_checksum_cannot_change(tmp_path: Path) -> None:
     connection = sqlite3.connect(tmp_path / "checksum.sqlite3", isolation_level=None)
     connection.row_factory = sqlite3.Row

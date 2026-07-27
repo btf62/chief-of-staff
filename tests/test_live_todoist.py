@@ -32,10 +32,11 @@ from chief_of_staff.auth.todoist_oauth import (
 from chief_of_staff.connectors import (
     TODOIST_DATA_READ_SCOPE,
     TodoistAuthorization,
-    TodoistFilterRequest,
     TodoistHttpTransport,
     TodoistPageRequest,
+    TodoistPrioritySemanticConflict,
     TodoistRateLimitError,
+    verify_todoist_priority_semantics,
 )
 from chief_of_staff.persistence import Database, StateStore
 
@@ -447,12 +448,9 @@ def test_todoist_http_transport_reaches_only_approved_get_resources() -> None:
     authorization = _authorization(reference)
 
     user = transport.get_authenticated_user(authorization)
-    task_page = transport.filter_tasks(
+    task_page = transport.list_tasks(
         authorization,
-        TodoistFilterRequest(
-            query="overdue | 15 days | p1 | p2 | assigned to: me",
-            cursor=None,
-        ),
+        TodoistPageRequest(cursor=None),
     )
     project = transport.get_project(authorization, "project-1")
     section = transport.get_section(authorization, "section-1")
@@ -474,7 +472,7 @@ def test_todoist_http_transport_reaches_only_approved_get_resources() -> None:
     ]
     assert paths == [
         "/api/v1/user",
-        "/api/v1/tasks/filter",
+        "/api/v1/tasks",
         "/api/v1/projects/project-1",
         "/api/v1/sections/section-1",
         "/api/v1/labels",
@@ -491,6 +489,90 @@ def test_todoist_http_transport_reaches_only_approved_get_resources() -> None:
         "write",
     ):
         assert not hasattr(transport, operation)
+
+
+def test_priority_probe_verifies_endpoint_mapping_and_stable_pagination() -> None:
+    keychain, _runner = _keychain()
+    reference = KeychainSecretReference(
+        KEYCHAIN_SERVICE,
+        f"{TODOIST_CONNECTOR}:access-token:{ACCOUNT_REFERENCE}",
+    )
+    keychain.store(reference, "synthetic-access-token")
+    opener = _RecordingOpener(
+        [
+            _task_page_bytes("p1-a", priority=4, next_cursor="opaque-next"),
+            _task_page_bytes("p1-b", priority=4),
+            _task_page_bytes("p2-a", priority=3),
+        ]
+    )
+    result = verify_todoist_priority_semantics(
+        TodoistHttpTransport(
+            keychain=keychain,
+            access_token_reference=reference,
+            url_opener=opener,
+        ),
+        _authorization(reference),
+    )
+
+    assert result.mapping == (("P1", 4), ("P2", 3), ("P3", 2), ("P4", 1))
+    assert result.p1_task_count == 2
+    assert result.p2_task_count == 1
+    assert result.page_count == 3
+    queries = [
+        urllib.parse.parse_qs(urllib.parse.urlsplit(request.full_url).query)
+        for request in opener.requests
+    ]
+    assert queries == [
+        {"limit": ["200"], "query": ["p1"]},
+        {"cursor": ["opaque-next"], "limit": ["200"], "query": ["p1"]},
+        {"limit": ["200"], "query": ["p2"]},
+    ]
+
+
+def test_priority_probe_stops_on_semantic_conflict() -> None:
+    keychain, _runner = _keychain()
+    reference = KeychainSecretReference(
+        KEYCHAIN_SERVICE,
+        f"{TODOIST_CONNECTOR}:access-token:{ACCOUNT_REFERENCE}",
+    )
+    keychain.store(reference, "synthetic-access-token")
+    opener = _RecordingOpener(
+        [
+            _task_page_bytes("p1-wrong", priority=1),
+            _task_page_bytes("p2-wrong", priority=2),
+        ]
+    )
+
+    with pytest.raises(TodoistPrioritySemanticConflict):
+        verify_todoist_priority_semantics(
+            TodoistHttpTransport(
+                keychain=keychain,
+                access_token_reference=reference,
+                url_opener=opener,
+            ),
+            _authorization(reference),
+        )
+
+
+def _task_page_bytes(
+    task_id: str,
+    *,
+    priority: int,
+    next_cursor: str | None = None,
+) -> bytes:
+    return json.dumps(
+        {
+            "results": [
+                {
+                    "id": task_id,
+                    "content": "Synthetic task",
+                    "priority": priority,
+                    "labels": [],
+                }
+            ],
+            "next_cursor": next_cursor,
+        }
+    ).encode()
 
 
 @dataclass(slots=True)

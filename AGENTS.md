@@ -6,10 +6,10 @@ This is a documentation-first repository with an accepted Version 1 design
 baseline for Daily Briefing v1. The product requirements, feature
 specification, architecture, and ADR-0001 through ADR-0006 are accepted.
 Milestones 0 through 4 are complete. Milestone 5 has completed the accepted
-Todoist connector and one explicitly approved combined Calendar-and-Todoist
-trial. Work is paused before Jira or another connector. No repeat Todoist or
-Calendar retrieval, authorization refresh, scope change, or broader live
-access is authorized.
+Todoist connector, one combined Calendar-and-Todoist trial, and one explicitly
+approved complete-retrieval and workday-quality validation. Work is paused
+before Jira or another connector. No repeat Todoist or Calendar retrieval,
+authorization refresh, scope change, or broader live access is authorized.
 
 ## Working rules
 
@@ -72,11 +72,12 @@ The Version 1 design-readiness requirements have been met:
    acceptance gates, and exclusions.
 
 Implementation may proceed only when a task explicitly authorizes it. The
-one-trial Google Calendar and Todoist gates have been exercised; do not repeat
-live retrieval, broaden access, refresh authorization, or begin Jira or
-another connector without new explicit approval. Satisfy a milestone's
-acceptance gate before beginning dependent work. Record material new product
-or architecture decisions before implementing them.
+Google Calendar and Todoist gates, including the bounded workday-quality
+validation, have been exercised; do not repeat live retrieval, broaden access,
+refresh authorization, or begin Jira or another connector without new explicit
+approval. Satisfy a milestone's acceptance gate before beginning dependent
+work. Record material new product or architecture decisions before
+implementing them.
 
 ## Validation
 

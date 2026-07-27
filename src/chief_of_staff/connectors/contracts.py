@@ -68,6 +68,7 @@ class SourceCoverage:
     retrieved_count: int | None = None
     selected_count: int | None = None
     persisted_count: int | None = None
+    candidate_count: int | None = None
     displayed_count: int | None = None
     context_resources: tuple[ContextResourceCoverage, ...] = ()
 
