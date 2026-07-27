@@ -7,7 +7,7 @@ identifying priorities, commitments, and useful signals.
 
 ## Status
 
-**Phase:** Milestones 1–4 complete; Milestone 5 Todoist validation complete
+**Phase:** Milestones 1–4 complete; Milestone 5 Jira mocked phase complete
 
 The Python, local-state, deterministic briefing, repository connector, and
 read-only Google Calendar foundations are complete. An explicitly approved,
@@ -15,8 +15,10 @@ bounded primary-calendar trial satisfied
 [Milestone 4](docs/roadmap.md#milestone-4--first-safe-connectors). The accepted
 Todoist connector, its combined Calendar trial, and one explicitly approved
 complete-retrieval and normal-workday quality validation now satisfy the
-Todoist portion of Milestone 5. Live retrieval is stopped before Jira or
-another connector; no repeat or broader access is authorized.
+Todoist portion of Milestone 5. The Jira specification, mocked authorization
+boundary, synthetic connector, and deterministic integration are complete.
+Work is stopped at the Jira live-access gate; no Jira authorization, live Jira
+data, repeat Calendar or Todoist retrieval, or broader access is authorized.
 
 ## Repository map
 

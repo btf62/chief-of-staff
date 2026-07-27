@@ -7,8 +7,10 @@ baseline for Daily Briefing v1. The product requirements, feature
 specification, architecture, and ADR-0001 through ADR-0006 are accepted.
 Milestones 0 through 4 are complete. Milestone 5 has completed the accepted
 Todoist connector, one combined Calendar-and-Todoist trial, and one explicitly
-approved complete-retrieval and workday-quality validation. Work is paused
-before Jira or another connector. No repeat Todoist or Calendar retrieval,
+approved complete-retrieval and workday-quality validation. The accepted Jira
+connector has completed its mocked and synthetic-data phase. Work is paused at
+the Jira live-access gate and before Asana or another connector. No live Jira
+authorization or retrieval, repeat Todoist or Calendar retrieval,
 authorization refresh, scope change, or broader live access is authorized.
 
 ## Working rules
@@ -74,10 +76,10 @@ The Version 1 design-readiness requirements have been met:
 Implementation may proceed only when a task explicitly authorizes it. The
 Google Calendar and Todoist gates, including the bounded workday-quality
 validation, have been exercised; do not repeat live retrieval, broaden access,
-refresh authorization, or begin Jira or another connector without new explicit
-approval. Satisfy a milestone's acceptance gate before beginning dependent
-work. Record material new product or architecture decisions before
-implementing them.
+refresh authorization, cross the Jira live-access gate, or begin Asana or
+another connector without new explicit approval. Satisfy a milestone's
+acceptance gate before beginning dependent work. Record material new product
+or architecture decisions before implementing them.
 
 ## Validation
 

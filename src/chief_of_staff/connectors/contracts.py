@@ -8,7 +8,7 @@ from typing import Protocol, runtime_checkable
 
 from chief_of_staff.domain import CoverageStatus
 
-type FactValue = str | int | bool | None
+type FactValue = str | int | bool | tuple[str, ...] | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +41,7 @@ class SourceItem:
     retrieved_at: datetime
     display_url: str | None = None
     freshness_at: datetime | None = None
+    connector_run_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

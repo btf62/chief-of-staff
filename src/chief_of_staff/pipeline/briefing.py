@@ -357,9 +357,15 @@ def build_reduced_plan(
             )
         )
 
-    preparation = tuple(
+    calendar_preparation = tuple(
         record for record in todays_calendar if record.preparation is not None
     )
+    task_preparation = tuple(
+        record
+        for record in prioritized_tasks
+        if record.preparation is not None and record.calendar_dependency
+    )
+    preparation = (*calendar_preparation, *task_preparation)
     if preparation:
         sections.append(
             BriefingSection(
@@ -367,6 +373,22 @@ def build_reduced_plan(
                 items=tuple(_preparation_item(record) for record in preparation),
             )
         )
+
+    commitments_at_risk = tuple(
+        record
+        for record in prioritized_tasks
+        if record.id not in used_record_ids
+        and record.provenance.source == "jira"
+        and record.source_owned_risk
+    )[:LIMITED_SECTION_ITEMS]
+    if commitments_at_risk:
+        sections.append(
+            BriefingSection(
+                name=BriefingSectionName.COMMITMENTS_AT_RISK,
+                items=tuple(_jira_risk_item(record) for record in commitments_at_risk),
+            )
+        )
+        used_record_ids.update(record.id for record in commitments_at_risk)
 
     important_tasks = tuple(
         record
@@ -652,11 +674,22 @@ def _coverage_summary(
             if report.displayed_count is None
             else f"{report.displayed_count} displayed"
         )
+        pagination = (
+            None
+            if report.page_count is None
+            else (
+                f"{report.page_count} pages (pagination occurred)"
+                if report.page_count > 1
+                else ("1 page (no pagination)" if report.page_count == 1 else "0 pages")
+            )
+        )
         detail = (
             f"`{report.source}`: {report.status.value}; "
             f"{retrieved} retrieved; {selected} selected; "
             f"{persisted}; {candidates}; {displayed}"
         )
+        if pagination is not None:
+            detail += f"; {pagination}"
         if report.context_resources:
             resources = ", ".join(
                 (
@@ -1113,6 +1146,8 @@ def _up_next_detail(record: NormalizedRecord, today: date) -> str:
 
 def _is_important_task_candidate(record: NormalizedRecord, today: date) -> bool:
     due_date = None if record.due_at is None else record.due_at.date()
+    if record.provenance.source == "jira" and due_date is not None and due_date > today:
+        return False
     return (
         due_date is None
         or due_date <= today
@@ -1153,6 +1188,8 @@ def _task_is_daily_candidate(
             context.briefing_date,
             planning_confidence,
         )
+    if record.provenance.source == "jira":
+        return _jira_task_is_daily_candidate(record, context.briefing_date)
     return (
         record.explicit_commitment
         or record.preparation is not None
@@ -1162,6 +1199,24 @@ def _task_is_daily_candidate(
             and due_date <= context.briefing_date + timedelta(days=7)
         )
     )
+
+
+def _jira_task_is_daily_candidate(
+    record: NormalizedRecord,
+    today: date,
+) -> bool:
+    """Require current evidence beyond assignment, age, or Jira priority."""
+
+    due_date = None if record.due_at is None else record.due_at.date()
+    if (
+        record.explicit_commitment
+        or record.preparation is not None
+        or record.calendar_dependency
+        or record.explicit_priority_link
+        or record.source_owned_risk
+    ):
+        return True
+    return bool(due_date is not None and today <= due_date <= today + timedelta(days=7))
 
 
 def _todoist_task_is_daily_candidate(
@@ -1310,6 +1365,10 @@ def _task_candidate_exclusion_reason(
         ):
             return "Todoist P1/P2 without current evidence under degraded ranking"
         return "outside seven-day daily horizon without current evidence"
+    if record.provenance.source == "jira":
+        if due_date is not None and due_date < context.briefing_date:
+            return "overdue Jira issue without another current signal"
+        return "Jira assignment or priority without current briefing evidence"
     return "outside seven-day daily horizon without another priority signal"
 
 
@@ -1676,6 +1735,22 @@ def _preparation_item(record: NormalizedRecord) -> BriefingItem:
     )
 
 
+def _jira_risk_item(record: NormalizedRecord) -> BriefingItem:
+    dependencies = (
+        "Dependency: " + ", ".join(record.dependency_references) + ". "
+        if record.dependency_references
+        else ""
+    )
+    return _record_item(
+        record,
+        key_prefix="jira-risk",
+        detail=(
+            f"{dependencies}Jira reports this work as blocked or endangered. "
+            "This is Jira-owned work status, not a human-promise claim."
+        ),
+    )
+
+
 def _looking_ahead_item(record: NormalizedRecord) -> BriefingItem:
     when = record.start_at or record.due_at
     detail = "Approaching work."
@@ -1717,7 +1792,7 @@ def _display_title(record: NormalizedRecord) -> str:
         return record.title
     cleaned = CONTROL_TOKEN.sub("", record.title)
     cleaned = re.sub(r"\s{2,}", " ", cleaned).strip(" \t-:;")
-    return cleaned or "Todoist task"
+    return cleaned or f"{record.provenance.source} task"
 
 
 def _brief_due_phrase(record: NormalizedRecord, today: date) -> str:

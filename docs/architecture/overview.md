@@ -212,7 +212,7 @@ Phase 1 requires connectors for:
 
 Connector-specific retrieval rules, permissions, freshness semantics, bounded
 cache exceptions, and failure behavior belong in the
-[planned connector specifications](connectors/README.md#planned-specifications).
+[connector specifications](connectors/README.md).
 This overview defines only their common boundary.
 
 ## 5. Internal Information Model

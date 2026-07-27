@@ -19,12 +19,22 @@ class RecordCluster:
 
 
 @dataclass(frozen=True, slots=True)
+class CrossSourceAssociation:
+    """Non-destructive relationship supported by an explicit source reference."""
+
+    member_ids: tuple[str, str]
+    basis: str
+    conflicting_fields: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class DeduplicationResult:
     """Records plus explicit duplicate and conflict decisions."""
 
     records: tuple[NormalizedRecord, ...]
     exact_duplicates: tuple[RecordCluster, ...]
     conflicts: tuple[RecordCluster, ...]
+    associations: tuple[CrossSourceAssociation, ...]
 
 
 def deduplicate_records(
@@ -60,10 +70,12 @@ def deduplicate_records(
             conflicts.append(cluster)
 
     retained.sort(key=lambda record: record.id)
+    retained_records = tuple(retained)
     return DeduplicationResult(
-        records=tuple(retained),
+        records=retained_records,
         exact_duplicates=tuple(duplicates),
         conflicts=tuple(conflicts),
+        associations=_cross_source_associations(retained_records),
     )
 
 
@@ -80,6 +92,26 @@ def _semantic_signature(record: NormalizedRecord) -> tuple[object, ...]:
         record.start_at,
         record.end_at,
         record.due_at,
+        record.provider_priority,
+        record.explicit_priority_link,
+        record.calendar_dependency,
+        record.effort_minutes,
+        record.source_priority,
+        record.project_reference,
+        record.issue_type,
+        record.status_category,
+        record.assignee_reference,
+        record.reporter_reference,
+        record.parent_reference,
+        record.labels,
+        record.dependency_references,
+        record.dependency_relationships,
+        record.dependency_display_urls,
+        record.related_source_ids,
+        record.blocked,
+        record.source_owned_risk,
+        record.source_created_at,
+        record.source_updated_at,
     )
 
 
@@ -87,4 +119,42 @@ def _freshness_key(record: NormalizedRecord) -> tuple[datetime, datetime]:
     return (
         record.provenance.freshness_at or record.provenance.retrieved_at,
         record.provenance.retrieved_at,
+    )
+
+
+def _cross_source_associations(
+    records: tuple[NormalizedRecord, ...],
+) -> tuple[CrossSourceAssociation, ...]:
+    by_id = {record.id: record for record in records}
+    associations: dict[tuple[str, str], CrossSourceAssociation] = {}
+    for record in records:
+        for related_id in record.related_source_ids:
+            related = by_id.get(related_id)
+            if related is None or related.provenance.source == record.provenance.source:
+                continue
+            first_id, second_id = sorted((record.id, related.id))
+            pair = (first_id, second_id)
+            associations[pair] = CrossSourceAssociation(
+                member_ids=pair,
+                basis="explicit cross-source reference",
+                conflicting_fields=_conflicting_fields(record, related),
+            )
+    return tuple(associations[key] for key in sorted(associations))
+
+
+def _conflicting_fields(
+    first: NormalizedRecord,
+    second: NormalizedRecord,
+) -> tuple[str, ...]:
+    comparisons = (
+        ("title", first.title, second.title),
+        ("status", first.status, second.status),
+        ("due_at", first.due_at, second.due_at),
+    )
+    return tuple(
+        field
+        for field, first_value, second_value in comparisons
+        if first_value is not None
+        and second_value is not None
+        and first_value != second_value
     )

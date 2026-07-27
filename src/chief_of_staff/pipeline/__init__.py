@@ -24,6 +24,7 @@ from chief_of_staff.pipeline.context import (
     resolve_context,
 )
 from chief_of_staff.pipeline.deduplication import (
+    CrossSourceAssociation,
     DeduplicationResult,
     RecordCluster,
     deduplicate_records,
@@ -47,6 +48,7 @@ __all__ = (
     "BriefingSectionName",
     "BriefingValidationError",
     "CalendarEventClassification",
+    "CrossSourceAssociation",
     "DeduplicationResult",
     "DeterministicBriefingPipeline",
     "InvocationContext",

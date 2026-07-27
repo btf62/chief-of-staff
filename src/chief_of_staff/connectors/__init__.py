@@ -26,6 +26,26 @@ from chief_of_staff.connectors.google_calendar_live import (
     GoogleCalendarHttpTransport,
     StoredGoogleCalendarAuthorizationProvider,
 )
+from chief_of_staff.connectors.jira import (
+    JIRA_ENHANCED_SEARCH_OPERATION,
+    JIRA_INITIAL_FIELDS,
+    JIRA_PAGE_LIMIT,
+    JiraAuthenticationError,
+    JiraAuthorization,
+    JiraAuthorizationProvider,
+    JiraAuthorizationUnavailable,
+    JiraConnector,
+    JiraIssue,
+    JiraIssueLink,
+    JiraIssuePage,
+    JiraPermissionError,
+    JiraQueryBoundary,
+    JiraRateLimitError,
+    JiraRetrievalAudit,
+    JiraRetrievalError,
+    JiraSearchRequest,
+    JiraTransport,
+)
 from chief_of_staff.connectors.repository import RepositoryContextConnector
 from chief_of_staff.connectors.static import StaticConnector
 from chief_of_staff.connectors.todoist import (
@@ -65,6 +85,9 @@ from chief_of_staff.connectors.todoist_live import (
 
 __all__ = (
     "GOOGLE_CALENDAR_EVENTS_OWNED_READONLY_SCOPE",
+    "JIRA_ENHANCED_SEARCH_OPERATION",
+    "JIRA_INITIAL_FIELDS",
+    "JIRA_PAGE_LIMIT",
     "TODOIST_ACTIVE_TASK_ENDPOINT",
     "TODOIST_DATA_READ_SCOPE",
     "TODOIST_FILTER_QUERY",
@@ -82,6 +105,21 @@ __all__ = (
     "GoogleCalendarListRequest",
     "GoogleCalendarPage",
     "GoogleCalendarTransport",
+    "JiraAuthenticationError",
+    "JiraAuthorization",
+    "JiraAuthorizationProvider",
+    "JiraAuthorizationUnavailable",
+    "JiraConnector",
+    "JiraIssue",
+    "JiraIssueLink",
+    "JiraIssuePage",
+    "JiraPermissionError",
+    "JiraQueryBoundary",
+    "JiraRateLimitError",
+    "JiraRetrievalAudit",
+    "JiraRetrievalError",
+    "JiraSearchRequest",
+    "JiraTransport",
     "ReadOnlyConnector",
     "RepositoryContextConnector",
     "RetrievalWindow",

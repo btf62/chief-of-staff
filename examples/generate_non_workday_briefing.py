@@ -6,6 +6,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 
 from chief_of_staff.connectors import SourceItem, StaticConnector
+from chief_of_staff.connectors.contracts import FactValue
 from chief_of_staff.domain import CoverageStatus
 from chief_of_staff.pipeline import DeterministicBriefingPipeline, resolve_context
 
@@ -21,9 +22,9 @@ def _item(
     *,
     item_type: str,
     title: str,
-    **facts: str | int | bool | None,
+    **facts: FactValue,
 ) -> SourceItem:
-    item_facts: dict[str, str | int | bool | None] = {
+    item_facts: dict[str, FactValue] = {
         "title": title,
         **facts,
     }

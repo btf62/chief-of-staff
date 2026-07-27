@@ -13,6 +13,7 @@ from chief_of_staff.connectors.contracts import (
     ConnectorRequest,
     ConnectorResult,
     ContextResourceCoverage,
+    FactValue,
     SourceCoverage,
     SourceItem,
 )
@@ -902,7 +903,7 @@ def _task_to_source_item(
         )
         if value is not None
     ]
-    facts: dict[str, str | int | bool | None] = {
+    facts: dict[str, FactValue] = {
         "title": content,
         "summary": "; ".join(context_parts) or None,
         "status": "open",

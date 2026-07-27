@@ -15,6 +15,7 @@ from chief_of_staff.connectors import (
     SourceItem,
     StaticConnector,
 )
+from chief_of_staff.connectors.contracts import FactValue
 from chief_of_staff.domain import CoverageStatus
 from chief_of_staff.pipeline import (
     BriefingItem,
@@ -48,9 +49,9 @@ def _item(
     title: str = "Prepare the planning outline",
     retrieved_at: datetime = NOW,
     freshness_at: datetime | None = None,
-    **facts: str | int | bool | None,
+    **facts: FactValue,
 ) -> SourceItem:
-    item_facts: dict[str, str | int | bool | None] = {
+    item_facts: dict[str, FactValue] = {
         "title": title,
         **facts,
     }

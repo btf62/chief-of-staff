@@ -27,6 +27,7 @@ class Provenance:
     display_url: str | None
     retrieved_at: datetime
     freshness_at: datetime | None
+    connector_run_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +52,22 @@ class NormalizedRecord:
     explicit_priority_link: bool = False
     calendar_dependency: bool = False
     effort_minutes: int | None = None
+    source_priority: str | None = None
+    project_reference: str | None = None
+    issue_type: str | None = None
+    status_category: str | None = None
+    assignee_reference: str | None = None
+    reporter_reference: str | None = None
+    parent_reference: str | None = None
+    labels: tuple[str, ...] = ()
+    dependency_references: tuple[str, ...] = ()
+    dependency_relationships: tuple[str, ...] = ()
+    dependency_display_urls: tuple[str, ...] = ()
+    related_source_ids: tuple[str, ...] = ()
+    blocked: bool = False
+    source_owned_risk: bool = False
+    source_created_at: datetime | None = None
+    source_updated_at: datetime | None = None
 
 
 def normalize_item(
@@ -94,6 +111,7 @@ def normalize_item(
             freshness_at=(
                 None if item.freshness_at is None else _aware(item.freshness_at, zone)
             ),
+            connector_run_id=item.connector_run_id,
         ),
         provider_priority=_optional_integer(item, "provider_priority"),
         explicit_priority_link=_boolean(
@@ -107,6 +125,22 @@ def normalize_item(
             default=False,
         ),
         effort_minutes=_optional_positive_integer(item, "effort_minutes"),
+        source_priority=_optional_string(item, "source_priority"),
+        project_reference=_optional_string(item, "project_reference"),
+        issue_type=_optional_string(item, "issue_type"),
+        status_category=_optional_string(item, "status_category"),
+        assignee_reference=_optional_string(item, "assignee_reference"),
+        reporter_reference=_optional_string(item, "reporter_reference"),
+        parent_reference=_optional_string(item, "parent_reference"),
+        labels=_string_tuple(item, "labels"),
+        dependency_references=_string_tuple(item, "dependency_references"),
+        dependency_relationships=_string_tuple(item, "dependency_relationships"),
+        dependency_display_urls=_string_tuple(item, "dependency_display_urls"),
+        related_source_ids=_string_tuple(item, "related_source_ids"),
+        blocked=_boolean(item, "blocked", default=False),
+        source_owned_risk=_boolean(item, "source_owned_risk", default=False),
+        source_created_at=_optional_datetime(item, "source_created_at", zone),
+        source_updated_at=_optional_datetime(item, "source_updated_at", zone),
     )
 
 
@@ -157,6 +191,15 @@ def _boolean(item: SourceItem, key: str, *, default: bool) -> bool:
     if not isinstance(value, bool):
         raise ValueError(f"{key} must be a boolean")
     return value
+
+
+def _string_tuple(item: SourceItem, key: str) -> tuple[str, ...]:
+    value = item.facts.get(key, ())
+    if not isinstance(value, tuple) or not all(
+        isinstance(element, str) and element.strip() for element in value
+    ):
+        raise ValueError(f"{key} must contain non-empty strings")
+    return tuple(element.strip() for element in value)
 
 
 def _optional_datetime(

@@ -75,6 +75,10 @@ No strict versioning scheme is promised before a distributable product exists.
 - A combined deterministic live-trial runner for approved repository context,
   primary Calendar, and Todoist, with private output, transient raw payloads,
   independent coverage, and no hosted inference.
+- An accepted Jira connector specification, mocked OAuth state boundary,
+  read-only-only synthetic transport, typed issue normalization, conservative
+  cross-source association, coverage funnel, and deterministic briefing
+  integration stopped before live access.
 
 ### Changed
 
@@ -95,3 +99,5 @@ No strict versioning scheme is promised before a distributable product exists.
   and stopped before Milestone 5 or any additional live connector.
 - Completed the explicitly approved bounded Todoist trial and stopped before
   Jira, another connector, or repeat Calendar or Todoist access.
+- Completed Jira's mocked and synthetic-data phase and stopped at its mandatory
+  live-access approval gate.

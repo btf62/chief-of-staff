@@ -36,13 +36,13 @@ decisions for each future connector specification.
 | Approved repository context | [Repository context](repository-context.md) | Accepted and implemented |
 | Google Calendar | [Google Calendar](google-calendar.md) | Accepted; bounded live trial complete and stopped |
 | Todoist | [Todoist](todoist.md) | Accepted; bounded live trial and workday validation complete and stopped |
+| Jira | [Jira](jira.md) | Accepted; mocked and synthetic phase complete, stopped at live-access gate |
 
 ## Planned specifications
 
 | Source | Planned specification |
 | --- | --- |
 | Gmail | `gmail.md` |
-| Jira | `jira.md` |
 | Asana | `asana.md` |
 | Approved Google Drive content | `google-drive.md` |
 
