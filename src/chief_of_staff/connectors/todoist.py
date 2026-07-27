@@ -390,6 +390,7 @@ class TodoistConnector:
                         projects=projects,
                         sections=sections,
                         labels=labels,
+                        relevant_task_ids=self.relevant_task_ids,
                         timezone=request.timezone,
                         retrieved_at=retrieved_at,
                     )
@@ -861,6 +862,7 @@ def _task_to_source_item(
     projects: tuple[TodoistProject, ...],
     sections: tuple[TodoistSection, ...],
     labels: tuple[TodoistLabel, ...],
+    relevant_task_ids: frozenset[str],
     timezone: str,
     retrieved_at: datetime,
 ) -> SourceItem:
@@ -906,6 +908,7 @@ def _task_to_source_item(
         "status": "open",
         "importance": {1: 1, 2: 2, 3: 4, 4: 5}[task.priority],
         "provider_priority": task.priority,
+        "explicit_priority_link": task.id in relevant_task_ids,
         "explicit_commitment": False,
         "all_day": all_day,
         "due_at": None if due_at is None else due_at.isoformat(),

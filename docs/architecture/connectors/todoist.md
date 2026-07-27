@@ -1,7 +1,7 @@
 # Todoist Connector
 
 - **Status:** Accepted
-- **Version:** 4
+- **Version:** 5
 - **Owner:** Brad
 - **Last updated:** 2026-07-27
 
@@ -306,10 +306,54 @@ context.
 
 The selected and persisted pool is deliberately broader than one day's
 presentation. A deterministic daily-candidate gate narrows that pool for the
-briefing date, and section budgets narrow it again for display. On ordinary
-workdays, due or overdue tasks, tasks due within seven days, P1/P2 tasks,
-explicit commitments, and preparation items may be daily candidates. This
+briefing date, and section budgets narrow it again for display. This
 presentation gate never changes source selection or persistence.
+
+### Todoist planning confidence
+
+The connector retains a simple, explainable relative-ranking confidence
+assessment. It calculates:
+
+- Complete active-task count.
+- Overdue count and percentage.
+- P1/P2 count and percentage.
+- Count that is both overdue and P1/P2.
+
+Relative-ranking confidence is `degraded` when either the overdue percentage
+or the P1/P2 percentage exceeds 25 percent. These two module-level thresholds
+are configurable implementation constants and must remain documented and
+covered by tests. They do not form a composite score and do not characterize
+Brad's task-management practice as healthy, unhealthy, or failing.
+
+When confidence is degraded, an ordinary-workday task becomes a daily
+candidate only through stronger current evidence:
+
+- Due today or within the next seven days.
+- Direct dependency on today's Calendar.
+- Explicit linkage to an approved active priority.
+- Explicit commitment or preparation evidence.
+- A compatible multi-signal combination, such as P1/P2 plus a reliable source
+  update on the briefing date or preceding calendar day.
+
+An overdue task requires another current signal. Overdue status alone is
+insufficient. P1 or P2 alone is also insufficient while confidence is
+degraded. A source update is not inferred when the endpoint omits its
+timestamp, and the one-day recency window is an intentionally narrow
+date-based signal rather than a general task-quality judgment.
+
+When confidence is not degraded, Todoist P1/P2 may remain a daily-candidate
+signal, but section budgets and current-date rules still prevent arbitrary
+backlog filling.
+
+Up Next admits ordinary future tasks only through the fourteen-day horizon. A
+more distant task requires explicit preparation or a direct Calendar
+dependency that makes work necessary now. Looking Ahead prioritizes Calendar
+and explicit preparation rather than serving as overflow for distant tasks.
+
+Visible titles remove Todoist label-style control tokens without changing the
+persisted source title. All-day due values render as dates, and actual times
+appear only for source due datetimes. Priority explanations use Todoist's P1/P2
+terminology rather than the application's internal importance conversion.
 
 The connector does not claim that a person is waiting, convert a due date into
 an external promise, or perform task mutations. On configured non-workdays,
@@ -335,6 +379,11 @@ Synthetic contract, integration, security, and lifecycle tests demonstrate:
 - Conservative project, section, and label resolution.
 - Minimal source persistence and cascade deletion.
 - Provider priority as a source signal.
+- Transparent Todoist saturation thresholds and aggregate coverage facts.
+- Degraded-confidence exclusion of overdue-only and priority-only tasks.
+- Strong current and multi-signal daily candidacy.
+- Fourteen-day Up Next limits and explicit preparation exceptions.
+- Clean display titles, all-day due dates, and provider priority terminology.
 - No People Waiting claim from a task alone.
 - Duplicate-presentation limits, provenance, section order, and word budgets.
 - Independent repository, Calendar, and Todoist coverage disclosure.

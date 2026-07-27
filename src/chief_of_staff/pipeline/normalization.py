@@ -47,6 +47,9 @@ class NormalizedRecord:
     end_at: datetime | None
     due_at: datetime | None
     provenance: Provenance
+    provider_priority: int | None = None
+    explicit_priority_link: bool = False
+    calendar_dependency: bool = False
 
 
 def normalize_item(
@@ -91,6 +94,17 @@ def normalize_item(
                 None if item.freshness_at is None else _aware(item.freshness_at, zone)
             ),
         ),
+        provider_priority=_optional_integer(item, "provider_priority"),
+        explicit_priority_link=_boolean(
+            item,
+            "explicit_priority_link",
+            default=False,
+        ),
+        calendar_dependency=_boolean(
+            item,
+            "calendar_dependency",
+            default=False,
+        ),
     )
 
 
@@ -115,6 +129,17 @@ def _integer(item: SourceItem, key: str, *, default: int) -> int:
     value = item.facts.get(key, default)
     if isinstance(value, bool) or not isinstance(value, int):
         raise ValueError(f"{key} must be an integer")
+    return value
+
+
+def _optional_integer(item: SourceItem, key: str) -> int | None:
+    value = item.facts.get(key)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{key} must be an integer")
+    if key == "provider_priority" and value not in {1, 2, 3, 4}:
+        raise ValueError("provider_priority must be between 1 and 4")
     return value
 
 

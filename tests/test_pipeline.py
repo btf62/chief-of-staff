@@ -47,6 +47,7 @@ def _item(
     item_type: str = "task",
     title: str = "Prepare the planning outline",
     retrieved_at: datetime = NOW,
+    freshness_at: datetime | None = None,
     **facts: str | int | bool | None,
 ) -> SourceItem:
     item_facts: dict[str, str | int | bool | None] = {
@@ -60,7 +61,7 @@ def _item(
         facts=item_facts,
         display_url=f"https://example.invalid/source/{item_id}",
         retrieved_at=retrieved_at,
-        freshness_at=retrieved_at,
+        freshness_at=retrieved_at if freshness_at is None else freshness_at,
     )
 
 
@@ -302,7 +303,7 @@ def test_reduced_pipeline_is_deterministic_traceable_and_within_budget() -> None
     assert first.rendered == second.rendered
     assert first.rendered.word_count <= 800
     assert "`synthetic_tasks`: partial" in first.rendered.text
-    assert "source importance 5/5" in first.rendered.text
+    assert "source importance" not in first.rendered.text
     assert "[synthetic_tasks/task-1]" in first.rendered.text
     names = tuple(section.name for section in first.plan.sections)
     assert names == (
@@ -311,6 +312,7 @@ def test_reduced_pipeline_is_deterministic_traceable_and_within_budget() -> None
         BriefingSectionName.UP_NEXT,
         BriefingSectionName.TODAYS_CALENDAR,
         BriefingSectionName.PREPARATION_NEEDED,
+        BriefingSectionName.RECOMMENDED_FOCUS_BLOCK,
         BriefingSectionName.LOOKING_AHEAD,
         BriefingSectionName.SOURCE_COVERAGE,
     )
@@ -718,7 +720,8 @@ def test_obvious_schedule_implications_are_synthesized_deterministically() -> No
     note = first.plan.sections[0].summary or ""
 
     assert first.rendered == second.rendered
-    assert "4 fixed commitments from 9:00 AM to 12:00 PM" in note
+    assert "Calendar anchors the day across" in note
+    assert "2 hours 50 minutes scheduled" in note
     assert "1 schedule overlap requires attention" in note
     assert "1 back-to-back transition leaves no calendar margin" in note
     assert "1 tight transition has 15 minutes or less" in note
@@ -1052,7 +1055,7 @@ def test_todoist_facts_remain_source_signals_without_people_waiting_or_duplicate
             "task-1",
             title="Synthetic priority task",
             importance=5,
-            provider_priority=1,
+            provider_priority=4,
             explicit_commitment=False,
             status="open",
             due_at="2026-07-27T00:00:00-04:00",
@@ -1062,7 +1065,7 @@ def test_todoist_facts_remain_source_signals_without_people_waiting_or_duplicate
             "task-2",
             title="Synthetic approaching task",
             importance=1,
-            provider_priority=4,
+            provider_priority=1,
             explicit_commitment=False,
             status="open",
             due_at="2026-07-30T00:00:00-04:00",
@@ -1088,7 +1091,7 @@ def test_todoist_facts_remain_source_signals_without_people_waiting_or_duplicate
     assert all(
         source.source == "todoist" for item in visible_items for source in item.sources
     )
-    assert "source importance 5/5" in result.rendered.text
+    assert "source importance" not in result.rendered.text
     assert "People Waiting on Brad" not in result.rendered.text
     assert result.rendered.word_count <= 800
 
@@ -1130,7 +1133,7 @@ def test_workday_task_funnel_separates_selection_candidates_and_display() -> Non
     assert audit.available_count == 9
     assert audit.candidate_count == 8
     assert audit.excluded_reasons == (
-        ("outside seven-day daily horizon without another priority signal", 1),
+        ("outside seven-day daily horizon without current evidence", 1),
     )
     coverage = result.plan.coverage[0]
     assert coverage.selected_count == 9
@@ -1173,13 +1176,386 @@ def test_due_today_precedes_overdue_backlog_in_deterministic_order() -> None:
         if section.name is BriefingSectionName.TODAYS_OUTCOMES
     )
     assert len(outcomes.items) == 1
-    assert outcomes.items[0].headline == "Complete Synthetic current-day task"
+    assert outcomes.items[0].headline == "Synthetic current-day task"
     important = next(
         section
         for section in result.plan.sections
         if section.name is BriefingSectionName.IMPORTANT_TASKS
     )
     assert important.items[0].headline == "Synthetic overdue backlog"
+
+
+def test_todoist_planning_confidence_uses_transparent_saturation_facts() -> None:
+    stale = datetime(2026, 6, 1, 12, 0, tzinfo=UTC)
+    todoist = _connector(
+        "todoist",
+        _item(
+            "overdue-p1",
+            provider_priority=4,
+            due_at="2026-07-10T00:00:00-04:00",
+            all_day=True,
+            freshness_at=stale,
+        ),
+        _item(
+            "overdue-p2",
+            provider_priority=3,
+            due_at="2026-07-11T00:00:00-04:00",
+            all_day=True,
+            freshness_at=stale,
+        ),
+        _item(
+            "overdue-normal",
+            provider_priority=1,
+            due_at="2026-07-12T00:00:00-04:00",
+            all_day=True,
+            freshness_at=stale,
+        ),
+        _item(
+            "undated-p1",
+            provider_priority=4,
+            freshness_at=stale,
+        ),
+        _item(
+            "due-today",
+            provider_priority=1,
+            due_at="2026-07-27T00:00:00-04:00",
+            all_day=True,
+        ),
+        *(
+            _item(f"background-{index}", provider_priority=1, freshness_at=stale)
+            for index in range(3)
+        ),
+    )
+    context = resolve_context(
+        run_id="todoist-confidence",
+        briefing_date=BRIEFING_DATE,
+        timezone="America/New_York",
+    )
+
+    result = DeterministicBriefingPipeline().run(context, (todoist,))
+
+    confidence = result.plan.task_planning_confidences[0]
+    assert confidence.active_count == 8
+    assert confidence.overdue_count == 3
+    assert confidence.high_priority_count == 3
+    assert confidence.overdue_high_priority_overlap_count == 2
+    assert confidence.overdue_ratio == pytest.approx(0.375)
+    assert confidence.high_priority_ratio == pytest.approx(0.375)
+    assert confidence.relative_ranking_degraded
+    assert result.plan.task_candidate_audits[0].candidate_count == 1
+    assert "relative-ranking confidence degraded" in result.rendered.text
+    assert "3 overdue [37.5%]" in result.rendered.text
+    assert "3 P1/P2 [37.5%]" in result.rendered.text
+    assert "relative ordering is being treated cautiously" in result.rendered.text
+
+
+def test_degraded_todoist_excludes_stale_overdue_and_priority_only_tasks() -> None:
+    stale = datetime(2026, 6, 1, 12, 0, tzinfo=UTC)
+    todoist = _connector(
+        "todoist",
+        _item(
+            "overdue-only",
+            provider_priority=1,
+            due_at="2026-07-10T00:00:00-04:00",
+            all_day=True,
+            freshness_at=stale,
+        ),
+        _item(
+            "priority-only",
+            provider_priority=4,
+            freshness_at=stale,
+        ),
+    )
+    context = resolve_context(
+        run_id="todoist-degraded-exclusions",
+        briefing_date=BRIEFING_DATE,
+        timezone="America/New_York",
+    )
+
+    result = DeterministicBriefingPipeline().run(context, (todoist,))
+
+    audit = result.plan.task_candidate_audits[0]
+    assert audit.candidate_count == 0
+    assert audit.excluded_reasons == (
+        ("Todoist P1/P2 without current evidence under degraded ranking", 1),
+        ("overdue without another current signal", 1),
+    )
+    assert "overdue-only" not in result.rendered.text
+    assert "priority-only" not in result.rendered.text
+
+
+def test_recent_priority_is_a_strong_multi_signal_candidate() -> None:
+    todoist = _connector(
+        "todoist",
+        _item(
+            "recent-p1",
+            title="Review the current launch decision",
+            provider_priority=4,
+            status="open",
+        ),
+    )
+    context = resolve_context(
+        run_id="todoist-current-multi-signal",
+        briefing_date=BRIEFING_DATE,
+        timezone="America/New_York",
+    )
+
+    result = DeterministicBriefingPipeline().run(context, (todoist,))
+
+    assert result.plan.task_planning_confidences[0].relative_ranking_degraded
+    assert result.plan.task_candidate_audits[0].candidate_count == 1
+    assert "Review the current launch decision" in result.rendered.text
+    assert "recently updated in the source" in result.rendered.text
+    assert "Todoist P1" in result.rendered.text
+
+
+def test_explicit_current_links_survive_degraded_todoist_confidence() -> None:
+    stale = datetime(2026, 6, 1, 12, 0, tzinfo=UTC)
+    todoist = _connector(
+        "todoist",
+        _item(
+            "stale-overdue",
+            provider_priority=1,
+            due_at="2026-07-10T00:00:00-04:00",
+            all_day=True,
+            freshness_at=stale,
+        ),
+        _item(
+            "calendar-dependent",
+            title="Prepare the Calendar-bound decision",
+            provider_priority=1,
+            calendar_dependency=True,
+            freshness_at=stale,
+        ),
+        _item(
+            "active-priority",
+            title="Advance the approved active priority",
+            provider_priority=1,
+            explicit_priority_link=True,
+            freshness_at=stale,
+        ),
+    )
+    context = resolve_context(
+        run_id="todoist-explicit-current-links",
+        briefing_date=BRIEFING_DATE,
+        timezone="America/New_York",
+    )
+
+    result = DeterministicBriefingPipeline().run(context, (todoist,))
+
+    assert result.plan.task_planning_confidences[0].relative_ranking_degraded
+    assert result.plan.task_candidate_audits[0].candidate_count == 2
+    assert "Prepare the Calendar-bound decision" in result.rendered.text
+    assert "Advance the approved active priority" in result.rendered.text
+    assert "stale-overdue" not in result.rendered.text
+
+
+def test_up_next_excludes_distant_work_without_current_preparation() -> None:
+    todoist = _connector(
+        "todoist",
+        _item(
+            "distant",
+            title="Handle a distant obligation",
+            provider_priority=4,
+            due_at="2026-09-01T00:00:00-04:00",
+            all_day=True,
+        ),
+        _item(
+            "distant-preparation",
+            title="Prepare the distant obligation",
+            provider_priority=4,
+            due_at="2026-09-01T00:00:00-04:00",
+            all_day=True,
+            preparation="Preparation must begin now.",
+        ),
+    )
+    context = resolve_context(
+        run_id="todoist-up-next-horizon",
+        briefing_date=BRIEFING_DATE,
+        timezone="America/New_York",
+    )
+
+    result = DeterministicBriefingPipeline().run(context, (todoist,))
+
+    audit = result.plan.task_candidate_audits[0]
+    assert audit.candidate_count == 2
+    up_next = next(
+        section
+        for section in result.plan.sections
+        if section.name is BriefingSectionName.UP_NEXT
+    )
+    assert tuple(item.headline for item in up_next.items) == (
+        "Prepare the distant obligation",
+    )
+    assert "Preparation is explicitly required now" in up_next.items[0].detail
+    assert "Handle a distant obligation" not in result.rendered.text
+
+
+def test_task_rendering_cleans_control_tokens_and_all_day_due_time() -> None:
+    raw_title = "Draft the launch plan @high_impact"
+    todoist = _connector(
+        "todoist",
+        _item(
+            "clean-title",
+            title=raw_title,
+            provider_priority=4,
+            due_at="2026-07-27T00:00:00-04:00",
+            all_day=True,
+        ),
+    )
+    context = resolve_context(
+        run_id="todoist-clean-rendering",
+        briefing_date=BRIEFING_DATE,
+        timezone="America/New_York",
+    )
+
+    result = DeterministicBriefingPipeline().run(context, (todoist,))
+
+    source_record = result.deduplication.records[0]
+    assert source_record.title == raw_title
+    assert "Draft the launch plan" in result.rendered.text
+    assert "@high_impact" not in result.rendered.text
+    assert "Complete Draft" not in result.rendered.text
+    assert "source due date is today" in result.rendered.text
+    assert "12:00 AM" not in result.rendered.text
+    assert "source importance" not in result.rendered.text
+
+
+def test_july_27_calendar_shape_and_focus_window_are_accurate() -> None:
+    calendar = _connector(
+        "google_calendar",
+        _item(
+            "morning",
+            item_type="calendar_event",
+            title="Morning commitment",
+            status="confirmed",
+            start_at="2026-07-27T09:00:00-04:00",
+            end_at="2026-07-27T12:00:00-04:00",
+        ),
+        _item(
+            "afternoon",
+            item_type="calendar_event",
+            title="Afternoon commitment",
+            status="confirmed",
+            start_at="2026-07-27T13:00:00-04:00",
+            end_at="2026-07-27T15:00:00-04:00",
+        ),
+    )
+    todoist = _connector(
+        "todoist",
+        _item(
+            "supported-outcome",
+            title="Finish the current deliverable",
+            provider_priority=1,
+            due_at="2026-07-27T00:00:00-04:00",
+            all_day=True,
+        ),
+    )
+    context = resolve_context(
+        run_id="july-27-product-quality",
+        briefing_date=BRIEFING_DATE,
+        timezone="America/New_York",
+    )
+
+    result = DeterministicBriefingPipeline().run(context, (calendar, todoist))
+    note = result.plan.sections[0].summary or ""
+
+    assert f"9:00 a.m.{TIME_RANGE_SEPARATOR}12:00 p.m." in note
+    assert f"1:00{TIME_RANGE_SEPARATOR}3:00 p.m." in note
+    assert "5 hours scheduled" in note
+    assert "a one-hour gap" in note
+    assert "Open Calendar time remains before 9:00 a.m. and after 3:00 p.m." in note
+    assert "transition and margin rather than a deep-work block" in note
+    assert "one continuous" not in note
+    focus = next(
+        section
+        for section in result.plan.sections
+        if section.name is BriefingSectionName.RECOMMENDED_FOCUS_BLOCK
+    )
+    assert f"3:15{TIME_RANGE_SEPARATOR}4:45 p.m. focus block" == focus.items[0].headline
+    assert "Finish the current deliverable" in focus.items[0].detail
+    assert result.plan.coverage[1].displayed_count == 1
+
+
+def test_focus_block_is_withheld_without_transition_safe_time() -> None:
+    calendar = _connector(
+        "google_calendar",
+        _item(
+            "morning",
+            item_type="calendar_event",
+            status="confirmed",
+            start_at="2026-07-27T08:00:00-04:00",
+            end_at="2026-07-27T10:00:00-04:00",
+        ),
+        _item(
+            "midday",
+            item_type="calendar_event",
+            status="confirmed",
+            start_at="2026-07-27T10:15:00-04:00",
+            end_at="2026-07-27T12:00:00-04:00",
+        ),
+        _item(
+            "afternoon",
+            item_type="calendar_event",
+            status="confirmed",
+            start_at="2026-07-27T12:15:00-04:00",
+            end_at="2026-07-27T17:00:00-04:00",
+        ),
+    )
+    todoist = _connector(
+        "todoist",
+        _item(
+            "supported-outcome",
+            provider_priority=1,
+            due_at="2026-07-27T00:00:00-04:00",
+            all_day=True,
+        ),
+    )
+    context = resolve_context(
+        run_id="focus-transition-safety",
+        briefing_date=BRIEFING_DATE,
+        timezone="America/New_York",
+    )
+
+    result = DeterministicBriefingPipeline().run(context, (calendar, todoist))
+
+    assert BriefingSectionName.RECOMMENDED_FOCUS_BLOCK not in {
+        section.name for section in result.plan.sections
+    }
+
+
+def test_degraded_backlog_does_not_fill_visible_task_sections() -> None:
+    stale = datetime(2026, 6, 1, 12, 0, tzinfo=UTC)
+    todoist = _connector(
+        "todoist",
+        *(
+            _item(
+                f"stale-{index}",
+                title=f"Stale backlog item {index}",
+                provider_priority=4,
+                due_at=f"2026-07-{10 + index:02d}T00:00:00-04:00",
+                all_day=True,
+                freshness_at=stale,
+            )
+            for index in range(4)
+        ),
+    )
+    context = resolve_context(
+        run_id="todoist-no-arbitrary-fill",
+        briefing_date=BRIEFING_DATE,
+        timezone="America/New_York",
+    )
+
+    result = DeterministicBriefingPipeline().run(context, (todoist,))
+
+    names = {section.name for section in result.plan.sections}
+    assert BriefingSectionName.TODAYS_OUTCOMES not in names
+    assert BriefingSectionName.UP_NEXT not in names
+    assert BriefingSectionName.IMPORTANT_TASKS not in names
+    assert BriefingSectionName.COMMITMENTS_AT_RISK not in names
+    assert result.plan.task_candidate_audits[0].candidate_count == 0
+    assert result.plan.coverage[0].displayed_count == 0
+    assert "No task has enough current evidence" in result.rendered.text
 
 
 def test_non_workday_suppresses_todoist_tasks_but_keeps_coverage() -> None:

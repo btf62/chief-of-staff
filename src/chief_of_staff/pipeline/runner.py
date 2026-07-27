@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections import Counter
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 
@@ -170,13 +169,17 @@ def _coverage_with_display_counts(
     plan: BriefingPlan,
     coverage: tuple[SourceCoverage, ...],
 ) -> tuple[SourceCoverage, ...]:
-    displayed = Counter(
-        source.source
+    displayed_records = {
+        (source.source, source.source_record_id)
         for section in plan.sections
         if section.name.value != "Source Coverage"
         for item in section.items
         for source in item.sources
-    )
+    }
+    displayed = {
+        source: sum(item_source == source for item_source, _ in displayed_records)
+        for source in {item_source for item_source, _ in displayed_records}
+    }
     candidates = {
         audit.source: audit.candidate_count for audit in plan.task_candidate_audits
     }
@@ -194,7 +197,7 @@ def _coverage_with_display_counts(
                 else report.selected_count
             ),
             candidate_count=candidates.get(report.source, 0),
-            displayed_count=displayed[report.source],
+            displayed_count=displayed.get(report.source, 0),
         )
         for report in coverage
     )

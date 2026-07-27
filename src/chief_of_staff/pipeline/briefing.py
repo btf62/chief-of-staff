@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from enum import StrEnum
 from itertools import pairwise
+from zoneinfo import ZoneInfo
 
 from chief_of_staff.connectors import SourceCoverage
 from chief_of_staff.pipeline.context import InvocationContext, WorkdayType
@@ -20,6 +21,15 @@ LIMITED_SECTION_ITEMS = 3
 EARLY_MORNING_START = time(9)
 MAX_SEQUENCE_GAP = timedelta(minutes=60)
 TIME_RANGE_SEPARATOR = "\N{EN DASH}"
+TODOIST_OVERDUE_SATURATION_THRESHOLD = 0.25
+TODOIST_PRIORITY_SATURATION_THRESHOLD = 0.25
+RECENT_TASK_UPDATE_WINDOW = timedelta(days=1)
+UP_NEXT_MAX_HORIZON = timedelta(days=14)
+FOCUS_WINDOW_START = time(8)
+FOCUS_WINDOW_END = time(17)
+FOCUS_BLOCK_DURATION = timedelta(minutes=90)
+FOCUS_TRANSITION_MARGIN = timedelta(minutes=15)
+CONTROL_TOKEN = re.compile(r"(?<!\S)@[A-Za-z0-9_-]+")
 
 
 class BriefingSectionName(StrEnum):
@@ -70,8 +80,12 @@ class PriorityInputs:
     explicit_commitment: bool
     preparation_required: bool
     source_importance: int
+    source: str
+    provider_priority: int | None
+    recently_updated: bool
+    explicit_priority_link: bool
 
-    def explanation(self) -> str:
+    def explanation(self, *, include_source_priority: bool = True) -> str:
         """Describe the facts that caused deterministic prioritization."""
 
         reasons: list[str] = []
@@ -85,8 +99,33 @@ class PriorityInputs:
             reasons.append("explicit commitment")
         if self.preparation_required:
             reasons.append("preparation required")
-        if self.source_importance:
-            reasons.append(f"source importance {self.source_importance}/5")
+        if self.explicit_priority_link:
+            reasons.append("linked to an approved active priority")
+        if self.recently_updated:
+            reasons.append("recently updated in the source")
+        priority_is_material = not (
+            self.due_today
+            or self.calendar_bound_today
+            or self.explicit_commitment
+            or self.preparation_required
+            or self.explicit_priority_link
+            or (self.overdue and self.recently_updated)
+        )
+        if (
+            include_source_priority
+            and priority_is_material
+            and self.source == "todoist"
+            and self.provider_priority in {3, 4}
+        ):
+            reasons.append(
+                "Todoist P1" if self.provider_priority == 4 else "Todoist P2"
+            )
+        elif (
+            include_source_priority
+            and priority_is_material
+            and self.source_importance >= 4
+        ):
+            reasons.append("high priority in the source")
         return ", ".join(reasons) or "no priority signal"
 
 
@@ -121,6 +160,47 @@ class TaskCandidateAudit:
 
 
 @dataclass(frozen=True, slots=True)
+class TaskPlanningConfidence:
+    """Transparent source aggregates used to qualify relative task ordering."""
+
+    source: str
+    active_count: int
+    overdue_count: int
+    high_priority_count: int
+    overdue_high_priority_overlap_count: int
+    overdue_threshold: float
+    high_priority_threshold: float
+
+    @property
+    def overdue_ratio(self) -> float:
+        return 0 if self.active_count == 0 else self.overdue_count / self.active_count
+
+    @property
+    def high_priority_ratio(self) -> float:
+        return (
+            0
+            if self.active_count == 0
+            else self.high_priority_count / self.active_count
+        )
+
+    @property
+    def relative_ranking_degraded(self) -> bool:
+        return (
+            self.overdue_ratio > self.overdue_threshold
+            or self.high_priority_ratio > self.high_priority_threshold
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class FocusWindow:
+    """One Calendar-derived proposal with explicit transition margin."""
+
+    starts_at: datetime
+    ends_at: datetime
+    supporting_events: tuple[NormalizedRecord, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class BriefingPlan:
     """Structured content selected before Markdown rendering."""
 
@@ -128,6 +208,7 @@ class BriefingPlan:
     coverage: tuple[SourceCoverage, ...]
     sections: tuple[BriefingSection, ...]
     task_candidate_audits: tuple[TaskCandidateAudit, ...] = ()
+    task_planning_confidences: tuple[TaskPlanningConfidence, ...] = ()
     generation_mode: str = "deterministic_reduced"
 
 
@@ -191,26 +272,27 @@ def build_reduced_plan(
         future_calendar_context,
         today,
     )
-    sections: list[BriefingSection] = [
-        BriefingSection(
-            name=BriefingSectionName.CHIEF_OF_STAFF_NOTE,
-            summary=_chief_note(
-                context,
-                todays_calendar_context,
-                tomorrow_sequence,
-            ),
-        )
-    ]
-
     available_task_records = tuple(
         record
         for record in records
         if record.kind is RecordKind.TASK and record.status != "completed"
     )
+    planning_confidences = _task_planning_confidences(
+        available_task_records,
+        coverage,
+        today,
+    )
+    confidence_by_source = {
+        confidence.source: confidence for confidence in planning_confidences
+    }
     task_records = tuple(
         record
         for record in available_task_records
-        if _task_is_daily_candidate(record, context)
+        if _task_is_daily_candidate(
+            record,
+            context,
+            confidence_by_source.get(record.provenance.source),
+        )
     )
     candidate_task_ids = {record.id for record in task_records}
     prioritized_tasks = sorted(
@@ -220,6 +302,21 @@ def build_reduced_plan(
     outcome_candidates = tuple(
         record for record in prioritized_tasks if _is_outcome_candidate(record, today)
     )[:MAX_OUTCOMES]
+    focus_window = _recommended_focus_window(todays_calendar_context, context)
+    todoist_confidence = confidence_by_source.get("todoist")
+    sections: list[BriefingSection] = [
+        BriefingSection(
+            name=BriefingSectionName.CHIEF_OF_STAFF_NOTE,
+            summary=_chief_note(
+                context,
+                todays_calendar_context,
+                tomorrow_sequence,
+                primary_outcome=(outcome_candidates[0] if outcome_candidates else None),
+                focus_window=focus_window,
+                todoist_confidence=todoist_confidence,
+            ),
+        )
+    ]
     if outcome_candidates:
         sections.append(
             BriefingSection(
@@ -234,9 +331,7 @@ def build_reduced_plan(
     up_next = tuple(
         record
         for record in prioritized_tasks
-        if record.id not in used_record_ids
-        and record.due_at is not None
-        and record.due_at.date() > today
+        if record.id not in used_record_ids and _is_up_next_candidate(record, today)
     )[:LIMITED_SECTION_ITEMS]
     if up_next:
         sections.append(
@@ -246,10 +341,9 @@ def build_reduced_plan(
                     _record_item(
                         record,
                         key_prefix="up-next",
-                        detail=f"Due {record.due_at:%A, %B %-d}.",
+                        detail=_up_next_detail(record, today),
                     )
                     for record in up_next
-                    if record.due_at is not None
                 ),
             )
         )
@@ -278,11 +372,7 @@ def build_reduced_plan(
         record
         for record in prioritized_tasks
         if record.id not in used_record_ids
-        and (
-            record.due_at is None
-            or record.due_at.date() <= today
-            or record.importance >= 4
-        )
+        and _is_important_task_candidate(record, today)
     )[:LIMITED_SECTION_ITEMS]
     if important_tasks:
         sections.append(
@@ -300,6 +390,15 @@ def build_reduced_plan(
         )
         used_record_ids.update(record.id for record in important_tasks)
 
+    focus_section = _recommended_focus_section(
+        context,
+        focus_window,
+        primary_outcome=(outcome_candidates[0] if outcome_candidates else None),
+        todoist_confidence=todoist_confidence,
+    )
+    if focus_section is not None:
+        sections.append(focus_section)
+
     future_records = tuple(
         sorted(
             (
@@ -308,7 +407,10 @@ def build_reduced_plan(
                 if record.id not in used_record_ids
                 and (
                     record.kind is not RecordKind.TASK
-                    or record.id in candidate_task_ids
+                    or (
+                        record.id in candidate_task_ids
+                        and _task_needs_looking_ahead(record, today)
+                    )
                 )
                 and (
                     record.kind is not RecordKind.CALENDAR_EVENT
@@ -343,7 +445,11 @@ def build_reduced_plan(
     sections.append(
         BriefingSection(
             name=BriefingSectionName.SOURCE_COVERAGE,
-            summary=_coverage_summary(context, coverage),
+            summary=_coverage_summary(
+                context,
+                coverage,
+                planning_confidences,
+            ),
         )
     )
 
@@ -355,7 +461,9 @@ def build_reduced_plan(
             available_task_records,
             task_records,
             context,
+            confidence_by_source,
         ),
+        task_planning_confidences=planning_confidences,
     )
 
 
@@ -462,17 +570,22 @@ def _chief_note(
     context: InvocationContext,
     todays_calendar_context: tuple[NormalizedRecord, ...],
     tomorrow_sequence: tuple[NormalizedRecord, ...],
+    *,
+    primary_outcome: NormalizedRecord | None,
+    focus_window: FocusWindow | None,
+    todoist_confidence: TaskPlanningConfidence | None,
 ) -> str:
     if context.workday_type is WorkdayType.MINISTRY_WORKDAY:
         return _ministry_workday_note(todays_calendar_context)
 
     if context.is_workday:
-        day_label = (
-            "flexible half-workday"
-            if context.workday_type is WorkdayType.FLEXIBLE_HALF_WORKDAY
-            else "workday"
+        return _normal_workday_note(
+            context,
+            todays_calendar_context,
+            primary_outcome=primary_outcome,
+            focus_window=focus_window,
+            todoist_confidence=todoist_confidence,
         )
-        return f"Today is a {day_label}. {_schedule_summary(todays_calendar_context)}"
 
     parts = [
         "Today is a configured non-workday; protect it from ordinary work demands.",
@@ -504,10 +617,14 @@ def _chief_note(
 def _coverage_summary(
     context: InvocationContext,
     coverage: tuple[SourceCoverage, ...],
+    planning_confidences: tuple[TaskPlanningConfidence, ...],
 ) -> str:
     if not coverage:
         return "No approved source coverage was supplied."
 
+    confidence_by_source = {
+        confidence.source: confidence for confidence in planning_confidences
+    }
     coverage_parts: list[str] = []
     for report in coverage:
         retrieved = (
@@ -557,12 +674,73 @@ def _coverage_summary(
             detail += f"; {'; '.join(report.warnings)}"
         if report.error_category:
             detail += f"; {report.error_category}"
+        planning_confidence = confidence_by_source.get(report.source)
+        if planning_confidence is not None:
+            status = (
+                "degraded"
+                if planning_confidence.relative_ranking_degraded
+                else "not degraded"
+            )
+            detail += (
+                f"; relative-ranking confidence {status} "
+                f"({planning_confidence.active_count} active, "
+                f"{planning_confidence.overdue_count} overdue "
+                f"[{planning_confidence.overdue_ratio:.1%}], "
+                f"{planning_confidence.high_priority_count} P1/P2 "
+                f"[{planning_confidence.high_priority_ratio:.1%}], "
+                f"{planning_confidence.overdue_high_priority_overlap_count} "
+                "both overdue and P1/P2)"
+            )
         coverage_parts.append(detail)
     if context.workday_diagnostics:
         coverage_parts.append(
             "Workday context: " + " ".join(context.workday_diagnostics)
         )
     return ". ".join(coverage_parts) + "."
+
+
+def _normal_workday_note(
+    context: InvocationContext,
+    todays_calendar_context: tuple[NormalizedRecord, ...],
+    *,
+    primary_outcome: NormalizedRecord | None,
+    focus_window: FocusWindow | None,
+    todoist_confidence: TaskPlanningConfidence | None,
+) -> str:
+    day_label = (
+        "flexible half-workday"
+        if context.workday_type is WorkdayType.FLEXIBLE_HALF_WORKDAY
+        else "workday"
+    )
+    parts = [
+        f"Today is a {day_label}.",
+        _calendar_shape_summary(todays_calendar_context),
+    ]
+    if primary_outcome is not None:
+        parts.append(
+            f"The strongest supported outcome is {_display_title(primary_outcome)}, "
+            f"{_brief_due_phrase(primary_outcome, context.briefing_date)}."
+        )
+    else:
+        parts.append("No task has enough current evidence to become a primary outcome.")
+    if focus_window is not None and primary_outcome is not None:
+        parts.append(
+            f"Protect {_natural_time_span(focus_window.starts_at, focus_window.ends_at)} "
+            "as the clearest focus window after Calendar transition margin."
+        )
+    elif (
+        focus_window is not None
+        and todoist_confidence is not None
+        and todoist_confidence.relative_ranking_degraded
+    ):
+        parts.append(
+            f"Calendar leaves {_natural_time_span(focus_window.starts_at, focus_window.ends_at)} "
+            "as the clearest focus window, but no task has enough current evidence "
+            "to assign as its objective."
+        )
+    if todoist_confidence is not None and todoist_confidence.relative_ranking_degraded:
+        parts.append(_todoist_confidence_disclosure(todoist_confidence))
+    return " ".join(parts)
 
 
 def _ministry_workday_note(
@@ -716,6 +894,134 @@ def _schedule_summary(todays_calendar: tuple[NormalizedRecord, ...]) -> str:
     return " ".join(parts)
 
 
+def _calendar_shape_summary(
+    todays_calendar: tuple[NormalizedRecord, ...],
+) -> str:
+    fixed = tuple(
+        sorted(
+            (
+                record
+                for record in todays_calendar
+                if classify_calendar_event(record)
+                is CalendarEventClassification.FIXED_COMMITMENT
+                and record.start_at is not None
+                and record.end_at is not None
+            ),
+            key=lambda record: record.start_at or datetime.max,
+        )
+    )
+    if not fixed:
+        material_status = any(
+            classify_calendar_event(record) is CalendarEventClassification.STATUS_SIGNAL
+            and _is_material_status_signal(record)
+            for record in todays_calendar
+        )
+        if material_status:
+            return "An explicit Calendar status affects availability today."
+        return "No fixed Calendar commitment shapes the day."
+
+    spans = tuple(
+        _natural_time_span(record.start_at, record.end_at)
+        for record in fixed
+        if record.start_at is not None
+    )
+    total_minutes = _scheduled_union_minutes(fixed)
+    gap_minutes = _positive_gap_minutes(fixed)
+    if len(spans) == 1:
+        shape = f"The Calendar anchors the day from {spans[0]}"
+    elif len(spans) == 2:
+        shape = (
+            f"The Calendar anchors the day with commitments from {spans[0]} "
+            f"and {spans[1]}"
+        )
+    else:
+        shape = f"The Calendar anchors the day across {spans[0]} through {spans[-1]}"
+    shape += f"—{_duration_phrase(total_minutes)} scheduled"
+    if len(gap_minutes) == 1:
+        shape += f", separated by {_gap_phrase(gap_minutes[0])}"
+    elif gap_minutes:
+        shape += (
+            f", with {len(gap_minutes)} gaps totaling "
+            f"{_duration_phrase(sum(gap_minutes))}"
+        )
+    shape += "."
+
+    first_start = fixed[0].start_at
+    last_end = max(record.end_at for record in fixed if record.end_at is not None)
+    open_parts: list[str] = []
+    if first_start is not None:
+        open_parts.append(f"before {_natural_clock_text(first_start)}")
+    open_parts.append(f"after {_natural_clock_text(last_end)}")
+    open_time = "Open Calendar time remains " + " and ".join(open_parts) + "."
+    if len(gap_minutes) == 1 and gap_minutes[0] <= 60:
+        open_time += (
+            f" Treat {_gap_phrase(gap_minutes[0])} as transition and margin "
+            "rather than a deep-work block."
+        )
+    implications = " ".join(_schedule_implications(fixed))
+    return " ".join(part for part in (shape, implications, open_time) if part)
+
+
+def _scheduled_union_minutes(
+    events: tuple[NormalizedRecord, ...],
+) -> int:
+    intervals = tuple(
+        sorted(
+            (
+                (record.start_at, record.end_at)
+                for record in events
+                if record.start_at is not None and record.end_at is not None
+            ),
+            key=lambda interval: interval[0],
+        )
+    )
+    if not intervals:
+        return 0
+    total = timedelta()
+    current_start, current_end = intervals[0]
+    for start_at, end_at in intervals[1:]:
+        if start_at <= current_end:
+            current_end = max(current_end, end_at)
+            continue
+        total += current_end - current_start
+        current_start, current_end = start_at, end_at
+    total += current_end - current_start
+    return int(total.total_seconds() // 60)
+
+
+def _positive_gap_minutes(
+    events: tuple[NormalizedRecord, ...],
+) -> tuple[int, ...]:
+    return tuple(
+        int((current.start_at - previous.end_at).total_seconds() // 60)
+        for previous, current in pairwise(events)
+        if previous.end_at is not None
+        and current.start_at is not None
+        and current.start_at > previous.end_at
+    )
+
+
+def _duration_phrase(minutes: int) -> str:
+    if minutes % 60 == 0:
+        hours = minutes // 60
+        return f"{hours} {'hour' if hours == 1 else 'hours'}"
+    if minutes > 60:
+        hours, remainder = divmod(minutes, 60)
+        return f"{hours} {'hour' if hours == 1 else 'hours'} {remainder} minutes"
+    return f"{minutes} {'minute' if minutes == 1 else 'minutes'}"
+
+
+def _gap_phrase(minutes: int) -> str:
+    if minutes == 60:
+        return "a one-hour gap"
+    return f"a {minutes}-minute gap"
+
+
+def _natural_clock_text(value: datetime) -> str:
+    clock, period = _natural_clock(value)
+    return f"{clock} {period}"
+
+
 def _schedule_implications(
     fixed_events: tuple[NormalizedRecord, ...],
 ) -> tuple[str, ...]:
@@ -787,9 +1093,48 @@ def _is_outcome_candidate(record: NormalizedRecord, today: date) -> bool:
     )
 
 
+def _is_up_next_candidate(record: NormalizedRecord, today: date) -> bool:
+    if record.due_at is None or record.due_at.date() <= today:
+        return False
+    due_date = record.due_at.date()
+    if due_date <= today + UP_NEXT_MAX_HORIZON:
+        return True
+    return record.preparation is not None or record.calendar_dependency
+
+
+def _up_next_detail(record: NormalizedRecord, today: date) -> str:
+    if record.due_at is None:
+        raise ValueError("Up Next requires a source due date")
+    due_detail = _source_due_sentence(record, today)
+    if record.due_at.date() > today + UP_NEXT_MAX_HORIZON:
+        return f"Preparation is explicitly required now. {due_detail}"
+    return due_detail
+
+
+def _is_important_task_candidate(record: NormalizedRecord, today: date) -> bool:
+    due_date = None if record.due_at is None else record.due_at.date()
+    return (
+        due_date is None
+        or due_date <= today
+        or record.explicit_commitment
+        or record.preparation is not None
+        or record.calendar_dependency
+        or record.explicit_priority_link
+    )
+
+
+def _task_needs_looking_ahead(record: NormalizedRecord, today: date) -> bool:
+    return bool(
+        record.due_at is not None
+        and record.due_at.date() > today
+        and (record.preparation is not None or record.calendar_dependency)
+    )
+
+
 def _task_is_daily_candidate(
     record: NormalizedRecord,
     context: InvocationContext,
+    planning_confidence: TaskPlanningConfidence | None,
 ) -> bool:
     if not context.is_workday:
         return False
@@ -799,6 +1144,14 @@ def _task_is_daily_candidate(
             record.explicit_commitment
             or record.preparation is not None
             or due_date == context.briefing_date
+            or record.calendar_dependency
+            or record.explicit_priority_link
+        )
+    if record.provenance.source == "todoist":
+        return _todoist_task_is_daily_candidate(
+            record,
+            context.briefing_date,
+            planning_confidence,
         )
     return (
         record.explicit_commitment
@@ -811,10 +1164,101 @@ def _task_is_daily_candidate(
     )
 
 
+def _todoist_task_is_daily_candidate(
+    record: NormalizedRecord,
+    today: date,
+    planning_confidence: TaskPlanningConfidence | None,
+) -> bool:
+    due_date = None if record.due_at is None else record.due_at.date()
+    if (
+        record.explicit_commitment
+        or record.preparation is not None
+        or record.calendar_dependency
+        or record.explicit_priority_link
+    ):
+        return True
+    if due_date is not None and today <= due_date <= today + timedelta(days=7):
+        return True
+
+    high_priority = record.provider_priority in {3, 4}
+    recently_updated = _is_recently_updated(record, today)
+    if due_date is not None and due_date < today:
+        return recently_updated
+    if high_priority and recently_updated:
+        return True
+    return bool(
+        high_priority
+        and planning_confidence is not None
+        and not planning_confidence.relative_ranking_degraded
+    )
+
+
+def _is_recently_updated(record: NormalizedRecord, today: date) -> bool:
+    freshness_at = record.provenance.freshness_at
+    if freshness_at is None:
+        return False
+    age = today - freshness_at.date()
+    return timedelta() <= age <= RECENT_TASK_UPDATE_WINDOW
+
+
+def _task_planning_confidences(
+    available: tuple[NormalizedRecord, ...],
+    coverage: tuple[SourceCoverage, ...],
+    today: date,
+) -> tuple[TaskPlanningConfidence, ...]:
+    reports = {report.source: report for report in coverage}
+    source_records = tuple(
+        record for record in available if record.provenance.source == "todoist"
+    )
+    if not source_records and "todoist" not in reports:
+        return ()
+    report = reports.get("todoist")
+    if (
+        report is not None
+        and report.selected_count is not None
+        and report.selected_count != len(source_records)
+    ):
+        return ()
+    reported_active = (
+        len(source_records)
+        if report is None or report.retrieved_count is None
+        else report.retrieved_count
+    )
+    overdue_count = sum(
+        record.due_at is not None and record.due_at.date() < today
+        for record in source_records
+    )
+    high_priority_count = sum(
+        record.provider_priority in {3, 4} for record in source_records
+    )
+    overlap_count = sum(
+        record.due_at is not None
+        and record.due_at.date() < today
+        and record.provider_priority in {3, 4}
+        for record in source_records
+    )
+    return (
+        TaskPlanningConfidence(
+            source="todoist",
+            active_count=max(
+                reported_active,
+                overdue_count,
+                high_priority_count,
+            ),
+            overdue_count=overdue_count,
+            high_priority_count=high_priority_count,
+            overdue_high_priority_overlap_count=overlap_count,
+            overdue_threshold=TODOIST_OVERDUE_SATURATION_THRESHOLD,
+            high_priority_threshold=TODOIST_PRIORITY_SATURATION_THRESHOLD,
+        ),
+    )
+
+
 def _task_candidate_audits(
     available: tuple[NormalizedRecord, ...],
     candidates: tuple[NormalizedRecord, ...],
     context: InvocationContext,
+    confidence_by_source: dict[str, TaskPlanningConfidence],
 ) -> tuple[TaskCandidateAudit, ...]:
     candidate_ids = {record.id for record in candidates}
     sources = sorted({record.provenance.source for record in available})
@@ -827,7 +1271,11 @@ def _task_candidate_audits(
         for record in source_records:
             if record.id in candidate_ids:
                 continue
-            reason = _task_candidate_exclusion_reason(record, context)
+            reason = _task_candidate_exclusion_reason(
+                record,
+                context,
+                confidence_by_source.get(source),
+            )
             reasons[reason] = reasons.get(reason, 0) + 1
         audits.append(
             TaskCandidateAudit(
@@ -845,12 +1293,157 @@ def _task_candidate_audits(
 def _task_candidate_exclusion_reason(
     record: NormalizedRecord,
     context: InvocationContext,
+    planning_confidence: TaskPlanningConfidence | None,
 ) -> str:
     if not context.is_workday:
         return "configured non-workday"
     if context.workday_type is WorkdayType.MINISTRY_WORKDAY:
         return "unrelated to ministry workday"
+    due_date = None if record.due_at is None else record.due_at.date()
+    if record.provenance.source == "todoist":
+        if due_date is not None and due_date < context.briefing_date:
+            return "overdue without another current signal"
+        if (
+            record.provider_priority in {3, 4}
+            and planning_confidence is not None
+            and planning_confidence.relative_ranking_degraded
+        ):
+            return "Todoist P1/P2 without current evidence under degraded ranking"
+        return "outside seven-day daily horizon without current evidence"
     return "outside seven-day daily horizon without another priority signal"
+
+
+def _recommended_focus_window(
+    todays_calendar_context: tuple[NormalizedRecord, ...],
+    context: InvocationContext,
+) -> FocusWindow | None:
+    if context.workday_type not in {
+        WorkdayType.FULL_WORKDAY,
+        WorkdayType.FLEXIBLE_HALF_WORKDAY,
+    }:
+        return None
+    occupied = tuple(
+        sorted(
+            (
+                record
+                for record in todays_calendar_context
+                if _is_active_calendar_event(record)
+                and record.start_at is not None
+                and record.end_at is not None
+                and not record.all_day
+                and classify_calendar_event(record)
+                is not CalendarEventClassification.STATUS_SIGNAL
+            ),
+            key=lambda record: record.start_at or datetime.max,
+        )
+    )
+    if not occupied:
+        return None
+
+    zone = ZoneInfo(context.timezone)
+    planning_start = datetime.combine(
+        context.briefing_date,
+        FOCUS_WINDOW_START,
+        tzinfo=zone,
+    )
+    planning_end = datetime.combine(
+        context.briefing_date,
+        FOCUS_WINDOW_END,
+        tzinfo=zone,
+    )
+    cursor = planning_start
+    previous: NormalizedRecord | None = None
+    for event in occupied:
+        if event.start_at is None or event.end_at is None:
+            continue
+        gap_end = min(planning_end, event.start_at - FOCUS_TRANSITION_MARGIN)
+        if gap_end - cursor >= FOCUS_BLOCK_DURATION:
+            supporting = tuple(
+                record for record in (previous, event) if record is not None
+            )
+            return FocusWindow(
+                starts_at=cursor,
+                ends_at=cursor + FOCUS_BLOCK_DURATION,
+                supporting_events=supporting,
+            )
+        cursor = max(cursor, event.end_at + FOCUS_TRANSITION_MARGIN)
+        previous = event
+    if planning_end - cursor < FOCUS_BLOCK_DURATION:
+        return None
+    return FocusWindow(
+        starts_at=cursor,
+        ends_at=cursor + FOCUS_BLOCK_DURATION,
+        supporting_events=(() if previous is None else (previous,)),
+    )
+
+
+def _recommended_focus_section(
+    context: InvocationContext,
+    focus_window: FocusWindow | None,
+    *,
+    primary_outcome: NormalizedRecord | None,
+    todoist_confidence: TaskPlanningConfidence | None,
+) -> BriefingSection | None:
+    if focus_window is None or context.workday_type not in {
+        WorkdayType.FULL_WORKDAY,
+        WorkdayType.FLEXIBLE_HALF_WORKDAY,
+    }:
+        return None
+    span = _natural_time_span(focus_window.starts_at, focus_window.ends_at)
+    sources = tuple(
+        dict.fromkeys(
+            (
+                *(() if primary_outcome is None else (_source_link(primary_outcome),)),
+                *(_source_link(event) for event in focus_window.supporting_events),
+            )
+        )
+    )
+    if primary_outcome is not None:
+        detail = (
+            f"Use this {int(FOCUS_BLOCK_DURATION.total_seconds() // 60)}-minute "
+            f"window for {_display_title(primary_outcome)}. "
+            f"{_source_due_sentence(primary_outcome, context.briefing_date)} "
+            "The proposal preserves Calendar transition margin."
+        )
+    elif (
+        todoist_confidence is not None and todoist_confidence.relative_ranking_degraded
+    ):
+        detail = (
+            "Calendar supports this uninterrupted window after transition margin, "
+            "but no Todoist task has enough current evidence to assign as its "
+            "objective."
+        )
+    else:
+        return None
+    if not sources:
+        return None
+    return BriefingSection(
+        name=BriefingSectionName.RECOMMENDED_FOCUS_BLOCK,
+        items=(
+            BriefingItem(
+                key=f"focus:{context.briefing_date.isoformat()}",
+                headline=f"{span} focus block",
+                detail=detail,
+                sources=sources,
+            ),
+        ),
+    )
+
+
+def _todoist_confidence_disclosure(
+    confidence: TaskPlanningConfidence,
+) -> str:
+    saturated: list[str] = []
+    if confidence.overdue_ratio > confidence.overdue_threshold:
+        saturated.append("overdue")
+    if confidence.high_priority_ratio > confidence.high_priority_threshold:
+        saturated.append("high-priority")
+    saturation = " and ".join(saturated) or "relative"
+    return (
+        f"Todoist's {saturation} backlog signals are saturated, so relative "
+        "ordering is being treated cautiously and current dates or explicit "
+        "links take precedence."
+    )
 
 
 def _priority_inputs(record: NormalizedRecord, today: date) -> PriorityInputs:
@@ -858,12 +1451,15 @@ def _priority_inputs(record: NormalizedRecord, today: date) -> PriorityInputs:
     return PriorityInputs(
         overdue=due_date is not None and due_date < today,
         due_today=due_date == today,
-        calendar_bound_today=(
-            record.start_at is not None and record.start_at.date() == today
-        ),
+        calendar_bound_today=record.calendar_dependency
+        or (record.start_at is not None and record.start_at.date() == today),
         explicit_commitment=record.explicit_commitment,
         preparation_required=record.preparation is not None,
         source_importance=record.importance,
+        source=record.provenance.source,
+        provider_priority=record.provider_priority,
+        recently_updated=_is_recently_updated(record, today),
+        explicit_priority_link=record.explicit_priority_link,
     )
 
 
@@ -875,6 +1471,10 @@ def _priority_sort_key(record: NormalizedRecord, today: date) -> tuple[object, .
     return (
         not inputs.due_today,
         not inputs.explicit_commitment,
+        not inputs.calendar_bound_today,
+        not inputs.preparation_required,
+        not inputs.explicit_priority_link,
+        not inputs.recently_updated,
         not inputs.overdue,
         -inputs.source_importance,
         due_at,
@@ -996,14 +1596,10 @@ def _natural_clock(value: datetime) -> tuple[str, str]:
 
 def _outcome_item(record: NormalizedRecord, today: date) -> BriefingItem:
     inputs = _priority_inputs(record, today)
-    deadline = (
-        "No source deadline."
-        if record.due_at is None
-        else f"Source deadline: {record.due_at:%A, %B %-d at %-I:%M %p}."
-    )
+    deadline = _source_due_sentence(record, today)
     return BriefingItem(
         key=f"outcome:{record.id}",
-        headline=f"Complete {record.title}",
+        headline=_display_title(record),
         detail=f"{inputs.explanation()}. {deadline}",
         sources=(_source_link(record),),
         priority_inputs=inputs,
@@ -1069,10 +1665,48 @@ def _record_item(
 ) -> BriefingItem:
     return BriefingItem(
         key=f"{key_prefix}:{record.id}",
-        headline=record.title,
+        headline=_display_title(record),
         detail=detail,
         sources=(_source_link(record),),
     )
+
+
+def _display_title(record: NormalizedRecord) -> str:
+    if record.kind is not RecordKind.TASK:
+        return record.title
+    cleaned = CONTROL_TOKEN.sub("", record.title)
+    cleaned = re.sub(r"\s{2,}", " ", cleaned).strip(" \t-:;")
+    return cleaned or "Todoist task"
+
+
+def _brief_due_phrase(record: NormalizedRecord, today: date) -> str:
+    if record.due_at is None:
+        return "supported by explicit current evidence"
+    due_date = record.due_at.date()
+    if due_date == today:
+        return "due today"
+    if due_date < today:
+        return f"overdue since {record.due_at:%A, %B %-d}"
+    if record.all_day:
+        return f"due {record.due_at:%A, %B %-d}"
+    return f"due {record.due_at:%A, %B %-d at %-I:%M %p}"
+
+
+def _source_due_sentence(record: NormalizedRecord, today: date) -> str:
+    if record.due_at is None:
+        return "No source deadline is recorded."
+    due_date = record.due_at.date()
+    if due_date == today:
+        if record.all_day:
+            return "The source due date is today."
+        return f"The source deadline is today at {record.due_at:%-I:%M %p}."
+    if due_date < today:
+        if record.all_day:
+            return f"The source due date was {record.due_at:%A, %B %-d}."
+        return f"The source deadline was {record.due_at:%A, %B %-d at %-I:%M %p}."
+    if record.all_day:
+        return f"The source due date is {record.due_at:%A, %B %-d}."
+    return f"The source deadline is {record.due_at:%A, %B %-d at %-I:%M %p}."
 
 
 def _source_link(record: NormalizedRecord) -> SourceLink:

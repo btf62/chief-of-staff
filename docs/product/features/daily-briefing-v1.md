@@ -1,7 +1,7 @@
 # Feature: Daily Briefing v1
 
 - **Status:** Accepted
-- **Version:** 5
+- **Version:** 6
 - **Owner:** Brad
 - **Last updated:** 2026-07-27
 
@@ -113,6 +113,8 @@ Provide a concise synthesized assessment, normally no more than 150 words.
 The note should explain:
 
 - The shape of the day
+- The strongest supported outcome
+- Meaningful open work windows
 - The central priority tension
 - What would make the day successful
 - Any important risk or opportunity
@@ -123,6 +125,12 @@ Do not place connector statuses, record counts, retrieval errors, or governing
 document summaries in this note. Phrase synthesis as based on retrieved facts
 when completeness is uncertain; all coverage limitations and detailed
 metadata belong in Source Coverage.
+
+Describe separate Calendar commitments as separate blocks. Summarize their
+total scheduled time, gaps, and transition constraints without converting the
+span between the first and last event into one continuous commitment. When
+Todoist relative-ranking confidence is degraded, include one concise
+plain-language disclosure here without source counts or a diagnostic score.
 
 ### 2. Today's Outcomes
 
@@ -149,6 +157,10 @@ assistant is intentionally holding behind the top three.
 This section should reduce anxiety without becoming another task list. Omit
 items already represented elsewhere unless the additional context is
 necessary.
+
+A task due more than fourteen days away does not belong in Up Next unless
+explicit evidence shows that preparation must begin now. Do not use Up Next as
+overflow for the highest-ranked unused task.
 
 ### 4. Today's Calendar
 
@@ -289,6 +301,20 @@ Task-system priority is a source-owned signal, not the final Chief of Staff
 priority. It may influence deterministic ordering, but it does not by itself
 prove an external commitment, relationship consequence, or required outcome.
 
+When Todoist contains a saturated overdue or P1/P2 backlog, mark its
+relative-ranking confidence as degraded. Continue using explicit dates,
+Calendar dependencies, approved active-priority links, and other current
+facts, but do not admit a task to the daily-candidate set merely because it is
+overdue or P1/P2. The connector specification owns the transparent thresholds
+and exact deterministic signals.
+
+Visible task titles should remove Todoist control syntax while preserving the
+authoritative source title and link internally. Do not mechanically prepend
+`Complete` to an action-oriented source title. Describe Todoist priority only
+with source terminology such as `Todoist P1` or `Todoist P2`, and only when it
+materially explains inclusion. Render an all-day Todoist due value as a date or
+relative date, never as a midnight deadline.
+
 Source selection and local persistence maintain a bounded background pool.
 A separate date-specific daily-candidate gate determines which records
 materially affect the briefing date, and section budgets determine which
@@ -310,6 +336,12 @@ Use the [Leadership Model](../../foundations/leadership-model.md) as descriptive
 context. The live calendar, Brad's current energy, and explicit current
 instructions override default energy assumptions.
 
+Require enough uninterrupted time after transition margin and a
+high-confidence objective. Do not assume a noon gap is suitable for deep work.
+When Calendar supports a focus window but degraded Todoist confidence leaves
+no sufficiently supported objective, identify the window without assigning an
+arbitrary task.
+
 ### 10. Looking Ahead
 
 Provide selective awareness of:
@@ -330,7 +362,9 @@ every approved source used in the run. Distinguish records retrieved, selected,
 persisted, considered as daily candidates, and displayed. For source-specific
 context collections, such as Todoist projects, sections, and labels,
 distinguish retrieved and persisted counts with unambiguous resource labels.
-Include safe warnings or error categories when relevant.
+Include safe warnings or error categories when relevant. For Todoist, add the
+relative-ranking confidence status and compact active, overdue, P1/P2, and
+overlap counts without turning the appendix into a task-health report.
 
 Keep this appendix out of the Chief of Staff Note. It exists to make
 completeness, partial retrieval, authorization failures, and empty results
@@ -597,6 +631,9 @@ The following sources and capabilities are outside Daily Briefing v1:
 | AC-19 | Calendar events are classified from provider status, event type, and time shape; cancelled events are omitted, routine working-location signals remain contextual but are suppressed from visible sections, materially relevant status signals may appear, tentative events are not called fixed, and all-day events are not treated as full-day occupancy without additional evidence. |
 | AC-20 | Timestamp-derived overlaps, back-to-back commitments, transitions of 15 minutes or less, confirmed schedule span, and tomorrow-morning sequences are synthesized deterministically without unsupported implications. |
 | AC-21 | Source status; retrieved, selected, persisted, and displayed counts; supporting-context counts; safe warnings; and error categories appear in a final Source Coverage appendix rather than the Chief of Staff Note. |
+| AC-22 | Todoist saturation uses documented aggregate thresholds; degraded relative-ranking confidence requires stronger current evidence, excludes overdue-only and priority-only tasks, preserves the selected background pool, and is disclosed concisely. |
+| AC-23 | Todoist titles omit control syntax in display without changing source data; all-day due dates never render as midnight; source priority uses transparent Todoist terminology only when material. |
+| AC-24 | Up Next excludes work more than fourteen days away without explicit current preparation, and a Recommended Focus Block requires Calendar margin plus a supported objective or explicitly leaves the objective unassigned. |
 
 ## Open Questions
 
@@ -608,7 +645,8 @@ The following questions require later product or architecture decisions:
 - How should commitments in sent mail be detected?
 - What freshness threshold applies to each source?
 - How should duplicate or conflicting items across task systems be recognized?
-- How should confidence be represented without adding visual noise?
+- How should non-Todoist inference confidence be represented without adding
+  visual noise?
 - Through what interface should Brad inspect, correct, or disposition
   recommendations?
 - How should local correction state be retained, secured, synchronized, and

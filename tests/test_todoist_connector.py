@@ -353,6 +353,12 @@ def test_todoist_explicit_active_priority_link_selects_undated_task() -> None:
     result = connector.retrieve(_request(connector.approved_scope))
 
     assert [item.source_record_id for item in result.items] == ["linked-priority"]
+    normalized = normalize_item(
+        connector.source_name,
+        result.items[0],
+        timezone="America/New_York",
+    )
+    assert normalized.explicit_priority_link
 
 
 def test_todoist_deduplicates_stable_ids_across_cursor_pages() -> None:
@@ -431,6 +437,8 @@ def test_todoist_priority_is_source_signal_with_current_api_mapping() -> None:
     )
     assert p1.importance == 5
     assert p2.importance == 4
+    assert p1.provider_priority == 4
+    assert p2.provider_priority == 3
     assert p1.explicit_commitment is False
     assert p1.due_at == datetime(
         2026,
