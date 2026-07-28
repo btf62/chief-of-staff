@@ -79,6 +79,9 @@ No strict versioning scheme is promised before a distributable product exists.
   read-only-only synthetic transport, typed issue normalization, conservative
   cross-source association, coverage funnel, and deterministic briefing
   integration stopped before live access.
+- A resource-restricted Jira 3LO flow with exact `read:jira-work`, Keychain-
+  only secrets, one-site binding, bounded project-only discovery, a private
+  selection report, and no live issue endpoint.
 
 ### Changed
 
@@ -101,3 +104,5 @@ No strict versioning scheme is promised before a distributable product exists.
   Jira, another connector, or repeat Calendar or Todoist access.
 - Completed Jira's mocked and synthetic-data phase and stopped at its mandatory
   live-access approval gate.
+- Completed one bounded Jira authorization and project-discovery trial and
+  stopped before project selection or live issue retrieval.

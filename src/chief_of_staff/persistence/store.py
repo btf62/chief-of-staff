@@ -14,6 +14,7 @@ from chief_of_staff.domain.models import (
     ConclusionKind,
     ConclusionState,
     ConnectorAuthorizationMetadata,
+    ConnectorResourceMetadata,
     ConnectorRun,
     CredentialHealth,
     DispositionEvent,
@@ -108,16 +109,18 @@ class StateStore:
                     credential_service,
                     client_secret_account,
                     configured_at,
-                    application_owner
+                    application_owner,
+                    oauth_grant_type
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(connector) DO UPDATE SET
                     oauth_project_id = excluded.oauth_project_id,
                     oauth_client_id = excluded.oauth_client_id,
                     credential_service = excluded.credential_service,
                     client_secret_account = excluded.client_secret_account,
                     configured_at = excluded.configured_at,
-                    application_owner = excluded.application_owner
+                    application_owner = excluded.application_owner,
+                    oauth_grant_type = excluded.oauth_grant_type
                 """,
                 (
                     metadata.connector,
@@ -127,6 +130,7 @@ class StateStore:
                     metadata.client_secret_account,
                     _serialize_datetime(metadata.configured_at),
                     metadata.application_owner,
+                    metadata.oauth_grant_type,
                 ),
             )
 
@@ -150,6 +154,11 @@ class StateStore:
                 None
                 if row["application_owner"] is None
                 else str(row["application_owner"])
+            ),
+            oauth_grant_type=(
+                None
+                if row["oauth_grant_type"] is None
+                else str(row["oauth_grant_type"])
             ),
         )
 
@@ -253,6 +262,63 @@ class StateStore:
                 None if row["last_used_at"] is None else str(row["last_used_at"])
             ),
             updated_at=_parse_datetime(str(row["updated_at"])),
+        )
+
+    def save_connector_resource(self, metadata: ConnectorResourceMetadata) -> None:
+        """Persist one non-secret resource-level connector boundary."""
+
+        with self.database.transaction() as connection:
+            connection.execute(
+                """
+                INSERT INTO connector_resources(
+                    connector,
+                    resource_reference,
+                    resource_id,
+                    resource_url,
+                    resource_type,
+                    grant_type,
+                    selected_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(connector) DO UPDATE SET
+                    resource_reference = excluded.resource_reference,
+                    resource_id = excluded.resource_id,
+                    resource_url = excluded.resource_url,
+                    resource_type = excluded.resource_type,
+                    grant_type = excluded.grant_type,
+                    selected_at = excluded.selected_at
+                """,
+                (
+                    metadata.connector,
+                    metadata.resource_reference,
+                    metadata.resource_id,
+                    metadata.resource_url,
+                    metadata.resource_type,
+                    metadata.grant_type,
+                    _serialize_datetime(metadata.selected_at),
+                ),
+            )
+
+    def get_connector_resource(
+        self,
+        connector: str,
+    ) -> ConnectorResourceMetadata | None:
+        """Return the selected non-secret resource boundary."""
+
+        row = self.database.connection.execute(
+            "SELECT * FROM connector_resources WHERE connector = ?",
+            (connector,),
+        ).fetchone()
+        if row is None:
+            return None
+        return ConnectorResourceMetadata(
+            connector=str(row["connector"]),
+            resource_reference=str(row["resource_reference"]),
+            resource_id=str(row["resource_id"]),
+            resource_url=str(row["resource_url"]),
+            resource_type=str(row["resource_type"]),
+            grant_type=str(row["grant_type"]),
+            selected_at=_parse_datetime(str(row["selected_at"])),
         )
 
     def mark_connector_authorization_used(
@@ -764,6 +830,7 @@ class StateStore:
                 connection,
                 "connector_authorizations",
             ),
+            connector_resources=_table_count(connection, "connector_resources"),
             normalized_source_tasks=_table_count(
                 connection,
                 "normalized_source_tasks",
@@ -930,6 +997,7 @@ def _table_count(connection: sqlite3.Connection, table: str) -> int:
         "connector_authorizations": (
             "SELECT COUNT(*) AS count FROM connector_authorizations"
         ),
+        "connector_resources": "SELECT COUNT(*) AS count FROM connector_resources",
         "source_evidence": "SELECT COUNT(*) AS count FROM source_evidence",
         "normalized_source_tasks": (
             "SELECT COUNT(*) AS count FROM normalized_source_tasks"

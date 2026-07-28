@@ -1,16 +1,16 @@
 # Jira Connector
 
 - **Status:** Accepted
-- **Version:** 1
+- **Version:** 2
 - **Owner:** Brad
 - **Last updated:** 2026-07-27
 
-This specification defines the read-only Jira connector through its mocked and
-synthetic-data phase. It accepts the connector contract, normalization, failure
-handling, and deterministic briefing behavior described below. It does not
-authorize an OAuth application registration, credential storage, Atlassian
-account authorization, site discovery, live Jira retrieval, or external
-mutation.
+This specification defines the read-only Jira connector through its completed
+resource-restricted authorization and project-discovery phase. It accepts the
+project-only live boundary plus the mocked issue connector, normalization,
+failure handling, and deterministic briefing behavior described below. It does
+not authorize live issue search, issue normalization, issue persistence,
+another project discovery, or external mutation.
 
 ## Source authority
 
@@ -28,6 +28,16 @@ daily candidate, primary outcome, human commitment, or relationship claim.
 
 The implemented phase contains:
 
+- A private, resource-level Atlassian OAuth 2.0 3LO application.
+- Exact `read:jira-work` scope enforcement without offline access.
+- A state-protected fixed loopback callback and explicit browser-account
+  confirmation.
+- Keychain-only client-secret and short-lived access-token storage.
+- Exact one-site discovery through `accessible-resources`.
+- A current paginated project-search transport restricted to the selected
+  `cloudId`, `action=browse`, and minimal project metadata.
+- One private ignored project-selection report with no project catalog in
+  SQLite.
 - A structured, non-executable query boundary.
 - A read-only issue-search transport protocol.
 - Synthetic issue pages and mocked non-secret authorization metadata.
@@ -37,52 +47,53 @@ The implemented phase contains:
   limits, and authorization failure categories.
 - Provider-neutral source items, normalized task records, source evidence,
   connector-run records, provenance, and coverage counts.
-- Deterministic briefing integration using synthetic data only.
+- Deterministic briefing integration using synthetic issue data only.
 
-There is no Jira HTTP transport, token client, Keychain registration, live CLI,
-background poller, or hosted-inference path. The mocked coverage funnel reports
-zero persisted records because no Jira persistence or live trial is authorized.
+There is no live issue-search HTTP transport, executable JQL, issue
+normalization from Jira, background poller, refresh path, or hosted-inference
+path. Project discovery and synthetic issue behavior remain separate
+boundaries.
 
-## Proposed account, site, and application boundary
+## Accepted account, site, and application boundary
 
-The live-access gate must approve all of the following before implementation:
+The completed project-discovery trial uses:
 
-- The exact Atlassian account Brad selects and confirms.
-- One exact Jira Cloud site and its provider `cloudId`.
-- A resource-restricted OAuth grant limited to that selected site.
-- The OAuth application name, owner, and administrators.
-- The exact read scopes, callback, refresh behavior, project keys, query, issue
-  fields, page size, page limit, and description policy.
+- The Atlassian account Brad explicitly confirmed in the browser.
+- One exact Jira Cloud site and its provider `cloudId`, retained only as
+  private non-secret local metadata.
+- A resource-level grant limited to the site selected during consent.
+- The private application `Chief of Staff (Local) — Jira`, owned and
+  administered by Brad through his Northridge account.
+- Exact `read:jira-work` scope with no refresh token or offline access.
+- The fixed callback `http://127.0.0.1:8766/oauth/callback`.
 
-The proposed application should be controlled by Northridge or explicitly
-approved by the appropriate Northridge administrator, with at least one
-additional authorized administrator where organizational policy permits. No
-personal API token or basic-auth fallback is allowed.
+Brad explicitly approved proceeding with himself as the sole current
+contributor. Additional administrator ownership remains preferred where
+Northridge policy permits it. No personal API token or basic-auth fallback is
+allowed.
 
 The repository stores only opaque aliases such as `primary-user` and
 `approved-site`. Account identity, site URL, and `cloudId` remain private
 non-secret runtime metadata and must not be committed.
 
-## Proposed OAuth boundary
+## OAuth boundary
 
 Atlassian currently recommends OAuth 2.0 authorization-code grants, commonly
 called three-legged OAuth or 3LO, for external integrations. New applications
 can use resource-restricted grants so the token applies only to the site
 selected during consent.
 
-The exact live scope remains subject to Brad's approval. The current
-least-privilege recommendation is:
+The approved least-privilege scope is:
 
 ```text
 read:jira-work
 ```
 
 Atlassian lists this classic scope for reading Jira project and issue data and
-for issue search. The enhanced JQL search operation identifies it as the
-recommended classic scope. The initial connector does not call a user-profile
-endpoint, so `read:jira-user` is not currently recommended. If account
-verification later requires a separate user-profile call, that added scope and
-endpoint require another explicit review.
+for issue search. The project-discovery transport uses only project search.
+The connector does not call a user-profile endpoint; account identity is
+therefore explicitly confirmed from the browser consent experience rather than
+requesting `read:jira-user` or `read:me`.
 
 Do not request:
 
@@ -92,11 +103,10 @@ Do not request:
 - `offline_access` for the first bounded on-demand trial
 - Any granular or product scope not required by the approved operations
 
-Authorization must use a cryptographically random, unguessable `state` value
-and reject mismatches. The provider callback must exactly match the
-live-gate-approved registration. Atlassian's current documented 3LO sequence
-does not specify PKCE parameters for this external application flow; the live
-gate must recheck current documentation rather than invent unsupported
+Authorization uses a cryptographically random, unguessable `state` value and
+rejects mismatches. The callback exactly matches the application registration.
+Atlassian's current documented confidential-client 3LO sequence does not
+specify PKCE parameters, so this implementation does not invent unsupported
 parameters.
 
 The initial trial should use a short-lived access token without refresh
@@ -104,11 +114,30 @@ capability. Any future refresh token or unattended operation requires separate
 approval of `offline_access`, rotation behavior, revocation, retention, and
 scheduling.
 
-If live access is later approved, the client secret and access token belong
-only in macOS Keychain under reviewed lookup references. SQLite may contain
-only non-secret account, site, scope, expiry, health, app-ownership, and
-Keychain-reference metadata. No Jira credential currently exists under this
-specification.
+The client secret and short-lived access token belong only in macOS Keychain
+under reviewed lookup references. SQLite contains only non-secret account,
+site, scope, expiry, health, app-ownership, grant-type, and Keychain-reference
+metadata.
+
+## Bounded project discovery
+
+The sole live Jira data operation completed before issue selection is:
+
+```text
+GET /rest/api/3/project/search
+```
+
+Every request uses the selected `cloudId`, `action=browse`, `orderBy=key`, a
+page size of 50, and a 20-page ceiling. The application rejects a different
+`cloudId` before network access. Returned projects are minimized to ID, key,
+name, project type, archived status when the provider supplies it, and the
+fact that the browse-filtered endpoint returned the project.
+
+No issue search, issue count derived through issue search, project description,
+lead, role, component, version, board, sprint, filter, permission-detail,
+configuration, or mutation endpoint is called. Provider pages and unused
+fields remain transient. Project names and keys appear only in the mode-`0600`
+ignored selection report; the complete catalog is not stored in SQLite.
 
 ## Read-only transport contract
 
@@ -309,25 +338,47 @@ tokens and raw pages remain transient.
 
 ## Persistence and lifecycle
 
-No Jira source facts are persisted in the mocked and synthetic phase. A future
-approved live trial must first confirm the Jira task-to-SQLite mapping and
-apply [ADR-0004](../../decisions/0004-adopt-sqlite-and-bounded-local-data-lifecycle.md):
+The completed project-discovery phase applies
+[ADR-0004](../../decisions/0004-adopt-sqlite-and-bounded-local-data-lifecycle.md):
 
 - Raw response bytes and provider dictionaries remain transient.
-- Only selected, minimized source facts, provenance, evidence, freshness,
-  coverage, and run metadata may persist.
-- Descriptions and excluded resources do not persist.
+- The complete project catalog, project names, and project keys do not persist
+  in SQLite.
+- One minimized connector run, coverage record, catalog provenance reference,
+  authorization-health record, and selected-site boundary may persist.
+- The private report under `.local/` is mode `0600`, ignored by Git, and
+  retained only long enough for Brad to approve project keys.
 - Credentials never enter SQLite.
+- No issue fact is normalized or persisted.
+
+A future issue trial must first confirm Brad's project selection and the Jira
+task-to-SQLite mapping:
+
+- Only approved, selected, minimized source facts, provenance, evidence,
+  freshness, coverage, and run metadata may persist.
+- Descriptions and excluded resources do not persist.
 - Complete retrieval may reconcile absence; partial retrieval may not drive
   absence-based deletion.
 - Source-owned Jira facts remain subordinate to Jira.
 
-## Mocked and synthetic validation
+## Validation
 
 Tests demonstrate:
 
+- Exact `read:jira-work` authorization without user-profile, offline, write,
+  administrative, granular, Confluence, Jira Software, or Jira Service
+  Management scopes.
+- State mismatch and replay rejection.
+- Explicit account confirmation before token exchange.
+- One resource-level selected site and rejection of an unselected `cloudId`.
+- Keychain-only client-secret and access-token storage.
+- Project-only endpoint, field minimization, pagination, and browse filtering.
+- Distinct missing-site, ambiguous-site, authentication, permission,
+  rate-limit, empty-project, and partial-pagination outcomes.
+- Private report permissions, proposed unexecuted JQL, and absence of project
+  catalog or credentials from SQLite.
+- No reachable issue or mutation operation in the live discovery transport.
 - Mocked OAuth state matching and replay rejection.
-- Mandatory live token-exchange stop.
 - Exact proposed read-scope matching in mock metadata.
 - Read-only-only connector and transport interfaces.
 - Pagination with stable fields and boundaries.
@@ -346,30 +397,30 @@ Tests demonstrate:
 - Synthetic canonical-section integration and presentation budgets.
 - Absence of credentials, live data, hosted inference, and external writes.
 
-## Mandatory live-access gate
+## Mandatory issue-retrieval gate
 
-Work stops after mocked and synthetic validation. Before a live Jira trial,
-Brad must explicitly approve:
+Work stops after the one project-discovery trial. Brad must inspect the private
+report and explicitly approve:
 
-1. Atlassian account identity.
-2. Exact Jira Cloud site and `cloudId`.
-3. OAuth application name, ownership, and administrators.
-4. Resource-restricted grant selection.
-5. Exact read scopes.
-6. Exact callback and current state, PKCE, and refresh behavior.
-7. Approved project keys.
-8. Final JQL or equivalent boundary.
-9. Exact issue fields, including whether reporter or description is allowed.
-10. Page size, page limit, retrieval window, and persistence behavior.
+1. Project keys.
+2. Whether every selected project should be searched.
+3. Whether explicitly linked issue keys outside those projects are allowed.
+4. The filled JQL or equivalent query boundary.
+5. The exact issue fields, with description and reporter excluded unless a
+   later approval changes that boundary.
+6. Page size, page limit, retrieval window, normalization, persistence, and
+   briefing behavior.
 
-No registration, authorization, Keychain change, site discovery, live query,
-or Jira mutation is allowed until that approval is recorded.
+No JQL, issue endpoint, issue normalization, issue persistence, repeat project
+discovery, authorization refresh, or Jira mutation is authorized before that
+approval.
 
 ## Official references
 
 - [Atlassian OAuth 2.0 3LO apps](https://developer.atlassian.com/cloud/jira/platform/oauth-2-3lo-apps/)
 - [Jira OAuth 2.0 scopes](https://developer.atlassian.com/cloud/jira/platform/scopes-for-oauth-2-3LO-and-forge-apps/)
 - [Jira Cloud REST API v3](https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/)
+- [Jira project search](https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-projects/#api-rest-api-3-project-search-get)
 - [Jira enhanced issue search](https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-search/)
 - [ADR-0004: SQLite and Bounded Local Data Lifecycle](../../decisions/0004-adopt-sqlite-and-bounded-local-data-lifecycle.md)
 - [ADR-0005: OAuth and macOS Keychain](../../decisions/0005-adopt-oauth-and-macos-keychain.md)

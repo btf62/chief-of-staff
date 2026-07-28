@@ -169,7 +169,7 @@ explicit approval for another Calendar retrieval or any later connector.
 
 ## Milestone 5 — Task-System Connectors
 
-- **Status:** In progress — Todoist complete; Jira stopped at live-access gate
+- **Status:** In progress — Todoist complete; Jira stopped at issue gate
 - **Intended user-visible outcome:** Brad's factual briefing can include
   relevant source-owned work across Todoist, Jira, and Asana without replacing
   any task system.
@@ -212,18 +212,23 @@ snapshot. The quality gate now distinguishes retrieval, selection,
 persistence, daily-candidate, and display counts.
 
 The accepted [Jira connector](architecture/connectors/jira.md) now has a
-structured non-executable query boundary, mocked OAuth state validation,
-read-only-only transport contract, typed issue normalization, conservative
-cross-source association, pagination, partial and permission-limited failure
-handling, source-evidence and connector-run models, coverage funnel, and
-synthetic deterministic briefing integration. No Jira OAuth application,
-credential, HTTP transport, site discovery, or live record has been used.
+resource-restricted OAuth application, exact read-scope enforcement,
+Keychain-only credentials, one-site binding, project-only HTTP transport,
+private project-selection report, and project-discovery coverage and
+provenance. The structured issue query, issue normalization, conservative
+cross-source association, issue pagination and failure handling, and
+deterministic briefing integration remain synthetic.
 
-Work is stopped at the Jira live-access gate. Continue only after Brad
-explicitly approves the Atlassian account, site and `cloudId`, application
-ownership, exact scopes, project keys, final query, issue fields, pagination,
-and description policy. Repeat Calendar or Todoist access also remains
-unauthorized.
+One explicitly approved trial authorized the confirmed account, discovered one
+selected Jira Cloud site, and retrieved only browse-visible minimal project
+metadata. No JQL or issue endpoint was called, and no complete project catalog
+was persisted in SQLite.
+
+Work is stopped at the Jira issue-retrieval gate. Continue only after Brad
+reviews the private report and explicitly approves project keys, final query,
+issue fields, pagination, normalization, persistence, and description policy.
+Repeat Jira project discovery, authorization refresh, Calendar, or Todoist
+access also remains unauthorized.
 
 ## Milestone 6 — Gmail and Google Drive Connectors
 

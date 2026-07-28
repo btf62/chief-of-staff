@@ -200,6 +200,7 @@ class StateInspection:
     disposition_events: int
     oauth_clients: int
     connector_authorizations: int
+    connector_resources: int
     normalized_source_tasks: int
     normalized_source_task_labels: int
 
@@ -215,6 +216,7 @@ class OAuthClientMetadata:
     client_secret_account: str
     configured_at: datetime
     application_owner: str | None = None
+    oauth_grant_type: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -235,6 +237,19 @@ class ConnectorAuthorizationMetadata:
     authorized_at: datetime
     updated_at: datetime
     last_used_at: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ConnectorResourceMetadata:
+    """One non-secret provider resource bound to a connector grant."""
+
+    connector: str
+    resource_reference: str
+    resource_id: str
+    resource_url: str
+    resource_type: str
+    grant_type: str
+    selected_at: datetime
 
 
 @dataclass(frozen=True, slots=True)

@@ -4,12 +4,12 @@
 - **Owner:** Brad
 - **Last updated:** 2026-07-27
 
-This document describes the implemented repository, Calendar, and Todoist
-connector boundaries. The synthetic demonstrations, one bounded Calendar
-trial, one bounded combined Calendar-and-Todoist trial, and one approved
-complete-retrieval and normal-workday quality validation are complete. Live
-access is now stopped. None of the credential or live-retrieval commands below
-may be repeated without new explicit approval.
+This document describes the implemented repository, Calendar, Todoist, and
+Jira project-discovery boundaries. The synthetic demonstrations, bounded
+Calendar and Todoist trials, Todoist workday-quality validation, and one
+resource-restricted Jira project-only discovery are complete. Live access is
+now stopped. None of the credential or live-retrieval commands below may be
+repeated without new explicit approval.
 
 ## Run the safe connector demonstration
 
@@ -113,6 +113,65 @@ The client secret must enter the first command through controlled stdin, never
 through a command argument, shell history, configuration file, or repository
 file. Brad's personal API token is not an accepted fallback.
 
+## Jira authorization and credential boundary
+
+The Jira connector uses a private OAuth 2.0 3LO application named
+`Chief of Staff (Local) — Jira`, owned and administered by Brad through his
+Northridge account. Brad approved proceeding with himself as the sole current
+contributor. It uses a resource-level grant, the fixed loopback callback in the
+[Jira connector specification](../architecture/connectors/jira.md), and
+exactly this scope:
+
+```text
+read:jira-work
+```
+
+The client secret and short-lived access token are stored only in macOS
+Keychain. No refresh token or offline access was requested. SQLite stores only
+non-secret application ownership, user-confirmed account identity, selected
+site, `cloudId`, grant type, scope, expiry, health, and Keychain references.
+
+The private local setup and one-time discovery command was:
+
+```text
+python -m chief_of_staff.jira_live_cli \
+  register-client-interactive \
+  --application-name "Chief of Staff (Local) — Jira" \
+  --application-owner "Northridge Church"
+python -m chief_of_staff.jira_live_cli authorize-and-discover
+python -m chief_of_staff.jira_live_cli status
+```
+
+The first command prompts for the client ID and uses a hidden terminal prompt
+for the client secret. Neither belongs in a command argument, shell history,
+configuration file, report, or repository file. A controlled two-line stdin
+variant remains available for non-interactive local recovery. The authorization
+command requires Brad to confirm the account shown during browser consent.
+These commands remain available for inspection and recovery, but their
+presence does not authorize another grant or retrieval.
+
+## Bounded Jira project discovery
+
+The one approved Jira discovery:
+
+- Used `accessible-resources` to require exactly one selected site.
+- Bound all Jira API requests to that site's `cloudId`.
+- Used only `GET /rest/api/3/project/search` with `action=browse`.
+- Followed project pagination within a fixed page ceiling.
+- Minimized each project to ID, key, name, type, archived status when
+  available, and browse availability.
+- Kept provider pages and unused fields transient.
+- Stored only authorization health, selected-site metadata, one connector run,
+  coverage, and a catalog-level provenance reference in SQLite.
+- Wrote project names and keys only to a mode-`0600` report under
+  `.local/jira/`.
+- Prepared an unfilled JQL and field proposal without executing either.
+
+It did not call an issue endpoint or retrieve issue descriptions, counts
+through issue search, project details, roles, components, versions, boards,
+sprints, filters, permission details, or configuration. It exposed no Jira
+mutation operation.
+
 ## Bounded live trial
 
 The completed trial was invoked on demand with:
@@ -207,6 +266,12 @@ complete task and context pagination, duplicate-ID handling, priority
 semantics, independent selection attribution, snapshot reconciliation,
 candidate-versus-display accounting, minimized persistence, independent
 failures, non-workday suppression, and no task-system mutation.
+Jira project-discovery tests additionally cover exact scope, state and account
+confirmation, resource-level one-site selection, rejection of an unselected
+`cloudId`, Keychain isolation, the project-only endpoint and minimal fields,
+pagination, distinct authorization and retrieval failures, private report
+permissions, minimized SQLite persistence, transient raw pages, and absence of
+issue or mutation operations.
 
 ## Current limitations and stop condition
 
@@ -217,10 +282,13 @@ failures, non-workday suppression, and no task-system mutation.
   automatic refresh.
 - Todoist refresh credentials exist in Keychain, but their presence does not
   authorize scheduled, unattended, or repeated retrieval.
+- Jira uses a short-lived access token without refresh capability. The private
+  project report requires Brad's explicit selection before any issue trial.
 - Calendar events remain evidence for deterministic output; inference-only
   briefing sections are not implemented.
 - Daily Briefing v1 has not been accepted for operational use.
 
-The bounded trials and validation are complete. Do not repeat live Calendar or
-Todoist retrieval, refresh authorization, broaden either boundary, or begin
-Jira or another live connector without new explicit approval.
+The bounded trials and validation are complete. Do not repeat live Calendar,
+Todoist, or Jira project retrieval; refresh authorization; execute JQL;
+retrieve Jira issues; broaden any boundary; or begin another live connector
+without new explicit approval.
