@@ -4,20 +4,15 @@
 
 This is a documentation-first repository with an accepted Version 1 design
 baseline for Daily Briefing v1. The product requirements, feature
-specification, architecture, and ADR-0001 through ADR-0006 are accepted.
+specification, architecture, and ADR-0001 through ADR-0007 are accepted.
 Milestones 0 through 4 are complete. Milestone 5 has completed the accepted
 Todoist connector, one combined Calendar-and-Todoist trial, and one explicitly
 approved complete-retrieval and workday-quality validation. Jira has completed
 its mocked phase, one resource-restricted project-discovery trial, and one
 exact-project live issue trial integrated with the deterministic briefing.
-Asana has completed its mocked phase, historical bounded discovery, and one
-exact-project boundary correction that supersedes the earlier workspace
-selection and its obsolete Northridge boards. The only current Asana use is
-the exact project for collaboration with 9 Embers on Rock RMS development.
-Work is stopped before task retrieval. No repeat JQL, Jira issue retrieval,
-Jira project discovery, Asana authorization, exact-project verification or
-discovery, authorization refresh, Todoist or Calendar retrieval, scope change,
-or broader live access is authorized.
+Milestone 5 now covers only Todoist and Jira and is complete. No repeat JQL,
+Jira issue retrieval, Jira project discovery, authorization refresh, Todoist
+or Calendar retrieval, scope change, or broader live access is authorized.
 
 ## Working rules
 
@@ -75,19 +70,17 @@ The Version 1 design-readiness requirements have been met:
 2. The Product Requirements and Daily Briefing v1 specification are accepted.
 3. Data, privacy, security, agency, and source-authority constraints are
    recorded.
-4. The Architecture Overview and ADR-0001 through ADR-0006 are accepted.
+4. The Architecture Overview and ADR-0001 through ADR-0007 are accepted.
 5. The implementation roadmap defines milestone dependencies, deliverables,
    acceptance gates, and exclusions.
 
 Implementation may proceed only when a task explicitly authorizes it. The
-Google Calendar, Todoist, Jira project-discovery, Jira issue, Asana discovery,
-and Asana exact-project verification gates have been exercised; do not repeat
-live retrieval, broaden access, refresh authorization, repeat discovery or
-verification, or begin Asana task retrieval or another connector without new
-explicit approval.
-Satisfy a
-milestone's acceptance gate before beginning dependent work. Record material
-new product or architecture decisions before implementing them.
+Google Calendar, Todoist, Jira project-discovery, and Jira issue gates have
+been exercised; do not repeat live retrieval, broaden access, refresh
+authorization, repeat discovery, or begin another connector without new
+explicit approval. Satisfy a milestone's acceptance gate before beginning
+dependent work. Record material new product or architecture decisions before
+implementing them.
 
 ## Validation
 

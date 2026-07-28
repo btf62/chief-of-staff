@@ -7,7 +7,7 @@ identifying priorities, commitments, and useful signals.
 
 ## Status
 
-**Phase:** Milestones 1–4 complete; Milestone 5 task-system trials in progress
+**Phase:** Milestones 1–4 complete; Milestone 5 task-system trials complete
 
 The Python, local-state, deterministic briefing, repository connector, and
 read-only Google Calendar foundations are complete. An explicitly approved,
@@ -17,13 +17,10 @@ Todoist connector, its combined Calendar trial, and one explicitly approved
 complete-retrieval and normal-workday quality validation now satisfy the
 Todoist portion of Milestone 5. Jira has completed its resource-restricted
 authorization, project discovery, and one explicitly approved, exact-project
-issue-retrieval trial integrated with the deterministic briefing. Asana has
-completed historical bounded discovery and one exact-project boundary
-correction that supersedes the obsolete Northridge workspace selection. The
-active project is used only for collaboration with 9 Embers on Rock RMS
-development. Work is stopped before Asana task retrieval. No repeat Asana or
-Jira query, discovery, authorization refresh, repeat Calendar or Todoist
-retrieval, task access, or broader access is authorized.
+issue-retrieval trial integrated with the deterministic briefing. Milestone 5
+now covers only Todoist and Jira. No repeat Jira query, discovery,
+authorization refresh, repeat Calendar or Todoist retrieval, task access, or
+broader access is authorized.
 
 ## Repository map
 

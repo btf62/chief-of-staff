@@ -1,9 +1,9 @@
 # Product Requirements
 
 - **Status:** Accepted
-- **Version:** 1
+- **Version:** 2
 - **Owner:** Brad
-- **Last updated:** 2026-07-25
+- **Last updated:** 2026-07-28
 
 ## Responsibility
 
@@ -29,6 +29,19 @@ systems remain authoritative; the product provides a unified interpretation
 rather than replacing or modifying them. It may maintain bounded, inspectable
 local state so Brad can correct or disposition inferred items and prevent
 repeated false recommendations.
+
+The approved Phase 1 source set is:
+
+- Google Calendar
+- Work Gmail and Personal Gmail as independently authorized connector
+  instances
+- Todoist
+- Jira
+- Approved Google Drive content
+- Approved repository context
+
+Adding another source requires an explicit product-scope decision and its
+connector-specific access, privacy, and retention boundaries.
 
 ## Delivery phases
 
@@ -76,6 +89,7 @@ Detailed feature specifications belong in the
   [Daily Briefing v1 implementation roadmap](../roadmap.md).
 - Rock RMS, Church Online Platform, ministry analytics, dashboards, and
   autonomous actions in Daily Briefing v1.
+- Sources not included in the approved Phase 1 source set.
 - Ideas explicitly deferred in [future ideas](future-ideas.md).
 
 ## Acceptance

@@ -1,9 +1,9 @@
 # Architecture Overview
 
 - **Status:** Accepted
-- **Version:** 3
+- **Version:** 4
 - **Owner:** Brad
-- **Last updated:** 2026-07-27
+- **Last updated:** 2026-07-28
 
 This document defines the technical architecture required for
 [Daily Briefing v1](../product/features/daily-briefing-v1.md). It establishes
@@ -50,7 +50,7 @@ decision record.
 - Ministry analytics
 - Autonomous external actions
 - Sending email
-- Modifying tasks, calendars, documents, Jira, or Asana
+- Modifying tasks, calendars, documents, or Jira
 - Multi-user product generalization
 - Mobile applications
 - Premature scaling or distributed-system architecture
@@ -83,8 +83,8 @@ replace those systems or become authoritative for their records.
 The system has two distinct data relationships:
 
 - **External authoritative records:** Read-only facts retrieved from Google
-  Calendar, Gmail, Todoist, Jira, Asana, approved Google Drive content, and
-  approved repository context.
+  Calendar, Work Gmail, Personal Gmail, Todoist, Jira, approved Google Drive
+  content, and approved repository context.
 - **Product-owned local state:** Inspectable corrections and dispositions that
   affect briefing interpretation without changing an external record.
 
@@ -92,7 +92,7 @@ The system has two distinct data relationships:
 flowchart LR
     Brad["Brad Files<br/>Primary user"]
     Chief["Chief of Staff<br/>Local interpretation and briefing system"]
-    Sources["Approved sources<br/>Calendar, Gmail, Todoist, Jira, Asana, Drive, repository"]
+    Sources["Approved sources<br/>Calendar, Work Gmail, Personal Gmail, Todoist, Jira, Drive, repository"]
     State["Product-owned local state<br/>Corrections and dispositions"]
 
     Sources -->|"Read-only facts, freshness, and links"| Chief
@@ -235,10 +235,10 @@ instance from another instance that returned a legitimate empty result.
 Phase 1 requires connectors for:
 
 - Google Calendar
-- Gmail
+- Work Gmail
+- Personal Gmail
 - Todoist
 - Jira
-- Asana
 - Approved Google Drive content
 - Approved repository context
 

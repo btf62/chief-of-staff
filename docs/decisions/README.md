@@ -33,3 +33,4 @@ decisions.
 | [ADR-0004](0004-adopt-sqlite-and-bounded-local-data-lifecycle.md) | Adopt SQLite and a Bounded Local Data Lifecycle | Accepted | 2026-07-25 |
 | [ADR-0005](0005-adopt-oauth-and-macos-keychain.md) | Adopt OAuth and macOS Keychain for Connector Credentials | Accepted | 2026-07-25 |
 | [ADR-0006](0006-adopt-provider-neutral-inference-with-openai.md) | Adopt a Provider-Neutral Inference Boundary with OpenAI as the Initial Provider | Accepted | 2026-07-25 |
+| [ADR-0007](0007-remove-asana-from-product-scope.md) | Remove Asana from Product Scope | Accepted | 2026-07-28 |

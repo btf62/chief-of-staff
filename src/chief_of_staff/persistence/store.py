@@ -577,6 +577,18 @@ class StateStore:
                 (connector_instance_id,),
             )
 
+    def delete_connector_instance(self, connector_instance_id: str) -> bool:
+        """Delete one exact retired instance after its secrets are removed."""
+
+        if not connector_instance_id.strip():
+            raise ValueError("connector instance ID must not be empty")
+        with self.database.transaction() as connection:
+            cursor = connection.execute(
+                "DELETE FROM connector_instances WHERE id = ?",
+                (connector_instance_id,),
+            )
+        return cursor.rowcount > 0
+
     def delete_connector_authorization(self, connector_or_instance_id: str) -> bool:
         """Delete only non-secret grant metadata after token cleanup."""
 

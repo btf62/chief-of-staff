@@ -109,7 +109,7 @@ boundary requires review and may require a later ADR.
 
 The model must never:
 
-- Authenticate to Gmail, Calendar, Drive, Todoist, Jira, or Asana.
+- Authenticate to Gmail, Calendar, Drive, Todoist, or Jira.
 - Call source connectors.
 - Browse Brad's accounts independently.
 - Query SQLite directly.

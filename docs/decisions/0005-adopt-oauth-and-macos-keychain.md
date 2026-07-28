@@ -14,7 +14,6 @@ read-only access to:
 - Approved Google Drive content
 - Todoist
 - Jira
-- Asana
 - Approved local repository context
 
 These sources contain private personal, organizational, pastoral, and
@@ -102,7 +101,6 @@ For Daily Briefing v1:
   application.
 - Todoist uses OAuth rather than a personal API token.
 - Jira Cloud uses OAuth 2.0 three-legged authorization.
-- Asana uses OAuth rather than a personal access token.
 - Approved local repository context requires no remote credential when read
   directly from an approved local path.
 
@@ -160,8 +158,6 @@ behavior. The intended direction is:
 - Todoist `data:read` rather than read/write or delete permissions.
 - Jira issue, project, and user read scopes without write or administrative
   scopes.
-- Asana task, project, workspace, and identity read scopes without write or
-  delete scopes.
 - Google Drive access limited to approved content using the narrowest
   practical scope and content boundary.
 
@@ -350,14 +346,6 @@ These directions do not finalize endpoint or scope lists.
   operation.
 - Request refresh or offline capability only as needed for unattended future
   runs.
-
-### Asana
-
-- Use the authorization-code OAuth flow.
-- Request only the required read scopes.
-- Do not use a personal access token for normal Version 1 operation.
-- Store the client secret and refresh token in Keychain.
-- Do not request task, project, comment, or other write or delete permissions.
 
 ### Local repository context
 

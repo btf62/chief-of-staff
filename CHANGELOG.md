@@ -100,6 +100,7 @@ No strict versioning scheme is promised before a distributable product exists.
 - An accepted Asana specification, synthetic task contract, exact-scope OAuth
   flow, bounded workspace/project discovery surface, private selection report,
   and no-mutation contract tests.
+- ADR-0007, recording the decision to remove Asana from product scope.
 
 ### Changed
 
@@ -136,3 +137,11 @@ No strict versioning scheme is promised before a distributable product exists.
   retrieval.
 - Clarified that the superseded Northridge boards are obsolete and the exact
   project exists only for 9 Embers collaboration on Rock RMS development.
+
+### Removed
+
+- Asana from Daily Briefing v1, the Phase 1 source set, architecture, roadmap,
+  operations, connector index, implementation, and tests.
+- The local Asana OAuth grant, Keychain credentials, SQLite metadata, and
+  private discovery reports. No live task data had been retrieved or
+  persisted.

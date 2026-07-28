@@ -1,7 +1,7 @@
 # Daily Briefing v1 Implementation Roadmap
 
 - **Status:** Accepted
-- **Version:** 1
+- **Version:** 2
 - **Owner:** Brad
 - **Last updated:** 2026-07-28
 
@@ -12,11 +12,8 @@ bounded primary-calendar trial. Milestone 5 has completed its accepted Todoist
 boundary, combined Calendar-and-Todoist trial, and one explicitly approved
 complete-retrieval and normal-workday quality validation. Jira has completed
 its mocked phase, project discovery, and one exact-project live issue trial.
-Asana has completed its mocked phase, historical bounded discovery, and one
-exact-project boundary correction that supersedes the earlier workspace
-selection and its obsolete Northridge boards. The active project is used only
-for collaboration with 9 Embers on Rock RMS development. Work is stopped
-before live task retrieval.
+Milestone 5 now covers only the accepted Todoist and Jira task-system sources
+and is complete.
 Dates and estimates remain intentionally omitted until implementation
 evidence supports them.
 
@@ -174,16 +171,15 @@ explicit approval for another Calendar retrieval or any later connector.
 
 ## Milestone 5 — Task-System Connectors
 
-- **Status:** In progress — Todoist and Jira trials complete; Asana bound to one exact project and stopped before tasks
+- **Status:** Complete
 - **Intended user-visible outcome:** Brad's factual briefing can include
-  relevant source-owned work across Todoist, Jira, and Asana without replacing
-  any task system.
+  relevant source-owned work across Todoist and Jira without replacing either
+  task system.
 - **Dependencies:** Milestone 4 and an accepted connector specification for
   each task system before its live authorization.
 - **Principal deliverables:**
   - Todoist connector.
   - Jira connector.
-  - Asana connector.
   - Source-owned tasks, deadlines, ownership, and project context.
   - Preservation of conflicting source facts.
   - Conservative cross-source associations.
@@ -231,37 +227,9 @@ generated one normal-workday briefing from live repository, primary Calendar,
 Todoist, and Jira context without hosted inference. Jira items were not forced
 into the briefing when current evidence did not support daily relevance.
 
-The accepted [Asana connector](architecture/connectors/asana.md) now has a
-synthetic task contract, exact-scope OAuth with state and PKCE, Keychain-only
-secrets, refresh and revocation boundaries, workspace/project discovery
-transports, conservative pagination, minimized persistence, and no mutation
-surface.
-
-One explicitly approved Asana trial authorized the confirmed account with
-exactly `workspaces:read projects:read` and retrieved only minimal workspace
-metadata. It found multiple accessible workspaces, wrote the private selection
-report, and stopped.
-
-Brad then approved one organization workspace from that private report. One
-bounded project-only trial refreshed the existing exact-scope grant, bound the
-connector instance to the approved private GID, retrieved only active compact
-project records, and wrote the complete catalog to a new ignored mode-`0600`
-selection report. It did not repeat workspace discovery or call any task,
-user, section, search, mutation, hosted-inference, or other connector
-operation.
-
-Brad subsequently identified that workspace as the wrong active boundary and
-approved one exact project in a different accessible workspace. One bounded
-single-project verification matched both IDs from the approved link and
-replaced the active resource binding. The earlier catalog remains historical
-private audit material only. Those old Northridge boards are obsolete. The
-only current Asana use is collaboration with 9 Embers on Rock RMS development
-inside the exact approved project.
-
-Work is stopped before Asana task retrieval. The exact project is the maximum
-Asana boundary. Repeat Asana or Jira retrieval, another Asana project,
-workspace-wide or task access, authorization refresh, Calendar, or Todoist
-access remains unauthorized.
+Milestone 5 is complete. Repeat Jira retrieval, authorization refresh,
+Calendar access, or Todoist access remains unauthorized without a new explicit
+approval.
 
 ## Milestone 6 — Gmail and Google Drive Connectors
 

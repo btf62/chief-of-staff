@@ -1,9 +1,9 @@
 # Feature: Daily Briefing v1
 
 - **Status:** Accepted
-- **Version:** 7
+- **Version:** 8
 - **Owner:** Brad
-- **Last updated:** 2026-07-27
+- **Last updated:** 2026-07-28
 
 ## Summary
 
@@ -43,10 +43,10 @@ Daily Briefing v1 may read only approved content from these Phase 1 sources:
 | Source | Authoritative responsibility |
 | --- | --- |
 | Google Calendar | Current calendar events, timing, participants, locations, and meeting links |
-| Gmail | Messages, correspondence context, replies, acknowledgments, and communication commitments |
+| Work Gmail | Work messages, correspondence context, replies, acknowledgments, and communication commitments |
+| Personal Gmail | Personal messages, correspondence context, replies, acknowledgments, and communication commitments |
 | Todoist | Personal tasks, dates, priorities, and completion state |
 | Jira | Jira-managed work, status, ownership, dependencies, and deadlines |
-| Asana | Asana-managed work, status, ownership, dependencies, and deadlines |
 | Approved Google Drive content | Approved documents and planning context |
 | Approved repository context | Approved project goals, decisions, requirements, and working context |
 
@@ -290,7 +290,7 @@ rather than present it as fact.
 
 ### 8. Important Tasks
 
-Show only Todoist, Jira, or Asana work that materially affects today. Avoid
+Show only Todoist or Jira work that materially affects today. Avoid
 duplicating items already represented in Today's Outcomes, Preparation
 Needed, People Waiting on Brad, or Commitments at Risk.
 
@@ -469,7 +469,7 @@ The briefing must:
 Example Source Coverage disclosure:
 
 > Todoist was unavailable. Today's recommendations are based on Calendar,
-> Gmail, Jira, Asana, Drive, and repository context.
+> Work Gmail, Personal Gmail, Jira, Drive, and repository context.
 
 The briefing must not imply that absence from the approved source set proves
 that no relevant work or commitment exists.
@@ -566,7 +566,7 @@ It must not:
 - Send communications
 - Create or modify tasks
 - Change calendar events
-- Update Jira or Asana
+- Update Jira
 - Edit Drive documents
 - Take any other external action
 
@@ -602,8 +602,7 @@ Daily Briefing v1 is not:
 - A ministry analytics report
 - A performance-scoring system
 - An autonomous agent
-- A replacement for Gmail, Google Calendar, Todoist, Jira, Asana, or Google
-  Drive
+- A replacement for Gmail, Google Calendar, Todoist, Jira, or Google Drive
 
 The following sources and capabilities are outside Daily Briefing v1:
 
