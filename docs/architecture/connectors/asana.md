@@ -1,21 +1,25 @@
 # Asana Connector
 
 - **Status:** Accepted
-- **Version:** 3
+- **Version:** 4
 - **Owner:** Brad
 - **Last updated:** 2026-07-28
 
-This specification defines the read-only Asana connector through bounded
-workspace discovery and one explicitly approved organization-workspace
-project discovery. It prepares a synthetic task contract for later review, but
-it does not authorize or implement live task retrieval. It does not authorize
-another discovery, a different account, broader scopes, hosted inference, or
-an external mutation.
+This specification defines the read-only Asana connector through historical
+bounded discovery and one active, explicitly approved exact-project boundary.
+The exact project exists only for collaboration with 9 Embers on Rock RMS
+development. The previously discovered Northridge boards are obsolete. This
+specification prepares a synthetic exact-project task contract for later
+review, but it does not authorize or implement live task retrieval. It does
+not authorize another discovery, a different project or account, broader
+scopes, hosted inference, or an external mutation.
 
 ## Source authority
 
-Asana is authoritative for Asana-managed work. A later approved task boundary
-may preserve, when available and necessary:
+Asana is authoritative only for work managed in the exact approved 9 Embers
+Rock RMS development project. It is not an authority for the obsolete
+Northridge boards. A later approved task boundary may preserve, when available
+and necessary:
 
 - Workspace, task identity, and task name
 - Completion state and assignee
@@ -56,19 +60,27 @@ The implemented boundary contains:
   partial-coverage behavior.
 - Provider-neutral task normalization for the approved future field model.
 - A live transport exposing only workspace and active-project discovery, with
-  a project-only service that cannot list workspaces.
+  a project-only service that cannot list workspaces. These historical
+  discovery subcommands are retired from the operational CLI.
+- An exact-project verification transport exposing only
+  `GET /projects/{project_gid}` and validating the returned workspace and
+  project identities against the approved link.
 - Exact-scope OAuth authorization code handling with random `state`, PKCE
   `S256`, token introspection, refresh support, revocation, and reauthorization.
 - Keychain-only client-secret, access-token, and refresh-token storage.
-- Non-secret SQLite authorization, health, connector-run, minimal source
-  reference, discovered-workspace, freshness, and coverage metadata.
+- Non-secret SQLite authorization, health, connector-run, exact-project source
+  reference, freshness, and coverage metadata.
 - A private ignored selection report containing the discovery catalog.
 
 The first explicitly authorized live trial completed with three accessible
-workspaces and stopped. Brad then approved the organization workspace using
-the GID already recorded in the private discovery report. The bounded
-project-only gate is restricted to that local resource binding and cannot
-repeat workspace discovery. No task operation is authorized.
+workspaces and stopped. A later organization-workspace project catalog was
+retrieved, but Brad subsequently identified that workspace as the wrong active
+boundary and supplied one exact project in a different accessible workspace.
+The connector verified that one project and replaced the active resource
+binding. The earlier discovery reports remain private historical audit
+material and authorize no retrieval. The old Northridge boards are obsolete;
+the only active operating purpose is 9 Embers collaboration on Rock RMS
+development. No task operation is authorized.
 
 ## OAuth application and authorization
 
@@ -175,6 +187,37 @@ changes may still affect catalog completeness.
 See the official
 [workspace-project endpoint](https://developers.asana.com/reference/getprojectsforworkspace).
 
+## Exact-project boundary correction
+
+Brad supplied one exact modern Asana project URL. The local command parses the
+workspace and project GIDs from that URL, treats the trailing board or list
+view GID as navigation context rather than authority, and calls only:
+
+```text
+GET /api/1.0/projects/{project_gid}
+```
+
+The request uses the existing exact `workspaces:read projects:read` grant and
+requests only:
+
+```text
+gid,name,archived,public,permalink_url,workspace.gid
+```
+
+The response is accepted only when both its project GID and workspace GID
+match the approved URL and the project is not archived. A mismatch,
+authorization or permission failure, timeout, rate limit, invalid payload, or
+non-Asana permalink stops verification without replacing the prior binding.
+After successful verification, SQLite replaces the superseded workspace
+resource with one exact-project resource. The verification exposes no
+workspace-list, project-list, task, search, user, section, or mutation method.
+The safe local resource reference identifies the project purpose as 9 Embers
+Rock RMS development collaboration without committing its provider GID or
+private project name.
+
+See the official
+[single-project endpoint](https://developers.asana.com/reference/getproject).
+
 ## Private selection report
 
 Each discovery gate writes one ignored mode-`0600` Markdown report under
@@ -194,25 +237,27 @@ approve:
 It also presents assigned-workspace, approved-project, and hybrid
 task-retrieval options without choosing among them.
 
-Discovery does not imply approval. The complete project catalog, raw provider
-responses, and pagination offsets are not persisted. Transient response data,
-OAuth code, PKCE verifier, offsets, and temporary TLS material are released
-after use.
+The exact-project correction writes a separate mode-`0600` audit report
+recording the verified private identity and that the earlier workspace-wide
+boundary is superseded. Discovery does not imply approval. The complete
+project catalog, raw provider responses, and pagination offsets are not
+persisted. Transient response data, OAuth code, PKCE verifier, offsets, and
+temporary TLS material are released after use.
 
 ## Prepared task contract — not authorized live
 
-The narrowest practical future task operation is:
+The only task collection operation eligible for a later approval is:
 
 ```text
-GET /api/1.0/tasks
+GET /api/1.0/projects/{project_gid}/tasks
 ```
 
-The proposal uses one explicitly approved workspace, `assignee=me`,
-provider-supported incomplete-task semantics through `completed_since`, a
-limit of 100, and stable provider-offset pagination. Proposed later scopes
-are `tasks:read`, `workspaces:read`, and `projects:read`;
-`project_sections:read` is added only if Brad approves section membership as a
-requirement.
+The proposal uses only the active exact-project GID, a limit of 100, and stable
+provider-offset pagination. Returned tasks must retain membership in that
+project; an out-of-bound task is omitted and reported. A later live gate would
+add `tasks:read` to the existing `workspaces:read projects:read` grant.
+`project_sections:read` is added only if Brad separately approves section
+membership as a requirement.
 
 The proposed task fields are:
 
@@ -238,27 +283,29 @@ permalink_url
 Section membership and approved tags require a separately justified field and
 scope review. Notes and descriptions remain excluded.
 
-Asana's
-[standard task-list endpoint](https://developers.asana.com/reference/gettasks)
-is preferred over
-[workspace task search](https://developers.asana.com/reference/searchtasksforworkspace).
-Workspace search is premium-only, eventually consistent, and does not provide
-normal stable pagination, so it is unsuitable as the default v1 retrieval
-path without a later product requirement.
+The standard task-list endpoint and workspace task search are outside this
+project boundary. Workspace search is also premium-only, eventually
+consistent, and does not provide normal stable pagination, so it remains
+unsuitable for v1.
 
 No live task endpoint, task count, user endpoint, section endpoint, or search
 endpoint is authorized by this specification's discovery gate.
 
 ## Read-only enforcement
 
-The synthetic task transport exposes `list_tasks`; the live discovery
-transport exposes only `list_workspaces` and `list_projects`. Neither surface
-contains creation, update, completion, reopening, deletion, comment, story,
-assignment, project, section, tag, dependency, follower, attachment,
-custom-field, or other mutation methods.
+The synthetic task transport exposes exact-project `list_tasks`; the live
+discovery transport exposes only `list_workspaces` and `list_projects`; and
+the active verification transport exposes only `get_project`. None contains
+creation, update, completion, reopening, deletion, comment, story, assignment,
+project, section, tag, dependency, follower, attachment, custom-field, or
+other mutation methods.
+
+The operational CLI no longer exposes the workspace or active-project
+discovery subcommands, so those historical transports cannot replace the
+active exact-project binding through the supported live command surface.
 
 Tests assert the absence of live task and mutation operations. Provider host,
-paths, methods, fields, scopes, page limits, workspace rule, and
+paths, methods, fields, scopes, page limits, exact IDs, workspace rule, and
 `archived=false` query are fixed in code.
 
 ## Coverage and failure behavior
@@ -282,8 +329,8 @@ Permitted durable data is limited to:
 - Exact scope, expiry, authorization status, credential and refresh health
 - Keychain lookup references
 - One connector run and minimized source-evidence reference
-- One explicitly approved organization-workspace GID and safe resource
-  reference
+- One explicitly approved exact-project GID, authoritative link, and safe
+  resource reference
 - Coverage and freshness metadata
 - The ignored private selection report
 
@@ -314,12 +361,12 @@ The one approved live trial:
 - Called no project, task, user, hosted-inference, other-connector, or mutation
   operation.
 
-Brad selected one organization workspace from this private report. That
-selection authorizes one bounded project-only discovery but does not authorize
-another OAuth flow, workspace retrieval, task retrieval, or a different
-workspace.
+Brad selected one organization workspace from this private report. At that
+checkpoint, the selection authorized one bounded project-only discovery but
+not another OAuth flow, workspace retrieval, task retrieval, or a different
+workspace. The later exact-project correction supersedes this boundary.
 
-## Approved project-discovery checkpoint
+## Superseded project-discovery checkpoint
 
 The approved project-only gate:
 
@@ -337,7 +384,35 @@ The approved project-only gate:
 - Calls no workspace-list, task, user, section, search, hosted-inference,
   other-connector, or mutation operation.
 
-This checkpoint must stop for Brad to select a later task-retrieval boundary.
+Brad later identified this workspace selection as the wrong active boundary.
+Its catalog and report remain historical private audit material only. They do
+not authorize task access, another discovery, or any future workspace-wide
+retrieval. The discovered Northridge boards are obsolete and must not be used
+as current work evidence.
+
+## Exact-project boundary checkpoint
+
+The approved correction:
+
+- Parses one exact project URL supplied by Brad without placing it in shell
+  history or committed configuration.
+- Uses the existing healthy `workspaces:read projects:read` grant without
+  reauthorization or a scope change.
+- Calls the single-project endpoint once and validates both project and
+  workspace GIDs.
+- Replaces the connector instance's active workspace binding with the
+  verified exact-project resource.
+- Persists only the project source reference, authoritative link,
+  connector-run, coverage, freshness, and credential-use metadata.
+- Writes private identity details only to a mode-`0600` ignored audit report.
+- Persists no project name, raw payload, list catalog, view GID, or token.
+- Calls no workspace-list, project-list, task, user, section, search,
+  hosted-inference, other-connector, or mutation operation.
+
+Execution is stopped before task retrieval. The exact-project resource is now
+the maximum Asana boundary; another project or broader workspace boundary
+requires new explicit approval. Its current operating purpose is collaboration
+with 9 Embers on Rock RMS development.
 
 ## Acceptance
 
@@ -345,21 +420,20 @@ The mocked contract is accepted when formatting, linting, strict type checks,
 unit and integration tests, Markdown validation, credential and private-data
 checks, lifecycle audit, and wheel packaging pass.
 
-The bounded project live gate is complete only after:
+The exact-project correction is complete only after:
 
 1. The private app ownership and exact registered scopes are confirmed.
-2. The browser account is explicitly confirmed and API-verified.
-3. Token introspection reports exactly the approved discovery scopes.
-4. The instance is bound to the previously discovered, explicitly approved
-   organization workspace GID.
-5. No workspace-list endpoint is called.
-6. Active-project pagination completes without endpoint substitution.
+2. The existing confirmed authorization remains healthy.
+3. The submitted URL resolves to one workspace GID and one project GID.
+4. The single-project response matches both approved GIDs.
+5. The instance is bound only to the exact project.
+6. No workspace-list or project-list endpoint is called.
 7. The private report is mode `0600`.
 8. No task, user, hosted-inference, other-connector, or mutation operation is
    called.
 9. Persisted and transient data satisfy the lifecycle boundary.
 10. The complete repository validation passes.
-11. Execution stops for Brad's explicit task-boundary selection.
+11. Execution stops before any task retrieval.
 
 ## Related documents
 

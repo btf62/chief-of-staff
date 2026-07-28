@@ -7,9 +7,10 @@
 This document describes the implemented repository, Calendar, Todoist, Jira,
 and Asana boundaries. The synthetic demonstrations, bounded Calendar and
 Todoist trials, Todoist workday-quality validation, Jira project discovery,
-one exact-project Jira issue trial, and one Asana workspace-discovery trial are
-complete. Live access is now stopped. None of the credential or live-retrieval
-commands below may be repeated without new explicit approval.
+one exact-project Jira issue trial, historical Asana discovery, and one Asana
+exact-project boundary correction are complete. Live access is now stopped.
+None of the credential or live-retrieval commands below may be repeated
+without new explicit approval.
 
 ## Run the safe connector demonstration
 
@@ -203,7 +204,7 @@ Jira enhanced search is eventually consistent, so the report does not claim
 that concurrent provider changes were impossible during pagination. The
 private briefing remains under ignored mode-`0600` local state.
 
-## Asana authorization, workspace, and project-discovery boundary
+## Asana authorization, discovery, and exact-project boundary
 
 The Asana connector uses the private, workspace-restricted OAuth application
 `Chief of Staff (Local) — Asana`. Brad is its sole current owner; no separate
@@ -240,14 +241,21 @@ python -m chief_of_staff.asana_live_cli authorize-and-discover
 python -m chief_of_staff.asana_live_cli \
   approve-workspace-and-discover-projects \
   --workspace-report .local/asana/<private-workspace-report>.md
+python -m chief_of_staff.asana_live_cli \
+  restrict-to-exact-project-interactive
 python -m chief_of_staff.asana_live_cli status
 ```
+
+The two discovery subcommands are now retired from the operational CLI so they
+cannot replace the active exact-project boundary. They remain documented only
+as historical audit context. The exact-project command also requires new
+explicit approval before any repeat use.
 
 The two-line client ID and secret input came from a controlled transient source
 and was cleared immediately after Keychain storage. Neither value belongs in a
 command argument, shell history, file, report, or Git. The commands remain
-available for inspection and recovery, but do not authorize another grant,
-refresh, or retrieval.
+documented for inspection and recovery context, but do not authorize another
+grant, refresh, or retrieval.
 
 The one approved discovery called only `GET /api/1.0/workspaces`, requested
 `gid`, `name`, and `is_organization`, and followed provider offset semantics.
@@ -270,15 +278,36 @@ gid,name,archived,public,permalink_url
 ```
 
 The complete project catalog exists only in an ignored mode-`0600` report
-under `.local/asana/`. SQLite retains the approved workspace GID, safe resource
-reference, connector-run, catalog-reference, coverage, freshness, and
-credential-use metadata. It contains no project catalog, raw response, offset,
-or credential.
+under `.local/asana/`. At that checkpoint, SQLite retained the approved
+workspace GID, safe resource reference, connector-run, catalog-reference,
+coverage, freshness, and credential-use metadata. The later exact-project
+correction replaced that active workspace resource. SQLite contains no project
+catalog, raw response, offset, or credential.
 
 No task, user, section, team, search, hosted-inference, other-connector, or
 mutation endpoint was called. Raw provider responses and offsets were released
 after the report was created. Provider offset pagination completed, although
 concurrent project changes can affect point-in-time catalog completeness.
+
+Brad later identified that selected workspace as the wrong active boundary
+and supplied one exact project URL in a different accessible workspace. The
+interactive correction command keeps the URL out of command arguments and
+shell history. It used the existing healthy exact-scope grant, called only
+`GET /api/1.0/projects/{project_gid}`, and required the returned project and
+workspace GIDs to match the approved URL. It then replaced the active workspace
+resource with the exact project.
+
+The old Northridge boards are obsolete and have no current source authority.
+The exact project is used only for collaboration with 9 Embers on Rock RMS
+development. This operating purpose does not authorize access to the broader
+9 Embers workspace or any other project.
+
+The trailing board or list view GID is navigation context, not authorization.
+The private project identity appears only in SQLite's minimal source reference
+and an ignored mode-`0600` audit report. No workspace list, project list, task,
+user, section, search, hosted-inference, other-connector, or mutation endpoint
+was called. The earlier discovery reports remain superseded historical audit
+material.
 
 ## Bounded live trial
 
@@ -386,8 +415,10 @@ account confirmation, token introspection, Keychain isolation, refresh,
 revocation, reauthorization, fixed approved-workspace binding, workspace and
 project pagination, stable active-project parameters, conservative duplicate
 handling, timeout and page-limit stops, private report permissions,
-project-catalog isolation, partial task-contract coverage, transient raw
-responses and offsets, and absence of live task or mutation operations.
+project-catalog isolation, exact-project URL parsing and identity matching,
+replacement of the active workspace binding, exact-project synthetic task
+containment, partial task-contract coverage, transient raw responses and
+offsets, and absence of live task or mutation operations.
 
 ## Current limitations and stop condition
 
@@ -400,8 +431,9 @@ responses and offsets, and absence of live task or mutation operations.
   authorize scheduled, unattended, or repeated retrieval.
 - Jira uses a short-lived access token without refresh capability.
 - Asana access and refresh credentials exist in Keychain, but their presence
-  does not authorize refresh, repeat workspace or project discovery, task
-  retrieval, scheduling, or unattended operation.
+  does not authorize refresh, repeat workspace or project discovery,
+  exact-project verification, task retrieval, scheduling, or unattended
+  operation.
 - Asana app ownership is currently Brad-only; no separate Northridge
   administrator ownership was confirmed.
 - Calendar events remain evidence for deterministic output; inference-only
@@ -411,5 +443,6 @@ responses and offsets, and absence of live task or mutation operations.
 The bounded trials and validation are complete. Do not repeat live Calendar,
 Todoist, Jira project retrieval, Jira issue retrieval, Asana authorization,
 Asana workspace discovery, or Asana project discovery; refresh authorization;
-retrieve Asana tasks; broaden any boundary; or begin another live connector
-without new explicit approval.
+repeat exact-project verification; retrieve Asana tasks; access another Asana
+project; broaden any boundary; or begin another live connector without new
+explicit approval.

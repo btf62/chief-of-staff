@@ -131,3 +131,8 @@ No strict versioning scheme is promised before a distributable product exists.
   retrieval.
 - Completed one explicitly approved Asana active-project discovery inside the
   selected organization workspace and stopped before task retrieval.
+- Corrected the active Asana boundary to one explicitly approved exact project,
+  superseded the earlier workspace selection, and stopped before task
+  retrieval.
+- Clarified that the superseded Northridge boards are obsolete and the exact
+  project exists only for 9 Embers collaboration on Rock RMS development.

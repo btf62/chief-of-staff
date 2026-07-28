@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime
 
 from chief_of_staff.connectors import (
@@ -24,7 +24,7 @@ from chief_of_staff.domain import CoverageStatus
 from chief_of_staff.pipeline import normalize_item, resolve_context
 
 NOW = datetime(2026, 7, 27, 12, 0, tzinfo=UTC)
-WORKSPACE_GID = "9000000000000001"
+PROJECT_GID = "6000000000000001"
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,7 +35,7 @@ class _AuthorizationProvider:
     ) -> AsanaAuthorization:
         return AsanaAuthorization(
             account_reference=account_reference,
-            workspace_gid=WORKSPACE_GID,
+            project_gid=PROJECT_GID,
             granted_scopes=ASANA_TASK_SCOPES,
             credential_reference="synthetic-keychain-reference",
         )
@@ -118,7 +118,7 @@ def test_synthetic_task_pagination_and_normalization_preserve_approved_facts() -
     )
     connector = AsanaConnector(
         account_reference="primary-user",
-        workspace_gid=WORKSPACE_GID,
+        project_gid=PROJECT_GID,
         authorization_provider=_AuthorizationProvider(),
         transport=transport,
         clock=lambda: NOW,
@@ -138,8 +138,7 @@ def test_synthetic_task_pagination_and_normalization_preserve_approved_facts() -
         None,
         "provider-offset-2",
     ]
-    assert all(call.assignee == "me" for call in transport.calls)
-    assert all(call.completed_since == "now" for call in transport.calls)
+    assert all(call.project_gid == PROJECT_GID for call in transport.calls)
     assert all(call.fields == ASANA_TASK_FIELDS for call in transport.calls)
     assert normalized.provenance.connector_instance_id == ASANA_PRIMARY_INSTANCE
     assert normalized.assignee_reference == "7000000000000001"
@@ -159,14 +158,14 @@ def test_synthetic_task_pagination_and_normalization_preserve_approved_facts() -
 def test_authorization_failure_is_distinct_from_an_empty_task_result() -> None:
     unauthorized = AsanaConnector(
         account_reference="primary-user",
-        workspace_gid=WORKSPACE_GID,
+        project_gid=PROJECT_GID,
         authorization_provider=_UnavailableAuthorizationProvider(),
         transport=_TaskTransport(pages=()),
         clock=lambda: NOW,
     )
     empty = AsanaConnector(
         account_reference="primary-user",
-        workspace_gid=WORKSPACE_GID,
+        project_gid=PROJECT_GID,
         authorization_provider=_AuthorizationProvider(),
         transport=_TaskTransport(pages=(AsanaTaskPage(tasks=()),)),
         clock=lambda: NOW,
@@ -187,7 +186,7 @@ def test_partial_task_retrieval_preserves_successful_pages_and_coverage() -> Non
     )
     connector = AsanaConnector(
         account_reference="primary-user",
-        workspace_gid=WORKSPACE_GID,
+        project_gid=PROJECT_GID,
         authorization_provider=_AuthorizationProvider(),
         transport=transport,
         clock=lambda: NOW,
@@ -202,16 +201,43 @@ def test_partial_task_retrieval_preserves_successful_pages_and_coverage() -> Non
     assert result.items[0].source_record_id == "8000000000000001"
 
 
+def test_task_outside_exact_project_is_omitted() -> None:
+    outside = replace(
+        _task(),
+        memberships=(
+            AsanaMembership(
+                project_gid="9999999999999999",
+                section_gid="5000000000000001",
+            ),
+        ),
+    )
+    connector = AsanaConnector(
+        account_reference="primary-user",
+        project_gid=PROJECT_GID,
+        authorization_provider=_AuthorizationProvider(),
+        transport=_TaskTransport(pages=(AsanaTaskPage(tasks=(outside,)),)),
+        clock=lambda: NOW,
+    )
+
+    result = connector.retrieve(_request(connector))
+
+    assert result.coverage.status is CoverageStatus.PARTIAL
+    assert result.items == ()
+    assert result.coverage.warnings == (
+        "Asana task outside the exact approved project was omitted",
+    )
+
+
 def test_task_contract_has_no_live_transport_or_mutation_surface() -> None:
     transport = _TaskTransport(pages=(AsanaTaskPage(tasks=()),))
     connector = AsanaConnector(
         account_reference="primary-user",
-        workspace_gid=WORKSPACE_GID,
+        project_gid=PROJECT_GID,
         authorization_provider=_AuthorizationProvider(),
         transport=transport,
     )
 
-    assert ASANA_TASK_ENDPOINT == "GET /api/1.0/tasks"
+    assert ASANA_TASK_ENDPOINT == "GET /api/1.0/projects/{project_gid}/tasks"
     for operation in (
         "create",
         "update",

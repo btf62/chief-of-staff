@@ -10,12 +10,14 @@ Todoist connector, one combined Calendar-and-Todoist trial, and one explicitly
 approved complete-retrieval and workday-quality validation. Jira has completed
 its mocked phase, one resource-restricted project-discovery trial, and one
 exact-project live issue trial integrated with the deterministic briefing.
-Asana has completed its mocked phase, one bounded OAuth workspace-discovery
-trial, and one explicitly approved active-project discovery inside the
-selected organization workspace. Work is stopped before task retrieval. No
-repeat JQL, Jira issue retrieval, Jira project discovery, Asana authorization
-or discovery, authorization refresh, Todoist or Calendar retrieval, scope
-change, or broader live access is authorized.
+Asana has completed its mocked phase, historical bounded discovery, and one
+exact-project boundary correction that supersedes the earlier workspace
+selection and its obsolete Northridge boards. The only current Asana use is
+the exact project for collaboration with 9 Embers on Rock RMS development.
+Work is stopped before task retrieval. No repeat JQL, Jira issue retrieval,
+Jira project discovery, Asana authorization, exact-project verification or
+discovery, authorization refresh, Todoist or Calendar retrieval, scope change,
+or broader live access is authorized.
 
 ## Working rules
 
@@ -78,10 +80,10 @@ The Version 1 design-readiness requirements have been met:
    acceptance gates, and exclusions.
 
 Implementation may proceed only when a task explicitly authorizes it. The
-Google Calendar, Todoist, Jira project-discovery, Jira issue, Asana
-workspace-discovery, and Asana project-discovery gates have been exercised; do
-not repeat live retrieval, broaden access, refresh authorization, repeat
-discovery, or begin Asana task retrieval or another connector without new
+Google Calendar, Todoist, Jira project-discovery, Jira issue, Asana discovery,
+and Asana exact-project verification gates have been exercised; do not repeat
+live retrieval, broaden access, refresh authorization, repeat discovery or
+verification, or begin Asana task retrieval or another connector without new
 explicit approval.
 Satisfy a
 milestone's acceptance gate before beginning dependent work. Record material

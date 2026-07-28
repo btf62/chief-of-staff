@@ -17,7 +17,7 @@ from chief_of_staff.connectors.contracts import (
 from chief_of_staff.connectors.instances import ASANA_PRIMARY_INSTANCE
 from chief_of_staff.domain import ConnectorDomain, CoverageStatus
 
-ASANA_TASK_ENDPOINT: Final = "GET /api/1.0/tasks"
+ASANA_TASK_ENDPOINT: Final = "GET /api/1.0/projects/{project_gid}/tasks"
 ASANA_TASK_SCOPES: Final = frozenset({"tasks:read", "workspaces:read", "projects:read"})
 ASANA_TASK_PAGE_SIZE: Final = 100
 ASANA_TASK_MAX_PAGES: Final = 20
@@ -58,7 +58,7 @@ class AsanaAuthorization:
     """Non-secret handle for one independently authorized Asana instance."""
 
     account_reference: str
-    workspace_gid: str
+    project_gid: str
     granted_scopes: frozenset[str]
     credential_reference: str
     connector_instance_id: str = ASANA_PRIMARY_INSTANCE
@@ -76,7 +76,7 @@ class AsanaAuthorizationProvider(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class AsanaMembership:
-    """Minimum task membership facts from an approved workspace."""
+    """Minimum task membership facts used to enforce the exact project."""
 
     project_gid: str
     section_gid: str | None = None
@@ -123,11 +123,9 @@ class AsanaTask:
 
 @dataclass(frozen=True, slots=True)
 class AsanaTaskRequest:
-    """Exact standard assigned-task query proposed for a later live gate."""
+    """Exact-project task query proposed for a later live gate."""
 
-    workspace_gid: str
-    assignee: str
-    completed_since: str
+    project_gid: str
     fields: tuple[str, ...]
     limit: int
     offset: str | None = None
@@ -158,7 +156,7 @@ class AsanaConnector:
     """Normalize synthetic Asana tasks without enabling live task access."""
 
     account_reference: str
-    workspace_gid: str
+    project_gid: str
     authorization_provider: AsanaAuthorizationProvider
     transport: AsanaTaskTransport
     clock: Callable[[], datetime] = field(
@@ -174,9 +172,9 @@ class AsanaConnector:
     @property
     def approved_scope(self) -> str:
         return (
-            "synthetic Asana tasks; one approved workspace; assignee=me; "
-            "incomplete-task semantics; no notes, stories, attachments, "
-            "custom fields, time tracking, or mutation"
+            "synthetic Asana tasks; one exact approved project; "
+            "no workspace-wide or unassigned-project retrieval; no notes, "
+            "stories, attachments, custom fields, time tracking, or mutation"
         )
 
     def retrieve(self, request: ConnectorRequest) -> ConnectorResult:
@@ -197,7 +195,7 @@ class AsanaConnector:
             )
         if (
             authorization.account_reference != self.account_reference
-            or authorization.workspace_gid != self.workspace_gid
+            or authorization.project_gid != self.project_gid
             or authorization.granted_scopes != ASANA_TASK_SCOPES
             or authorization.connector_instance_id != ASANA_PRIMARY_INSTANCE
         ):
@@ -219,9 +217,7 @@ class AsanaConnector:
                 page = self.transport.list_tasks(
                     authorization,
                     AsanaTaskRequest(
-                        workspace_gid=self.workspace_gid,
-                        assignee="me",
-                        completed_since="now",
+                        project_gid=self.project_gid,
                         fields=ASANA_TASK_FIELDS,
                         limit=ASANA_TASK_PAGE_SIZE,
                         offset=offset,
@@ -235,6 +231,14 @@ class AsanaConnector:
                 break
             page_count += 1
             for task in page.tasks:
+                if not any(
+                    membership.project_gid == self.project_gid
+                    for membership in task.memberships
+                ):
+                    warnings.append(
+                        "Asana task outside the exact approved project was omitted"
+                    )
+                    continue
                 existing = tasks.get(task.gid)
                 if existing is None:
                     tasks[task.gid] = task

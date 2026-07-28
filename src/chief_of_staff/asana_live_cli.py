@@ -1,4 +1,4 @@
-"""Private local commands for the one bounded Asana discovery trial."""
+"""Private local commands for the active exact-project Asana boundary."""
 
 from __future__ import annotations
 
@@ -16,14 +16,13 @@ from chief_of_staff.auth.asana_oauth import (
 )
 from chief_of_staff.auth.keychain import KeychainSecretReference, MacOSKeychain
 from chief_of_staff.connectors.asana_discovery import (
-    ASANA_APPROVED_WORKSPACE_ALIAS,
-    AsanaApprovedWorkspaceProjectDiscoveryService,
-    AsanaApprovedWorkspaceProjectTrialRunner,
-    AsanaDiscoveryHttpTransport,
-    AsanaDiscoveryService,
-    AsanaDiscoveryTrialRunner,
     StoredAsanaDiscoveryAuthorizationProvider,
-    approved_workspace_from_private_report,
+)
+from chief_of_staff.connectors.asana_project_boundary import (
+    AsanaExactProjectHttpTransport,
+    AsanaExactProjectTrialRunner,
+    AsanaExactProjectVerificationService,
+    parse_approved_asana_project_url,
 )
 from chief_of_staff.connectors.instances import ASANA_PRIMARY_INSTANCE
 from chief_of_staff.persistence import Database, StateStore
@@ -54,12 +53,7 @@ def main(arguments: list[str] | None = None) -> int:
     )
     stdin_register_parser.add_argument("--application-owner", required=True)
 
-    authorize_parser = subparsers.add_parser("authorize-and-discover")
-    authorize_parser.add_argument("--account-reference", default="primary-user")
-    authorize_parser.add_argument("--timeout-seconds", type=int, default=300)
-
-    project_parser = subparsers.add_parser("approve-workspace-and-discover-projects")
-    project_parser.add_argument("--workspace-report", type=Path, required=True)
+    subparsers.add_parser("restrict-to-exact-project-interactive")
 
     subparsers.add_parser("status")
 
@@ -103,78 +97,10 @@ def main(arguments: list[str] | None = None) -> int:
             _print_status(state_store, keychain)
             return 0
 
-        if parsed.command == "authorize-and-discover":
-            confirmed_identity = getpass.getpass(
-                "Confirmed Asana account email shown in the browser: "
-            ).strip()
-            if not confirmed_identity:
-                raise ValueError("explicit Asana account confirmation is required")
-            authorization = AsanaInstalledAppOAuth(
-                keychain=keychain,
-                state_store=state_store,
-            ).authorize_interactively(
-                account_reference=parsed.account_reference,
-                confirmed_account_identity=confirmed_identity,
-                timeout_seconds=parsed.timeout_seconds,
-            )
-            confirmed_identity = ""
-            client = state_store.get_oauth_client(ASANA_PRIMARY_INSTANCE)
-            if client is None:
-                raise RuntimeError("Asana OAuth client metadata disappeared")
-            if client.application_owner is None:
-                raise RuntimeError("Asana OAuth application owner is missing")
-            report = AsanaDiscoveryTrialRunner(
-                state_store=state_store,
-                discovery_service=AsanaDiscoveryService(
-                    authorization_provider=(
-                        StoredAsanaDiscoveryAuthorizationProvider(
-                            state_store=state_store,
-                            keychain=keychain,
-                        )
-                    ),
-                    transport=AsanaDiscoveryHttpTransport(),
-                ),
-                output_directory=DISCOVERY_DIRECTORY,
-                application_name=client.oauth_project_id,
-                application_owner=client.application_owner,
-                account_identity_source=authorization.account_identity_source,
-            ).run()
-            _print_json(
-                {
-                    "access_token_issued": report.access_token_issued,
-                    "account_alias": "Asana",
-                    "account_identity_source": report.account_identity_source,
-                    "application_name": report.application_name,
-                    "application_owner": report.application_owner,
-                    "complete_project_catalog_persisted": (
-                        report.complete_project_catalog_persisted
-                    ),
-                    "credential_health": report.credential_health,
-                    "granted_scope": report.granted_scope,
-                    "offset_persisted": report.offset_persisted,
-                    "private_report_path": report.private_report_path,
-                    "project_count": report.project_count,
-                    "project_discovery_performed": (report.project_discovery_performed),
-                    "project_page_count": report.project_page_count,
-                    "project_pagination_occurred": (report.project_pagination_occurred),
-                    "raw_payload_persisted": report.raw_payload_persisted,
-                    "refresh_health": report.refresh_health,
-                    "refresh_token_issued": report.refresh_token_issued,
-                    "task_endpoint_called": report.task_endpoint_called,
-                    "workspace_count": report.workspace_count,
-                    "workspace_page_count": report.workspace_page_count,
-                    "workspace_pagination_occurred": (
-                        report.workspace_pagination_occurred
-                    ),
-                }
-            )
-            return 0
-
-        if parsed.command == "approve-workspace-and-discover-projects":
-            workspace = approved_workspace_from_private_report(
-                report_path=parsed.workspace_report,
-                approved_alias=ASANA_APPROVED_WORKSPACE_ALIAS,
-            )
+        if parsed.command == "restrict-to-exact-project-interactive":
+            approved_url = getpass.getpass("Exact approved Asana project URL: ").strip()
+            approved_reference = parse_approved_asana_project_url(approved_url)
+            approved_url = ""
             stored_authorization = state_store.get_connector_authorization(
                 ASANA_PRIMARY_INSTANCE
             )
@@ -192,45 +118,40 @@ def main(arguments: list[str] | None = None) -> int:
                 raise RuntimeError("Asana OAuth client metadata is unavailable")
             if client.application_owner is None:
                 raise RuntimeError("Asana OAuth application owner is missing")
-            report = AsanaApprovedWorkspaceProjectTrialRunner(
+            exact_report = AsanaExactProjectTrialRunner(
                 state_store=state_store,
-                discovery_service=AsanaApprovedWorkspaceProjectDiscoveryService(
+                verification_service=AsanaExactProjectVerificationService(
                     authorization_provider=StoredAsanaDiscoveryAuthorizationProvider(
                         state_store=state_store,
                         keychain=keychain,
                     ),
-                    transport=AsanaDiscoveryHttpTransport(),
-                    approved_workspace=workspace,
+                    transport=AsanaExactProjectHttpTransport(),
+                    approved_reference=approved_reference,
                 ),
                 output_directory=DISCOVERY_DIRECTORY,
                 application_name=client.oauth_project_id,
                 application_owner=client.application_owner,
-                account_identity_source="existing-confirmed-grant",
             ).run()
             _print_json(
                 {
                     "account_alias": "Asana",
-                    "approved_workspace_alias": ASANA_APPROVED_WORKSPACE_ALIAS,
-                    "complete_project_catalog_persisted": (
-                        report.complete_project_catalog_persisted
+                    "active_resource_type": exact_report.active_resource_type,
+                    "application_name": exact_report.application_name,
+                    "application_owner": exact_report.application_owner,
+                    "credential_health": exact_report.credential_health,
+                    "granted_scope": exact_report.granted_scope,
+                    "private_report_path": exact_report.private_report_path,
+                    "project_endpoint_calls": exact_report.project_endpoint_calls,
+                    "project_list_endpoint_called": (
+                        exact_report.project_list_endpoint_called
                     ),
-                    "concurrent_change_could_affect_completeness": (
-                        report.concurrent_change_could_affect_completeness
+                    "project_verified": exact_report.project_verified,
+                    "raw_payload_persisted": exact_report.raw_payload_persisted,
+                    "refresh_health": exact_report.refresh_health,
+                    "task_endpoint_called": exact_report.task_endpoint_called,
+                    "workspace_list_endpoint_called": (
+                        exact_report.workspace_list_endpoint_called
                     ),
-                    "credential_health": report.credential_health,
-                    "discovery_complete": report.discovery_complete,
-                    "duplicate_project_count": report.duplicate_project_count,
-                    "granted_scope": report.granted_scope,
-                    "offset_persisted": report.offset_persisted,
-                    "private_report_path": report.private_report_path,
-                    "project_count": report.project_count,
-                    "project_page_count": report.project_page_count,
-                    "project_pagination_occurred": (report.project_pagination_occurred),
-                    "raw_payload_persisted": report.raw_payload_persisted,
-                    "refresh_health": report.refresh_health,
-                    "task_endpoint_called": report.task_endpoint_called,
-                    "timeout_or_permission_issue": (report.timeout_or_permission_issue),
-                    "workspace_list_endpoint_called": False,
                 }
             )
             return 0

@@ -12,9 +12,11 @@ bounded primary-calendar trial. Milestone 5 has completed its accepted Todoist
 boundary, combined Calendar-and-Todoist trial, and one explicitly approved
 complete-retrieval and normal-workday quality validation. Jira has completed
 its mocked phase, project discovery, and one exact-project live issue trial.
-Asana has completed its mocked phase, bounded OAuth workspace discovery, and
-one explicitly approved active-project discovery inside the selected
-organization workspace. Work is stopped before live task retrieval.
+Asana has completed its mocked phase, historical bounded discovery, and one
+exact-project boundary correction that supersedes the earlier workspace
+selection and its obsolete Northridge boards. The active project is used only
+for collaboration with 9 Embers on Rock RMS development. Work is stopped
+before live task retrieval.
 Dates and estimates remain intentionally omitted until implementation
 evidence supports them.
 
@@ -172,7 +174,7 @@ explicit approval for another Calendar retrieval or any later connector.
 
 ## Milestone 5 — Task-System Connectors
 
-- **Status:** In progress — Todoist and Jira trials complete; Asana stopped at task-boundary selection
+- **Status:** In progress — Todoist and Jira trials complete; Asana bound to one exact project and stopped before tasks
 - **Intended user-visible outcome:** Brad's factual briefing can include
   relevant source-owned work across Todoist, Jira, and Asana without replacing
   any task system.
@@ -248,9 +250,18 @@ selection report. It did not repeat workspace discovery or call any task,
 user, section, search, mutation, hosted-inference, or other connector
 operation.
 
-Work is stopped at Asana task-boundary selection. Repeat Asana or Jira
-retrieval, Asana project or task access, authorization refresh, Calendar, or
-Todoist access remains unauthorized.
+Brad subsequently identified that workspace as the wrong active boundary and
+approved one exact project in a different accessible workspace. One bounded
+single-project verification matched both IDs from the approved link and
+replaced the active resource binding. The earlier catalog remains historical
+private audit material only. Those old Northridge boards are obsolete. The
+only current Asana use is collaboration with 9 Embers on Rock RMS development
+inside the exact approved project.
+
+Work is stopped before Asana task retrieval. The exact project is the maximum
+Asana boundary. Repeat Asana or Jira retrieval, another Asana project,
+workspace-wide or task access, authorization refresh, Calendar, or Todoist
+access remains unauthorized.
 
 ## Milestone 6 — Gmail and Google Drive Connectors
 

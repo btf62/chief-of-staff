@@ -18,11 +18,12 @@ complete-retrieval and normal-workday quality validation now satisfy the
 Todoist portion of Milestone 5. Jira has completed its resource-restricted
 authorization, project discovery, and one explicitly approved, exact-project
 issue-retrieval trial integrated with the deterministic briefing. Asana has
-completed bounded workspace discovery and one explicitly approved,
-organization-workspace active-project discovery. Work is stopped before Asana
-task retrieval. No repeat Asana or Jira query, discovery, authorization
-refresh, repeat Calendar or Todoist retrieval, task access, or broader access
-is authorized.
+completed historical bounded discovery and one exact-project boundary
+correction that supersedes the obsolete Northridge workspace selection. The
+active project is used only for collaboration with 9 Embers on Rock RMS
+development. Work is stopped before Asana task retrieval. No repeat Asana or
+Jira query, discovery, authorization refresh, repeat Calendar or Todoist
+retrieval, task access, or broader access is authorized.
 
 ## Repository map
 
