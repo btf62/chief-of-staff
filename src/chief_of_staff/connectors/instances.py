@@ -15,6 +15,7 @@ from chief_of_staff.domain import ConnectorDomain
 GOOGLE_CALENDAR_PRIMARY_INSTANCE = "google_calendar:primary"
 TODOIST_PRIMARY_INSTANCE = "todoist:primary"
 JIRA_PRIMARY_INSTANCE = "jira:primary"
+ASANA_PRIMARY_INSTANCE = "asana:primary"
 
 
 @dataclass(frozen=True, slots=True)

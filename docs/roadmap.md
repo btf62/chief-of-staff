@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Version:** 1
 - **Owner:** Brad
-- **Last updated:** 2026-07-27
+- **Last updated:** 2026-07-28
 
 This roadmap sequences implementation of the accepted
 [Daily Briefing v1](product/features/daily-briefing-v1.md) design. Milestones 0
@@ -12,8 +12,10 @@ bounded primary-calendar trial. Milestone 5 has completed its accepted Todoist
 boundary, combined Calendar-and-Todoist trial, and one explicitly approved
 complete-retrieval and normal-workday quality validation. Jira has completed
 its mocked phase, project discovery, and one exact-project live issue trial.
-Work is stopped before Asana or another connector. Dates and estimates remain
-intentionally omitted until implementation evidence supports them.
+Asana has completed its mocked phase and one bounded OAuth workspace-discovery
+trial, which stopped before projects after returning multiple workspaces.
+Dates and estimates remain intentionally omitted until implementation
+evidence supports them.
 
 Acceptance of this roadmap does not expand product scope. The
 [Product Requirements](product/requirements.md), feature specification,
@@ -169,7 +171,7 @@ explicit approval for another Calendar retrieval or any later connector.
 
 ## Milestone 5 — Task-System Connectors
 
-- **Status:** In progress — Todoist and Jira trials complete; Asana not begun
+- **Status:** In progress — Todoist and Jira trials complete; Asana stopped at workspace selection
 - **Intended user-visible outcome:** Brad's factual briefing can include
   relevant source-owned work across Todoist, Jira, and Asana without replacing
   any task system.
@@ -226,9 +228,20 @@ generated one normal-workday briefing from live repository, primary Calendar,
 Todoist, and Jira context without hosted inference. Jira items were not forced
 into the briefing when current evidence did not support daily relevance.
 
-Work is stopped before Asana or another connector. Repeat Jira issue or project
-retrieval, authorization refresh, Calendar, or Todoist access remains
-unauthorized.
+The accepted [Asana connector](architecture/connectors/asana.md) now has a
+synthetic task contract, exact-scope OAuth with state and PKCE, Keychain-only
+secrets, refresh and revocation boundaries, workspace/project discovery
+transports, conservative pagination, minimized persistence, and no mutation
+surface.
+
+One explicitly approved Asana trial authorized the confirmed account with
+exactly `workspaces:read projects:read` and retrieved only minimal workspace
+metadata. It found multiple accessible workspaces, wrote the private selection
+report, and stopped before project or task retrieval as required.
+
+Work is stopped at Asana workspace selection. Repeat Asana or Jira retrieval,
+Asana project or task access, authorization refresh, Calendar, or Todoist
+access remains unauthorized.
 
 ## Milestone 6 — Gmail and Google Drive Connectors
 

@@ -2,14 +2,14 @@
 
 - **Status:** Accepted
 - **Owner:** Brad
-- **Last updated:** 2026-07-27
+- **Last updated:** 2026-07-28
 
-This document describes the implemented repository, Calendar, Todoist, and
-Jira boundaries. The synthetic demonstrations, bounded Calendar and Todoist
-trials, Todoist workday-quality validation, Jira project discovery, and one
-exact-project Jira issue trial are complete. Live access is now stopped. None
-of the credential or live-retrieval commands below may be repeated without new
-explicit approval.
+This document describes the implemented repository, Calendar, Todoist, Jira,
+and Asana boundaries. The synthetic demonstrations, bounded Calendar and
+Todoist trials, Todoist workday-quality validation, Jira project discovery,
+one exact-project Jira issue trial, and one Asana workspace-discovery trial are
+complete. Live access is now stopped. None of the credential or live-retrieval
+commands below may be repeated without new explicit approval.
 
 ## Run the safe connector demonstration
 
@@ -203,6 +203,61 @@ Jira enhanced search is eventually consistent, so the report does not claim
 that concurrent provider changes were impossible during pagination. The
 private briefing remains under ignored mode-`0600` local state.
 
+## Asana authorization and workspace-discovery boundary
+
+The Asana connector uses the private, workspace-restricted OAuth application
+`Chief of Staff (Local) — Asana`. Brad is its sole current owner; no separate
+Northridge administrator ownership was confirmed. The app is not published in
+the public Asana app directory. It registered only:
+
+```text
+https://127.0.0.1:8768/oauth/callback
+```
+
+and exactly these discovery scopes:
+
+```text
+workspaces:read projects:read
+```
+
+Full permissions and task, user, OpenID Connect, write, delete, and
+administrative scopes remained disabled. Authorization used random `state`,
+PKCE `S256`, explicit browser-account confirmation, provider-returned account
+identity, and token introspection.
+
+The client secret, access token, and refresh token are stored only in macOS
+Keychain. SQLite stores non-secret application ownership, opaque account
+reference, exact scope, expiry, health, Keychain references, connector-run,
+catalog-reference, freshness, and coverage metadata.
+
+The private one-time commands were:
+
+```text
+python -m chief_of_staff.asana_live_cli \
+  register-client-from-stdin \
+  --application-owner "Brad Files (sole owner)"
+python -m chief_of_staff.asana_live_cli authorize-and-discover
+python -m chief_of_staff.asana_live_cli status
+```
+
+The two-line client ID and secret input came from a controlled transient source
+and was cleared immediately after Keychain storage. Neither value belongs in a
+command argument, shell history, file, report, or Git. The commands remain
+available for inspection and recovery, but do not authorize another grant,
+refresh, or retrieval.
+
+The one approved discovery called only `GET /api/1.0/workspaces`, requested
+`gid`, `name`, and `is_organization`, and followed provider offset semantics.
+It returned three accessible workspaces on one page. The multiple-workspace
+rule wrote their selection details only to an ignored mode-`0600` report under
+`.local/asana/` and stopped before the
+`GET /api/1.0/workspaces/{workspace_gid}/projects` operation.
+
+No workspace was selected or persisted. No project, task, user, search,
+hosted-inference, other-connector, or mutation endpoint was called. Raw
+provider responses, offsets, authorization code, PKCE verifier, temporary TLS
+material, and transient credential transfer were released after use.
+
 ## Bounded live trial
 
 The completed trial was invoked on demand with:
@@ -304,6 +359,12 @@ cursor pagination, duplicate IDs, distinct authorization and retrieval
 failures, minimized issue persistence, transient raw pages and cursors,
 conservative cross-source association, daily relevance, and absence of
 mutation operations.
+Asana tests additionally cover exact discovery scopes, state and PKCE,
+account confirmation, token introspection, Keychain isolation, refresh,
+revocation, reauthorization, workspace and project pagination, conservative
+duplicate handling, the multiple-workspace stop, private report permissions,
+partial task-contract coverage, transient raw responses and offsets, and
+absence of live task or mutation operations.
 
 ## Current limitations and stop condition
 
@@ -315,11 +376,17 @@ mutation operations.
 - Todoist refresh credentials exist in Keychain, but their presence does not
   authorize scheduled, unattended, or repeated retrieval.
 - Jira uses a short-lived access token without refresh capability.
+- Asana access and refresh credentials exist in Keychain, but their presence
+  does not authorize refresh, repeat discovery, project retrieval, task
+  retrieval, scheduling, or unattended operation.
+- Asana app ownership is currently Brad-only; no separate Northridge
+  administrator ownership was confirmed.
 - Calendar events remain evidence for deterministic output; inference-only
   briefing sections are not implemented.
 - Daily Briefing v1 has not been accepted for operational use.
 
 The bounded trials and validation are complete. Do not repeat live Calendar,
-Todoist, Jira project retrieval, or Jira issue retrieval; refresh
-authorization; broaden any boundary; or begin another live connector without
-new explicit approval.
+Todoist, Jira project retrieval, Jira issue retrieval, Asana authorization, or
+Asana workspace discovery; refresh authorization; retrieve Asana projects or
+tasks; broaden any boundary; or begin another live connector without new
+explicit approval.

@@ -14,9 +14,10 @@ Calendar-and-Todoist trial, and one explicitly approved complete-retrieval and
 normal-workday quality validation. Jira has completed its mocked phase,
 resource-restricted project discovery, and one explicitly approved
 exact-project issue-retrieval trial integrated with a deterministic briefing.
-Work is stopped before Asana or another connector. No repeat Jira query,
-project discovery, authorization refresh, or repeat Calendar or Todoist access
-is authorized.
+Asana has completed its mocked phase and one bounded OAuth workspace-discovery
+trial. Multiple accessible workspaces caused the required stop before project
+or task retrieval. No repeat Asana or Jira query, discovery, authorization
+refresh, or repeat Calendar or Todoist access is authorized.
 Design acceptance authorizes implementation within the accepted scope; it does
 not mean the complete Daily Briefing has passed operational acceptance.
 
@@ -59,6 +60,8 @@ not mean the complete Daily Briefing has passed operational acceptance.
   completed bounded issue trial
 - [Gmail connector](architecture/connectors/gmail.md) — preliminary
   multi-account boundary; not implemented or authorized
+- [Asana connector](architecture/connectors/asana.md) — accepted mocked
+  contract and completed bounded workspace-only discovery
 - [Decision records](decisions/README.md) — architecture and significant
   product decisions
 

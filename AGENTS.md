@@ -10,9 +10,11 @@ Todoist connector, one combined Calendar-and-Todoist trial, and one explicitly
 approved complete-retrieval and workday-quality validation. Jira has completed
 its mocked phase, one resource-restricted project-discovery trial, and one
 exact-project live issue trial integrated with the deterministic briefing.
-Work is paused before Asana or another connector. No repeat JQL, Jira issue
-retrieval, Jira project discovery, authorization refresh, Todoist or Calendar
-retrieval, scope change, or broader live access is authorized.
+Asana has completed its mocked phase and one bounded OAuth workspace-discovery
+trial. Three accessible workspaces caused the mandatory stop before project
+or task retrieval. No repeat JQL, Jira issue retrieval, Jira project
+discovery, Asana authorization or discovery, authorization refresh, Todoist
+or Calendar retrieval, scope change, or broader live access is authorized.
 
 ## Working rules
 
@@ -75,10 +77,11 @@ The Version 1 design-readiness requirements have been met:
    acceptance gates, and exclusions.
 
 Implementation may proceed only when a task explicitly authorizes it. The
-Google Calendar, Todoist, Jira project-discovery, and Jira issue gates have
-been exercised; do not repeat live retrieval, broaden access, refresh
-authorization, repeat Jira project discovery, or begin Asana or another
-connector without new explicit approval. Satisfy a
+Google Calendar, Todoist, Jira project-discovery, Jira issue, and Asana
+workspace-discovery gates have been exercised; do not repeat live retrieval,
+broaden access, refresh authorization, repeat discovery, or begin Asana
+project or task retrieval or another connector without new explicit approval.
+Satisfy a
 milestone's acceptance gate before beginning dependent work. Record material
 new product or architecture decisions before implementing them.
 

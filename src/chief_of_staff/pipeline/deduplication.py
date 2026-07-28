@@ -115,6 +115,8 @@ def _semantic_signature(record: NormalizedRecord) -> tuple[object, ...]:
         record.dependency_references,
         record.dependency_relationships,
         record.dependency_display_urls,
+        record.membership_references,
+        record.dependent_references,
         record.related_source_ids,
         record.blocked,
         record.source_owned_risk,

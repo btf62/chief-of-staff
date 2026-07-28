@@ -92,6 +92,14 @@ No strict versioning scheme is promised before a distributable product exists.
   recommendations.
 - One bounded combined repository, primary Calendar, Todoist, and Jira
   deterministic briefing trial without hosted inference or external writes.
+- An explicit multi-account connector-instance model with independent
+  authorization, Keychain references, configuration, domain, coverage,
+  freshness, retention, and provenance.
+- A preliminary two-account Gmail specification preserving strict work and
+  personal domain boundaries without implementing or authorizing Gmail.
+- An accepted Asana specification, synthetic task contract, exact-scope OAuth
+  flow, bounded workspace/project discovery surface, private selection report,
+  and no-mutation contract tests.
 
 ### Changed
 
@@ -118,3 +126,6 @@ No strict versioning scheme is promised before a distributable product exists.
   stopped before project selection or live issue retrieval.
 - Completed one bounded exact-project Jira issue trial and stopped before
   Asana, another connector, or any repeat live retrieval.
+- Completed one bounded Asana OAuth and workspace-discovery trial; multiple
+  accessible workspaces caused the required stop before project or task
+  retrieval.

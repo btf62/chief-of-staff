@@ -66,6 +66,8 @@ class NormalizedRecord:
     dependency_references: tuple[str, ...] = ()
     dependency_relationships: tuple[str, ...] = ()
     dependency_display_urls: tuple[str, ...] = ()
+    membership_references: tuple[str, ...] = ()
+    dependent_references: tuple[str, ...] = ()
     related_source_ids: tuple[str, ...] = ()
     blocked: bool = False
     source_owned_risk: bool = False
@@ -147,6 +149,8 @@ def normalize_item(
         dependency_references=_string_tuple(item, "dependency_references"),
         dependency_relationships=_string_tuple(item, "dependency_relationships"),
         dependency_display_urls=_string_tuple(item, "dependency_display_urls"),
+        membership_references=_string_tuple(item, "membership_references"),
+        dependent_references=_string_tuple(item, "dependent_references"),
         related_source_ids=_string_tuple(item, "related_source_ids"),
         blocked=_boolean(item, "blocked", default=False),
         source_owned_risk=_boolean(item, "source_owned_risk", default=False),

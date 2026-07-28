@@ -7,7 +7,7 @@ identifying priorities, commitments, and useful signals.
 
 ## Status
 
-**Phase:** Milestones 1–4 complete; Milestone 5 Todoist and Jira trials complete
+**Phase:** Milestones 1–4 complete; Milestone 5 task-system trials in progress
 
 The Python, local-state, deterministic briefing, repository connector, and
 read-only Google Calendar foundations are complete. An explicitly approved,
@@ -18,9 +18,10 @@ complete-retrieval and normal-workday quality validation now satisfy the
 Todoist portion of Milestone 5. Jira has completed its resource-restricted
 authorization, project discovery, and one explicitly approved, exact-project
 issue-retrieval trial integrated with the deterministic briefing. Work is
-stopped before Asana or another connector; no repeat Jira query, project
-discovery, authorization refresh, repeat Calendar or Todoist retrieval, or
-broader access is authorized.
+stopped after one bounded Asana authorization and workspace-discovery trial.
+The trial returned multiple workspaces and therefore stopped before projects.
+No repeat Asana or Jira query, discovery, authorization refresh, repeat
+Calendar or Todoist retrieval, task access, or broader access is authorized.
 
 ## Repository map
 

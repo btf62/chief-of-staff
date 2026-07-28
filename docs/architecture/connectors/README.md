@@ -59,12 +59,12 @@ decisions for each future connector specification.
 | Todoist | [Todoist](todoist.md) | Accepted; bounded live trial and workday validation complete and stopped |
 | Jira | [Jira](jira.md) | Accepted; bounded project and issue trials complete and stopped |
 | Gmail | [Gmail](gmail.md) | Preliminary multi-account boundary; not implemented or authorized |
+| Asana | [Asana](asana.md) | Accepted; bounded workspace discovery complete and stopped before projects |
 
 ## Planned specifications
 
 | Source | Planned specification |
 | --- | --- |
-| Asana | `asana.md` |
 | Approved Google Drive content | `google-drive.md` |
 
 Each future specification should implement the common read-only connector
