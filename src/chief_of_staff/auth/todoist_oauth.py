@@ -22,6 +22,7 @@ from chief_of_staff.auth.keychain import (
     KeychainSecretReference,
     MacOSKeychain,
 )
+from chief_of_staff.connectors.instances import TODOIST_PRIMARY_INSTANCE
 from chief_of_staff.connectors.todoist import TODOIST_DATA_READ_SCOPE
 from chief_of_staff.domain import (
     AuthorizationStatus,
@@ -157,6 +158,7 @@ class TodoistOAuthClientRegistrar:
             client_secret_account=reference.account,
             configured_at=self.clock(),
             application_owner=application_owner.strip(),
+            connector_instance_id=TODOIST_PRIMARY_INSTANCE,
         )
         try:
             self.state_store.save_oauth_client(metadata)
@@ -409,6 +411,7 @@ class TodoistInstalledAppOAuth:
             token_expires_at=now + timedelta(seconds=token.expires_in_seconds),
             authorized_at=now if authorized_at is None else authorized_at,
             updated_at=now,
+            connector_instance_id=TODOIST_PRIMARY_INSTANCE,
         )
         try:
             self.state_store.save_connector_authorization(metadata)

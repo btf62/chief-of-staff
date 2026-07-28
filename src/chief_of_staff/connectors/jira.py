@@ -16,6 +16,7 @@ from chief_of_staff.connectors.contracts import (
     SourceCoverage,
     SourceItem,
 )
+from chief_of_staff.connectors.instances import JIRA_PRIMARY_INSTANCE
 from chief_of_staff.domain import (
     ConnectorRun,
     ConnectorStatus,
@@ -344,6 +345,7 @@ class JiraConnector:
             ),
             error_category=error_category,
             page_count=page_count,
+            connector_instance_id=JIRA_PRIMARY_INSTANCE,
         )
         self.last_audit = JiraRetrievalAudit(
             connector_run=connector_run,
@@ -506,6 +508,7 @@ class JiraConnector:
                 retrieved_count=retrieved_count,
                 selected_count=selected_count,
                 persisted_count=0,
+                connector_instance_id=JIRA_PRIMARY_INSTANCE,
             ),
         )
 
@@ -604,6 +607,7 @@ def _issue_to_source_item(
         freshness_at=issue.updated_at or issue.created_at,
         display_url=issue.display_url,
         connector_run_id=connector_run_id,
+        connector_instance_id=JIRA_PRIMARY_INSTANCE,
     )
 
 
@@ -629,6 +633,7 @@ def _source_evidence(
         evidence_fingerprint=fingerprint,
         retrieved_at=item.retrieved_at,
         freshness_at=item.freshness_at,
+        connector_instance_id=JIRA_PRIMARY_INSTANCE,
     )
 
 

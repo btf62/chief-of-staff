@@ -26,6 +26,7 @@ from chief_of_staff.auth.keychain import (
 from chief_of_staff.connectors.google_calendar import (
     GOOGLE_CALENDAR_EVENTS_OWNED_READONLY_SCOPE,
 )
+from chief_of_staff.connectors.instances import GOOGLE_CALENDAR_PRIMARY_INSTANCE
 from chief_of_staff.domain import (
     AuthorizationStatus,
     ConnectorAuthorizationMetadata,
@@ -186,6 +187,7 @@ class GoogleOAuthClientRegistrar:
             credential_service=reference.service,
             client_secret_account=reference.account,
             configured_at=self.clock(),
+            connector_instance_id=GOOGLE_CALENDAR_PRIMARY_INSTANCE,
         )
         try:
             self.state_store.save_oauth_client(metadata)
@@ -378,6 +380,7 @@ class GoogleInstalledAppOAuth:
             token_expires_at=now + timedelta(seconds=token.expires_in_seconds),
             authorized_at=now,
             updated_at=now,
+            connector_instance_id=GOOGLE_CALENDAR_PRIMARY_INSTANCE,
         )
         try:
             self.state_store.save_connector_authorization(metadata)

@@ -12,6 +12,9 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from chief_of_staff.connectors import (
+    GOOGLE_CALENDAR_PRIMARY_INSTANCE,
+    JIRA_PRIMARY_INSTANCE,
+    TODOIST_PRIMARY_INSTANCE,
     ContextResourceCoverage,
     GoogleCalendarConnector,
     JiraConnector,
@@ -146,9 +149,9 @@ class LiveCalendarTrialRunner:
             persisted_by_source={
                 source: sum(
                     evidence_source == source
-                    for evidence_source, _source_record_id in evidence_ids
+                    for evidence_source, _instance_id, _source_record_id in evidence_ids
                 )
-                for source in connector_run_ids
+                for source, _instance_id in connector_run_ids
             },
         )
         output_path = self._write_briefing(
@@ -189,7 +192,10 @@ class LiveCalendarTrialRunner:
         completed_at: datetime,
         context: object,
         result: object,
-    ) -> tuple[dict[str, str], dict[tuple[str, str], str]]:
+    ) -> tuple[
+        dict[tuple[str, str | None], str],
+        dict[tuple[str, str | None, str], str],
+    ]:
         from chief_of_staff.pipeline import InvocationContext, PipelineResult
 
         if not isinstance(context, InvocationContext) or not isinstance(
@@ -209,10 +215,16 @@ class LiveCalendarTrialRunner:
                 status=BriefingStatus.SUCCEEDED,
             )
         )
-        connector_run_ids: dict[str, str] = {}
+        connector_run_ids: dict[tuple[str, str | None], str] = {}
         for coverage in result.plan.coverage:
-            connector_run_id = f"{run_id}:{coverage.source}"
-            connector_run_ids[coverage.source] = connector_run_id
+            connector_instance_id = (
+                coverage.connector_instance_id
+                or _default_connector_instance_id(coverage.source)
+            )
+            connector_run_id = f"{run_id}:{connector_instance_id or coverage.source}"
+            connector_run_ids[(coverage.source, connector_instance_id)] = (
+                connector_run_id
+            )
             self.state_store.add_connector_run(
                 ConnectorRun(
                     id=connector_run_id,
@@ -227,23 +239,29 @@ class LiveCalendarTrialRunner:
                     freshness_at=coverage.freshness_at,
                     error_category=coverage.error_category,
                     page_count=coverage.page_count,
+                    connector_instance_id=connector_instance_id,
                 )
             )
             self.state_store.link_connector_run(run_id, connector_run_id)
 
-        evidence_ids: dict[tuple[str, str], str] = {}
+        evidence_ids: dict[tuple[str, str | None, str], str] = {}
         for record in result.deduplication.records:
             source = record.provenance.source
+            connector_instance_id = (
+                record.provenance.connector_instance_id
+                or _default_connector_instance_id(source)
+            )
             fingerprint = _evidence_fingerprint(
                 source=source,
                 source_record_id=record.provenance.source_record_id,
                 freshness_at=record.provenance.freshness_at,
+                connector_instance_id=connector_instance_id,
             )
             evidence_id = f"{run_id}:evidence:{hashlib.sha256(fingerprint.encode()).hexdigest()[:20]}"
             self.state_store.add_source_evidence(
                 SourceEvidence(
                     id=evidence_id,
-                    connector_run_id=connector_run_ids[source],
+                    connector_run_id=connector_run_ids[(source, connector_instance_id)],
                     source=source,
                     source_record_id=record.provenance.source_record_id,
                     display_url=record.provenance.display_url,
@@ -251,9 +269,16 @@ class LiveCalendarTrialRunner:
                     evidence_fingerprint=fingerprint,
                     retrieved_at=record.provenance.retrieved_at,
                     freshness_at=record.provenance.freshness_at,
+                    connector_instance_id=connector_instance_id,
                 )
             )
-            evidence_ids[(source, record.provenance.source_record_id)] = evidence_id
+            evidence_ids[
+                (
+                    source,
+                    connector_instance_id,
+                    record.provenance.source_record_id,
+                )
+            ] = evidence_id
         return connector_run_ids, evidence_ids
 
     def _write_briefing(
@@ -289,10 +314,21 @@ def _evidence_fingerprint(
     source: str,
     source_record_id: str,
     freshness_at: datetime | None,
+    connector_instance_id: str | None,
 ) -> str:
     freshness = "" if freshness_at is None else freshness_at.isoformat()
-    material = f"{source}\0{source_record_id}\0{freshness}"
+    material = (
+        f"{source}\0{connector_instance_id or ''}\0{source_record_id}\0{freshness}"
+    )
     return hashlib.sha256(material.encode()).hexdigest()
+
+
+def _default_connector_instance_id(source: str) -> str | None:
+    return {
+        "google_calendar": GOOGLE_CALENDAR_PRIMARY_INSTANCE,
+        "todoist": TODOIST_PRIMARY_INSTANCE,
+        "jira": JIRA_PRIMARY_INSTANCE,
+    }.get(source)
 
 
 @dataclass(frozen=True, slots=True)
@@ -466,7 +502,7 @@ class LiveTodoistTrialRunner:
             persisted_by_source={
                 source: sum(
                     evidence_source == source
-                    for evidence_source, _source_record_id in evidence_ids
+                    for evidence_source, _instance_id, _source_record_id in evidence_ids
                 )
                 for source in coverage_by_source
             },
@@ -578,7 +614,7 @@ class LiveTodoistTrialRunner:
     def _persist_todoist_tasks(
         self,
         *,
-        evidence_ids: dict[tuple[str, str], str],
+        evidence_ids: dict[tuple[str, str | None, str], str],
         timezone: str,
         prune_stale: bool,
     ) -> TodoistPersistenceResult:
@@ -593,7 +629,9 @@ class LiveTodoistTrialRunner:
         persisted_labels: set[str] = set()
         persisted_tasks = 0
         for task in audit.selected_tasks:
-            evidence_id = evidence_ids.get(("todoist", task.id))
+            evidence_id = evidence_ids.get(
+                ("todoist", TODOIST_PRIMARY_INSTANCE, task.id)
+            )
             if evidence_id is None:
                 continue
             project = None if task.project_id is None else projects.get(task.project_id)
@@ -630,14 +668,15 @@ class LiveTodoistTrialRunner:
                 persisted_sections.add(section.id)
             persisted_labels.update(label.id for label in resolved_labels)
         current_evidence_ids = {
-            task.id: evidence_ids[("todoist", task.id)]
+            task.id: evidence_ids[("todoist", TODOIST_PRIMARY_INSTANCE, task.id)]
             for task in audit.selected_tasks
-            if ("todoist", task.id) in evidence_ids
+            if ("todoist", TODOIST_PRIMARY_INSTANCE, task.id) in evidence_ids
         }
         reconciliation = (
             self.state_store.reconcile_source_task_snapshot(
                 source="todoist",
                 current_evidence_ids=current_evidence_ids,
+                connector_instance_id=TODOIST_PRIMARY_INSTANCE,
             )
             if prune_stale
             else SourceTaskReconciliation(
@@ -871,7 +910,7 @@ class LiveJiraIssueTrialRunner:
             persisted_by_source={
                 source: sum(
                     evidence_source == source
-                    for evidence_source, _source_record_id in evidence_ids
+                    for evidence_source, _instance_id, _source_record_id in evidence_ids
                 )
                 for source in coverage_by_source
             },
@@ -988,7 +1027,7 @@ class LiveJiraIssueTrialRunner:
     def _persist_jira_issues(
         self,
         *,
-        evidence_ids: dict[tuple[str, str], str],
+        evidence_ids: dict[tuple[str, str | None, str], str],
         prune_stale: bool,
     ) -> JiraIssuePersistenceResult:
         audit = self.jira_connector.last_audit
@@ -999,7 +1038,7 @@ class LiveJiraIssueTrialRunner:
         link_count = 0
         current_evidence_ids: dict[str, str] = {}
         for issue in audit.selected_issues:
-            evidence_id = evidence_ids.get(("jira", issue.key))
+            evidence_id = evidence_ids.get(("jira", JIRA_PRIMARY_INSTANCE, issue.key))
             if (
                 evidence_id is None
                 or issue.assignee_account_id is None
@@ -1041,6 +1080,7 @@ class LiveJiraIssueTrialRunner:
         reconciliation = (
             self.state_store.reconcile_jira_issue_snapshot(
                 current_evidence_ids=current_evidence_ids,
+                connector_instance_id=JIRA_PRIMARY_INSTANCE,
             )
             if prune_stale
             else SourceTaskReconciliation(

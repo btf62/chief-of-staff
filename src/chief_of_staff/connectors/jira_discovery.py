@@ -26,6 +26,7 @@ from chief_of_staff.auth.keychain import (
     KeychainSecretReference,
     MacOSKeychain,
 )
+from chief_of_staff.connectors.instances import JIRA_PRIMARY_INSTANCE
 from chief_of_staff.domain import (
     AuthorizationStatus,
     ConnectorRun,
@@ -493,6 +494,7 @@ class JiraProjectDiscoveryTrialRunner:
                 coverage_status=CoverageStatus.COMPLETE,
                 freshness_at=completed_at,
                 page_count=discovery.page_count,
+                connector_instance_id=JIRA_PRIMARY_INSTANCE,
             )
         )
         fingerprint = hashlib.sha256(
@@ -512,6 +514,7 @@ class JiraProjectDiscoveryTrialRunner:
                 evidence_fingerprint=fingerprint,
                 retrieved_at=completed_at,
                 freshness_at=completed_at,
+                connector_instance_id=JIRA_PRIMARY_INSTANCE,
             )
         )
         output_path = self._write_private_report(

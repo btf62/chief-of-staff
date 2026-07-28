@@ -10,6 +10,7 @@ from itertools import pairwise
 from zoneinfo import ZoneInfo
 
 from chief_of_staff.connectors import SourceCoverage
+from chief_of_staff.domain import ConnectorDomain
 from chief_of_staff.pipeline.context import InvocationContext, WorkdayType
 from chief_of_staff.pipeline.normalization import NormalizedRecord, RecordKind
 
@@ -68,6 +69,9 @@ class SourceLink:
     source: str
     source_record_id: str
     display_url: str | None
+    connector_instance_id: str | None = None
+    account_alias: str | None = None
+    domain_classification: ConnectorDomain | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,6 +161,7 @@ class TaskCandidateAudit:
     available_count: int
     candidate_count: int
     excluded_reasons: tuple[tuple[str, int], ...]
+    connector_instance_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -585,8 +590,9 @@ def validate_briefing(
     if len(coverage_sections) != 1 or not coverage_text:
         errors.append("source coverage disclosure is missing")
     for source in plan.coverage:
-        if source.source not in coverage_text:
-            errors.append(f"coverage for {source.source} is not disclosed")
+        label = _coverage_label(source)
+        if label not in coverage_text:
+            errors.append(f"coverage for {label} is not disclosed")
 
     if errors:
         raise BriefingValidationError(tuple(errors))
@@ -688,7 +694,7 @@ def _coverage_summary(
             )
         )
         detail = (
-            f"`{report.source}`: {report.status.value}; "
+            f"`{_coverage_label(report)}`: {report.status.value}; "
             f"{retrieved} retrieved; {selected} selected; "
             f"{persisted}; {candidates}; {displayed}"
         )
@@ -1354,11 +1360,22 @@ def _task_candidate_audits(
     confidence_by_source: dict[str, TaskPlanningConfidence],
 ) -> tuple[TaskCandidateAudit, ...]:
     candidate_ids = {record.id for record in candidates}
-    sources = sorted({record.provenance.source for record in available})
+    sources = sorted(
+        {
+            (
+                record.provenance.source,
+                record.provenance.connector_instance_id or "",
+            )
+            for record in available
+        }
+    )
     audits: list[TaskCandidateAudit] = []
-    for source in sources:
+    for source, instance_id in sources:
         source_records = tuple(
-            record for record in available if record.provenance.source == source
+            record
+            for record in available
+            if record.provenance.source == source
+            and (record.provenance.connector_instance_id or "") == instance_id
         )
         reasons: dict[str, int] = {}
         for record in source_records:
@@ -1378,6 +1395,7 @@ def _task_candidate_audits(
                     record.id in candidate_ids for record in source_records
                 ),
                 excluded_reasons=tuple(sorted(reasons.items())),
+                connector_instance_id=instance_id or None,
             )
         )
     return tuple(audits)
@@ -1868,6 +1886,9 @@ def _source_link(record: NormalizedRecord) -> SourceLink:
         source=record.provenance.source,
         source_record_id=record.provenance.source_record_id,
         display_url=record.provenance.display_url,
+        connector_instance_id=record.provenance.connector_instance_id,
+        account_alias=record.provenance.account_alias,
+        domain_classification=record.provenance.domain_classification,
     )
 
 
@@ -1878,6 +1899,9 @@ def _source_links(record: NormalizedRecord) -> tuple[SourceLink, ...]:
             source=provenance.source,
             source_record_id=provenance.source_record_id,
             display_url=provenance.display_url,
+            connector_instance_id=provenance.connector_instance_id,
+            account_alias=provenance.account_alias,
+            domain_classification=provenance.domain_classification,
         )
         for provenance in record.associated_provenance
     )
@@ -1897,8 +1921,13 @@ def _association_detail(record: NormalizedRecord) -> str:
 
 
 def _render_source(source: SourceLink) -> str:
-    label = f"{source.source}/{source.source_record_id}"
+    display_source = source.account_alias or source.source
+    label = f"{display_source}/{source.source_record_id}"
     return label if source.display_url is None else f"[{label}]({source.display_url})"
+
+
+def _coverage_label(report: SourceCoverage) -> str:
+    return report.account_alias or report.source
 
 
 def _word_count(text: str) -> int:

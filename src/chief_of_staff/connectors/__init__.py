@@ -26,6 +26,15 @@ from chief_of_staff.connectors.google_calendar_live import (
     GoogleCalendarHttpTransport,
     StoredGoogleCalendarAuthorizationProvider,
 )
+from chief_of_staff.connectors.instances import (
+    GOOGLE_CALENDAR_PRIMARY_INSTANCE,
+    JIRA_PRIMARY_INSTANCE,
+    TODOIST_PRIMARY_INSTANCE,
+    ConnectorInstance,
+    ConnectorInstanceIdentity,
+    connector_instance_key,
+    partition_source_items_by_domain,
+)
 from chief_of_staff.connectors.jira import (
     JIRA_APPROVED_JQL,
     JIRA_APPROVED_PROJECT_KEY,
@@ -119,6 +128,7 @@ from chief_of_staff.connectors.todoist_live import (
 
 __all__ = (
     "GOOGLE_CALENDAR_EVENTS_OWNED_READONLY_SCOPE",
+    "GOOGLE_CALENDAR_PRIMARY_INSTANCE",
     "JIRA_API_ROOT",
     "JIRA_APPROVED_JQL",
     "JIRA_APPROVED_PROJECT_KEY",
@@ -126,6 +136,7 @@ __all__ = (
     "JIRA_EXCLUDED_ISSUE_FIELDS",
     "JIRA_INITIAL_FIELDS",
     "JIRA_PAGE_LIMIT",
+    "JIRA_PRIMARY_INSTANCE",
     "JIRA_PROJECT_MAX_PAGES",
     "JIRA_PROJECT_PAGE_SIZE",
     "JIRA_PROJECT_SEARCH_OPERATION",
@@ -133,11 +144,14 @@ __all__ = (
     "TODOIST_ACTIVE_TASK_ENDPOINT",
     "TODOIST_DATA_READ_SCOPE",
     "TODOIST_FILTER_QUERY",
+    "TODOIST_PRIMARY_INSTANCE",
     "CalendarAuthenticationError",
     "CalendarAuthorization",
     "CalendarAuthorizationProvider",
     "CalendarAuthorizationUnavailable",
     "CalendarRetrievalError",
+    "ConnectorInstance",
+    "ConnectorInstanceIdentity",
     "ConnectorRequest",
     "ConnectorResult",
     "ContextResourceCoverage",
@@ -214,6 +228,8 @@ __all__ = (
     "TodoistTaskPage",
     "TodoistTransport",
     "TodoistUser",
+    "connector_instance_key",
+    "partition_source_items_by_domain",
     "qualify_todoist_task",
     "stored_task_matches_selection_boundary",
     "task_due_at",

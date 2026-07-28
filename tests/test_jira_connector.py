@@ -265,7 +265,7 @@ def test_pagination_normalization_and_domain_records_preserve_fields() -> None:
         result.items[0],
         timezone="America/New_York",
     )
-    assert normalized.id == "jira:1001"
+    assert normalized.id == "jira:jira:primary:1001"
     assert normalized.provenance.source_record_id == "SYN-1"
     assert normalized.provenance.connector_run_id == "jira-connector-test:jira"
     assert normalized.provenance.display_url is not None
@@ -596,7 +596,10 @@ def test_jira_todoist_association_preserves_conflicting_records_and_links() -> N
     assert len(result.deduplication.records) == 2
     assert len(result.deduplication.associations) == 1
     association = result.deduplication.associations[0]
-    assert association.member_ids == ("jira:1001", "todoist:todo-1")
+    assert association.member_ids == (
+        "jira:jira:primary:1001",
+        "todoist:todo-1",
+    )
     assert association.basis == "explicit cross-source reference"
     assert association.conflicting_fields == ("status", "due_at")
     assert {
@@ -669,7 +672,10 @@ def test_jira_todoist_association_requires_an_explicit_key_and_combines_display(
     assert len(result.deduplication.records) == 3
     assert len(result.deduplication.associations) == 1
     association = result.deduplication.associations[0]
-    assert association.member_ids == ("jira:1001", "todoist:explicit")
+    assert association.member_ids == (
+        "jira:jira:primary:1001",
+        "todoist:explicit",
+    )
     assert "todoist:similar" not in association.member_ids
     outcome = next(
         section
@@ -764,7 +770,7 @@ def test_synthetic_jira_records_support_bounded_briefing_sections_and_funnel() -
     assert jira_audit.candidate_count == 7
     assert "1 page (no pagination)" in result.rendered.text
     assert result.deduplication.associations[0].member_ids == (
-        "jira:next-1",
+        "jira:jira:primary:next-1",
         "synthetic_calendar:meeting",
     )
 

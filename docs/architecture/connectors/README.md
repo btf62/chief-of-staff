@@ -12,7 +12,10 @@ values, or private source content in a connector specification.
 
 Every connector specification must document:
 
-- The authorized account and resource boundary
+- Whether the provider supports one or multiple independently configured
+  connector instances
+- The stable instance ID, safe account alias, domain classification, authorized
+  account reference, and resource boundary for each instance
 - OAuth application registration and ownership, when applicable
 - Exact requested scopes and why each is required
 - Whether each scope is read-only, sensitive, or restricted
@@ -23,6 +26,24 @@ Every connector specification must document:
 - Authentication-failure disclosure, distinct from empty source data
 - Read-only interface behavior and contract tests proving no external writes
 - Any narrowly bounded cache exception and its retention and deletion behavior
+
+Each retrieval operates on one connector instance. Connector runs, normalized
+facts, source evidence, freshness, coverage, failure state, and briefing
+provenance retain that instance identity. User-facing output uses the safe
+alias rather than a full email address or provider account identifier.
+
+Multiple instances of one provider must have independent OAuth grants,
+Keychain entries, resource and scope boundaries, retrieval configuration,
+enabled state, coverage, retention policy, and disconnection behavior.
+Provider-level defaults may be shared only when they do not silently broaden
+an instance. A failure, cache exception, sensitivity approval, or
+configuration change for one instance never transfers to another.
+
+Work and personal records remain distinct throughout retrieval, persistence,
+inference, and presentation. Hosted-inference evidence packets do not combine
+domains by default. Cross-account actors, threads, tasks, and commitments are
+not merged automatically; a conservative association preserves every source
+record and its separate provenance.
 
 Cloud connectors follow the authentication and secret-storage boundary in
 [ADR-0005](../../decisions/0005-adopt-oauth-and-macos-keychain.md). Exact scope
@@ -36,13 +57,13 @@ decisions for each future connector specification.
 | Approved repository context | [Repository context](repository-context.md) | Accepted and implemented |
 | Google Calendar | [Google Calendar](google-calendar.md) | Accepted; bounded live trial complete and stopped |
 | Todoist | [Todoist](todoist.md) | Accepted; bounded live trial and workday validation complete and stopped |
-| Jira | [Jira](jira.md) | Accepted; bounded project discovery complete, stopped at issue gate |
+| Jira | [Jira](jira.md) | Accepted; bounded project and issue trials complete and stopped |
+| Gmail | [Gmail](gmail.md) | Preliminary multi-account boundary; not implemented or authorized |
 
 ## Planned specifications
 
 | Source | Planned specification |
 | --- | --- |
-| Gmail | `gmail.md` |
 | Asana | `asana.md` |
 | Approved Google Drive content | `google-drive.md` |
 

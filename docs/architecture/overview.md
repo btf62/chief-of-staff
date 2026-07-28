@@ -1,9 +1,9 @@
 # Architecture Overview
 
 - **Status:** Accepted
-- **Version:** 2
+- **Version:** 3
 - **Owner:** Brad
-- **Last updated:** 2026-07-25
+- **Last updated:** 2026-07-27
 
 This document defines the technical architecture required for
 [Daily Briefing v1](../product/features/daily-briefing-v1.md). It establishes
@@ -71,6 +71,8 @@ decision record.
 9. Degrade gracefully and disclose partial coverage when a connector fails.
 10. Never commit credentials, private source content, production data, or
     sensitive evaluation material to Git.
+11. Identify authorization, coverage, provenance, retention, and operational
+    policy by connector instance rather than assuming one account per provider.
 
 ## 1. System Context
 
@@ -135,7 +137,7 @@ independently.
 A briefing run follows this sequence:
 
 1. Determine the briefing date, timezone, workday context, and run identity.
-2. Retrieve approved records from each enabled source.
+2. Retrieve approved records from each enabled connector instance.
 3. Record connector coverage, retrieval time, source freshness, and failures.
 4. Normalize records while preserving source meaning and stable references.
 5. Resolve likely identities, relationships, and duplicates conservatively.
@@ -172,11 +174,34 @@ lower or withhold affected recommendations.
 
 ## 4. Connector Model
 
+The architecture distinguishes a **connector provider** from a
+**connector instance**. A provider identifies one source implementation, such
+as Gmail. A connector instance is an application-owned identity for one
+independently authorized account and boundary, such as `Work Gmail` or
+`Personal Gmail`. The same provider implementation may serve multiple
+instances, but credentials, configuration, coverage, and provenance never
+become provider-global state.
+
+Each connector instance records non-secret metadata for:
+
+- A stable application-owned instance ID and provider type.
+- A user-facing alias used in briefings and reports instead of a full account
+  address.
+- The independently authorized account reference.
+- Work or personal domain classification.
+- Approved resource boundary and scopes.
+- Keychain lookup references and credential health, without secret values.
+- Retrieval configuration, coverage, freshness, and enabled state.
+- Retention or cache-policy reference.
+- Creation and update timestamps.
+
 Every connector implements a common, read-only conceptual contract:
 
 | Contract field | Purpose |
 | --- | --- |
-| Source name | Stable connector identity |
+| Connector instance | Stable application-owned identity for one configured account |
+| Provider type | Shared source-specific connector implementation |
+| Account alias and domain | Safe presentation label and work-or-personal policy boundary |
 | Approved account or scope | Accounts, projects, folders, repositories, labels, or other boundaries Brad has authorized |
 | Retrieval window | Time or query range requested for the run |
 | Retrieved at | Time the connector completed retrieval |
@@ -199,6 +224,13 @@ Exact accounts, resource boundaries, scopes, provider registration, refresh
 behavior, and revocation procedures belong in each connector specification.
 Read-only behavior is enforced through scopes, connector interfaces, and
 contract tests.
+
+Authorization, Keychain entries, disconnection, failure, and refresh are
+instance-specific. A failure or policy exception for one instance does not
+affect or authorize another. Every connector run and source record carries the
+instance ID through normalization and provenance; user-facing output normally
+shows only its alias. Coverage distinguishes an unauthorized or failed
+instance from another instance that returned a legitimate empty result.
 
 Phase 1 requires connectors for:
 
@@ -234,6 +266,7 @@ Every stored or transient item should distinguish:
 
 | Entity | Purpose and classification |
 | --- | --- |
+| `ConnectorInstance` | Application-owned provider-account identity with alias, domain, resource and scope boundary, non-secret credential references and health, retrieval policy, coverage, retention reference, and lifecycle timestamps |
 | `SourceRecord` | Minimal envelope for authoritative source identity, facts, freshness, display link, retrieval reference, and connector run |
 | `Actor` | Normalized person or organization identity with source-specific aliases; uncertain identities remain separate |
 | `CalendarEvent` | Calendar-owned time, participants, location, links, and status plus normalized transition or preparation context |
@@ -247,7 +280,7 @@ Every stored or transient item should distinguish:
 | `SourceEvidence` | Stable source reference, relevant excerpt or fact pointer, freshness, and display link supporting an inference or recommendation |
 | `LocalDisposition` | Timestamped confirmation, correction, dismissal, delegation, rescheduling, completion, abandonment, or deletion event |
 | `Briefing` | Structured section content, rendered output, coverage statement, validation result, and run metadata |
-| `ConnectorRun` | Per-source retrieval request, coverage, freshness, timing, warnings, and errors |
+| `ConnectorRun` | Per-instance retrieval request, coverage, freshness, timing, warnings, and errors |
 
 Inferences never overwrite authoritative facts. A corrected normalized value or
 inference is represented as a local overlay with provenance, not as a silent
@@ -313,6 +346,13 @@ Provider adapters receive only task-specific evidence packets selected by
 deterministic application code and return application-owned, schema-validated
 results. Models receive no connector, SQLite, local-state, or external-action
 tools.
+
+Evidence packets remain within one work or personal domain by default.
+Combining domains requires an explicit, reviewable inference need and separate
+approval; configuring two accounts for one provider does not authorize mixed
+hosted inference. A unified briefing may use records from multiple approved
+instances while retaining each record's account alias, domain, and
+provenance.
 
 The pipeline separates deterministic work from probabilistic judgment:
 
@@ -386,6 +426,13 @@ evaluation and configuration rather than another architecture choice.
 Deduplication is conservative. The system creates associations or clusters
 around source records rather than destructively merging them.
 
+Records from separate connector instances do not become the same actor,
+thread, task, or commitment merely because they share a provider, identifier,
+address, title, or similar content. A supported cross-account association
+retains both authoritative records, both instance identities, and any
+conflicts. No account-specific sensitivity, retention, cache, or retrieval
+exception transfers through an association.
+
 Evidence for a likely duplicate may include:
 
 - Explicit cross-source links or identifiers
@@ -446,6 +493,8 @@ remains in force.
 - Connector access is read-only and least-privilege.
 - Credentials and tokens never enter source control, logs, briefing output, or
   evaluation fixtures.
+- Credentials, scopes, health, disconnection, and Keychain references are
+  isolated per connector instance.
 - Private source content and production data never enter Git.
 - Retrieval, normalization, logging, and persistence minimize sensitive
   content.

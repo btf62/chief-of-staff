@@ -17,6 +17,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Final, Protocol
 
 from chief_of_staff.auth.keychain import KeychainSecretReference, MacOSKeychain
+from chief_of_staff.connectors.instances import JIRA_PRIMARY_INSTANCE
 from chief_of_staff.domain import (
     AuthorizationStatus,
     ConnectorAuthorizationMetadata,
@@ -173,6 +174,7 @@ class JiraOAuthClientRegistrar:
             configured_at=self.clock(),
             application_owner=application_owner.strip(),
             oauth_grant_type=JIRA_GRANT_TYPE,
+            connector_instance_id=JIRA_PRIMARY_INSTANCE,
         )
         try:
             self.state_store.save_oauth_client(metadata)
@@ -327,6 +329,7 @@ class JiraInstalledAppOAuth:
             token_expires_at=now + timedelta(seconds=token.expires_in_seconds),
             authorized_at=now,
             updated_at=now,
+            connector_instance_id=JIRA_PRIMARY_INSTANCE,
         )
         resource = ConnectorResourceMetadata(
             connector=JIRA_CONNECTOR,
@@ -336,6 +339,7 @@ class JiraInstalledAppOAuth:
             resource_type="jira_cloud_site",
             grant_type=JIRA_GRANT_TYPE,
             selected_at=now,
+            connector_instance_id=JIRA_PRIMARY_INSTANCE,
         )
         try:
             self.state_store.save_connector_authorization(authorization)

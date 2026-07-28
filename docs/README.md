@@ -57,6 +57,8 @@ not mean the complete Daily Briefing has passed operational acceptance.
 - [Jira connector](architecture/connectors/jira.md) — accepted
   resource-restricted project discovery, exact-project enhanced search, and
   completed bounded issue trial
+- [Gmail connector](architecture/connectors/gmail.md) — preliminary
+  multi-account boundary; not implemented or authorized
 - [Decision records](decisions/README.md) — architecture and significant
   product decisions
 

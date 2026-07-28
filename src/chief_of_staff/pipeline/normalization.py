@@ -8,6 +8,7 @@ from enum import StrEnum
 from zoneinfo import ZoneInfo
 
 from chief_of_staff.connectors import SourceItem
+from chief_of_staff.domain import ConnectorDomain
 
 
 class RecordKind(StrEnum):
@@ -28,6 +29,9 @@ class Provenance:
     retrieved_at: datetime
     freshness_at: datetime | None
     connector_run_id: str | None = None
+    connector_instance_id: str | None = None
+    account_alias: str | None = None
+    domain_classification: ConnectorDomain | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,7 +95,11 @@ def normalize_item(
         raise ValueError("importance must be between 0 and 5")
 
     return NormalizedRecord(
-        id=f"{source}:{item.id}",
+        id=(
+            f"{source}:{item.connector_instance_id}:{item.id}"
+            if item.connector_instance_id is not None
+            else f"{source}:{item.id}"
+        ),
         kind=kind,
         title=title,
         summary=_optional_string(item, "summary"),
@@ -113,6 +121,9 @@ def normalize_item(
                 None if item.freshness_at is None else _aware(item.freshness_at, zone)
             ),
             connector_run_id=item.connector_run_id,
+            connector_instance_id=item.connector_instance_id,
+            account_alias=item.account_alias,
+            domain_classification=item.domain_classification,
         ),
         provider_priority=_optional_integer(item, "provider_priority"),
         explicit_priority_link=_boolean(

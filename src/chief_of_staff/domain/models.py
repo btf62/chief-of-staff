@@ -88,6 +88,14 @@ class CredentialHealth(StrEnum):
     ERROR = "error"
 
 
+class ConnectorDomain(StrEnum):
+    """Operational domain carried independently for each connector instance."""
+
+    WORK = "work"
+    PERSONAL = "personal"
+    UNCLASSIFIED = "unclassified"
+
+
 @dataclass(frozen=True, slots=True)
 class ConnectorRun:
     """Retrieval metadata without raw source payloads."""
@@ -104,6 +112,7 @@ class ConnectorRun:
     freshness_at: datetime | None = None
     error_category: str | None = None
     page_count: int | None = None
+    connector_instance_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,6 +141,7 @@ class SourceEvidence:
     display_url: str | None = None
     excerpt: str | None = None
     freshness_at: datetime | None = None
+    connector_instance_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -206,6 +216,41 @@ class StateInspection:
     normalized_jira_issues: int
     normalized_jira_issue_labels: int
     normalized_jira_issue_links: int
+    connector_instances: int
+
+
+@dataclass(frozen=True, slots=True)
+class ConnectorInstanceMetadata:
+    """Application-owned identity and policy for one configured source account."""
+
+    id: str
+    provider: str
+    alias: str
+    domain_classification: ConnectorDomain
+    approved_resource_boundary: str
+    approved_scopes: str
+    retrieval_configuration: str
+    enabled: bool
+    retention_policy_reference: str
+    created_at: datetime
+    updated_at: datetime
+    last_coverage_status: CoverageStatus | None = None
+    last_freshness_at: datetime | None = None
+
+    def __post_init__(self) -> None:
+        for field_name, value in (
+            ("connector instance ID", self.id),
+            ("provider", self.provider),
+            ("account alias", self.alias),
+            ("approved resource boundary", self.approved_resource_boundary),
+            ("approved scopes", self.approved_scopes),
+            ("retrieval configuration", self.retrieval_configuration),
+            ("retention policy reference", self.retention_policy_reference),
+        ):
+            if not value.strip():
+                raise ValueError(f"{field_name} must not be empty")
+        if "@" in self.alias:
+            raise ValueError("account alias must not be a full email address")
 
 
 @dataclass(frozen=True, slots=True)
@@ -220,6 +265,7 @@ class OAuthClientMetadata:
     configured_at: datetime
     application_owner: str | None = None
     oauth_grant_type: str | None = None
+    connector_instance_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -240,6 +286,7 @@ class ConnectorAuthorizationMetadata:
     authorized_at: datetime
     updated_at: datetime
     last_used_at: datetime | None = None
+    connector_instance_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -253,6 +300,7 @@ class ConnectorResourceMetadata:
     resource_type: str
     grant_type: str
     selected_at: datetime
+    connector_instance_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

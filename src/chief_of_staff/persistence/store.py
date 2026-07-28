@@ -14,8 +14,11 @@ from chief_of_staff.domain.models import (
     ConclusionKind,
     ConclusionState,
     ConnectorAuthorizationMetadata,
+    ConnectorDomain,
+    ConnectorInstanceMetadata,
     ConnectorResourceMetadata,
     ConnectorRun,
+    CoverageStatus,
     CredentialHealth,
     DispositionEvent,
     DispositionKind,
@@ -59,6 +62,118 @@ class StateStore:
     def __init__(self, database: Database) -> None:
         self.database = database
 
+    def save_connector_instance(self, metadata: ConnectorInstanceMetadata) -> None:
+        """Persist one non-secret application-owned connector identity."""
+
+        with self.database.transaction() as connection:
+            existing = connection.execute(
+                "SELECT provider FROM connector_instances WHERE id = ?",
+                (metadata.id,),
+            ).fetchone()
+            if existing is not None and str(existing["provider"]) != metadata.provider:
+                raise ValueError(
+                    "connector instance ID cannot be rebound to another provider"
+                )
+            connection.execute(
+                """
+                INSERT INTO connector_instances(
+                    id,
+                    provider,
+                    alias,
+                    domain_classification,
+                    approved_resource_boundary,
+                    approved_scopes,
+                    retrieval_configuration,
+                    last_coverage_status,
+                    last_freshness_at,
+                    enabled,
+                    retention_policy_reference,
+                    created_at,
+                    updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    alias = excluded.alias,
+                    domain_classification = excluded.domain_classification,
+                    approved_resource_boundary =
+                        excluded.approved_resource_boundary,
+                    approved_scopes = excluded.approved_scopes,
+                    retrieval_configuration =
+                        excluded.retrieval_configuration,
+                    last_coverage_status = excluded.last_coverage_status,
+                    last_freshness_at = excluded.last_freshness_at,
+                    enabled = excluded.enabled,
+                    retention_policy_reference =
+                        excluded.retention_policy_reference,
+                    updated_at = excluded.updated_at
+                """,
+                _connector_instance_values(metadata),
+            )
+
+    def get_connector_instance(
+        self,
+        connector_instance_id: str,
+    ) -> ConnectorInstanceMetadata | None:
+        """Return one instance without exposing its account identity or secrets."""
+
+        row = self.database.connection.execute(
+            "SELECT * FROM connector_instances WHERE id = ?",
+            (connector_instance_id,),
+        ).fetchone()
+        return None if row is None else _connector_instance_from_row(row)
+
+    def list_connector_instances(
+        self,
+        *,
+        provider: str | None = None,
+    ) -> tuple[ConnectorInstanceMetadata, ...]:
+        """List configured instances, optionally restricted to one provider."""
+
+        if provider is None:
+            rows = self.database.connection.execute(
+                "SELECT * FROM connector_instances ORDER BY provider, alias, id"
+            ).fetchall()
+        else:
+            rows = self.database.connection.execute(
+                """
+                SELECT *
+                FROM connector_instances
+                WHERE provider = ?
+                ORDER BY alias, id
+                """,
+                (provider,),
+            ).fetchall()
+        return tuple(_connector_instance_from_row(row) for row in rows)
+
+    def update_connector_instance_coverage(
+        self,
+        connector_instance_id: str,
+        *,
+        coverage_status: CoverageStatus,
+        freshness_at: datetime | None,
+        updated_at: datetime,
+    ) -> None:
+        """Update coverage for exactly one independently configured account."""
+
+        with self.database.transaction() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE connector_instances
+                SET last_coverage_status = ?,
+                    last_freshness_at = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    coverage_status.value,
+                    _serialize_optional_datetime(freshness_at),
+                    _serialize_datetime(updated_at),
+                    connector_instance_id,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError("connector instance metadata is missing")
+
     def add_connector_run(self, run: ConnectorRun) -> None:
         """Persist connector metadata without a raw source payload."""
 
@@ -77,9 +192,10 @@ class StateStore:
                     coverage_status,
                     freshness_at,
                     error_category,
-                    page_count
+                    page_count,
+                    connector_instance_id
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     run.id,
@@ -94,6 +210,7 @@ class StateStore:
                     _serialize_optional_datetime(run.freshness_at),
                     run.error_category,
                     run.page_count,
+                    run.connector_instance_id,
                 ),
             )
 
@@ -101,10 +218,17 @@ class StateStore:
         """Persist non-secret OAuth client metadata and Keychain references."""
 
         with self.database.transaction() as connection:
+            connector_instance_id = self._ensure_connector_instance(
+                connection,
+                provider=metadata.connector,
+                connector_instance_id=metadata.connector_instance_id,
+                created_at=metadata.configured_at,
+            )
             connection.execute(
                 """
                 INSERT INTO oauth_clients(
-                    connector,
+                    connector_instance_id,
+                    provider,
                     oauth_project_id,
                     oauth_client_id,
                     credential_service,
@@ -113,8 +237,9 @@ class StateStore:
                     application_owner,
                     oauth_grant_type
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(connector) DO UPDATE SET
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(connector_instance_id) DO UPDATE SET
+                    provider = excluded.provider,
                     oauth_project_id = excluded.oauth_project_id,
                     oauth_client_id = excluded.oauth_client_id,
                     credential_service = excluded.credential_service,
@@ -124,6 +249,7 @@ class StateStore:
                     oauth_grant_type = excluded.oauth_grant_type
                 """,
                 (
+                    connector_instance_id,
                     metadata.connector,
                     metadata.oauth_project_id,
                     metadata.oauth_client_id,
@@ -135,17 +261,25 @@ class StateStore:
                 ),
             )
 
-    def get_oauth_client(self, connector: str) -> OAuthClientMetadata | None:
+    def get_oauth_client(
+        self,
+        connector_or_instance_id: str,
+    ) -> OAuthClientMetadata | None:
         """Return non-secret OAuth client metadata."""
 
+        connector_instance_id = self._resolve_connector_instance_id(
+            connector_or_instance_id
+        )
+        if connector_instance_id is None:
+            return None
         row = self.database.connection.execute(
-            "SELECT * FROM oauth_clients WHERE connector = ?",
-            (connector,),
+            "SELECT * FROM oauth_clients WHERE connector_instance_id = ?",
+            (connector_instance_id,),
         ).fetchone()
         if row is None:
             return None
         return OAuthClientMetadata(
-            connector=str(row["connector"]),
+            connector=str(row["provider"]),
             oauth_project_id=str(row["oauth_project_id"]),
             oauth_client_id=str(row["oauth_client_id"]),
             credential_service=str(row["credential_service"]),
@@ -161,6 +295,7 @@ class StateStore:
                 if row["oauth_grant_type"] is None
                 else str(row["oauth_grant_type"])
             ),
+            connector_instance_id=str(row["connector_instance_id"]),
         )
 
     def save_connector_authorization(
@@ -169,11 +304,18 @@ class StateStore:
     ) -> None:
         """Persist non-secret authorization health and Keychain references."""
 
+        connector_instance_id = (
+            metadata.connector_instance_id
+            or self._resolve_connector_instance_id(metadata.connector)
+        )
+        if connector_instance_id is None:
+            raise ValueError("connector instance metadata is missing")
         with self.database.transaction() as connection:
             connection.execute(
                 """
                 INSERT INTO connector_authorizations(
-                    connector,
+                    connector_instance_id,
+                    provider,
                     account_reference,
                     account_identity,
                     granted_scope,
@@ -188,8 +330,9 @@ class StateStore:
                     last_used_at,
                     updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(connector) DO UPDATE SET
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(connector_instance_id) DO UPDATE SET
+                    provider = excluded.provider,
                     account_reference = excluded.account_reference,
                     account_identity = excluded.account_identity,
                     granted_scope = excluded.granted_scope,
@@ -205,6 +348,7 @@ class StateStore:
                     updated_at = excluded.updated_at
                 """,
                 (
+                    connector_instance_id,
                     metadata.connector,
                     metadata.account_reference,
                     metadata.account_identity,
@@ -225,21 +369,47 @@ class StateStore:
                     _serialize_datetime(metadata.updated_at),
                 ),
             )
+            connection.execute(
+                """
+                UPDATE connector_instances
+                SET approved_scopes = ?,
+                    enabled = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    metadata.granted_scope,
+                    int(
+                        metadata.authorization_status is AuthorizationStatus.AUTHORIZED
+                    ),
+                    _serialize_datetime(metadata.updated_at),
+                    connector_instance_id,
+                ),
+            )
 
     def get_connector_authorization(
         self,
-        connector: str,
+        connector_or_instance_id: str,
     ) -> ConnectorAuthorizationMetadata | None:
         """Return inspectable authorization metadata without secret values."""
 
+        connector_instance_id = self._resolve_connector_instance_id(
+            connector_or_instance_id
+        )
+        if connector_instance_id is None:
+            return None
         row = self.database.connection.execute(
-            "SELECT * FROM connector_authorizations WHERE connector = ?",
-            (connector,),
+            """
+            SELECT *
+            FROM connector_authorizations
+            WHERE connector_instance_id = ?
+            """,
+            (connector_instance_id,),
         ).fetchone()
         if row is None:
             return None
         return ConnectorAuthorizationMetadata(
-            connector=str(row["connector"]),
+            connector=str(row["provider"]),
             account_reference=str(row["account_reference"]),
             account_identity=str(row["account_identity"]),
             granted_scope=str(row["granted_scope"]),
@@ -263,16 +433,24 @@ class StateStore:
                 None if row["last_used_at"] is None else str(row["last_used_at"])
             ),
             updated_at=_parse_datetime(str(row["updated_at"])),
+            connector_instance_id=str(row["connector_instance_id"]),
         )
 
     def save_connector_resource(self, metadata: ConnectorResourceMetadata) -> None:
         """Persist one non-secret resource-level connector boundary."""
 
+        connector_instance_id = (
+            metadata.connector_instance_id
+            or self._resolve_connector_instance_id(metadata.connector)
+        )
+        if connector_instance_id is None:
+            raise ValueError("connector instance metadata is missing")
         with self.database.transaction() as connection:
             connection.execute(
                 """
                 INSERT INTO connector_resources(
-                    connector,
+                    connector_instance_id,
+                    provider,
                     resource_reference,
                     resource_id,
                     resource_url,
@@ -280,8 +458,9 @@ class StateStore:
                     grant_type,
                     selected_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(connector) DO UPDATE SET
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(connector_instance_id) DO UPDATE SET
+                    provider = excluded.provider,
                     resource_reference = excluded.resource_reference,
                     resource_id = excluded.resource_id,
                     resource_url = excluded.resource_url,
@@ -290,6 +469,7 @@ class StateStore:
                     selected_at = excluded.selected_at
                 """,
                 (
+                    connector_instance_id,
                     metadata.connector,
                     metadata.resource_reference,
                     metadata.resource_id,
@@ -302,50 +482,59 @@ class StateStore:
 
     def get_connector_resource(
         self,
-        connector: str,
+        connector_or_instance_id: str,
     ) -> ConnectorResourceMetadata | None:
         """Return the selected non-secret resource boundary."""
 
+        connector_instance_id = self._resolve_connector_instance_id(
+            connector_or_instance_id
+        )
+        if connector_instance_id is None:
+            return None
         row = self.database.connection.execute(
-            "SELECT * FROM connector_resources WHERE connector = ?",
-            (connector,),
+            "SELECT * FROM connector_resources WHERE connector_instance_id = ?",
+            (connector_instance_id,),
         ).fetchone()
         if row is None:
             return None
         return ConnectorResourceMetadata(
-            connector=str(row["connector"]),
+            connector=str(row["provider"]),
             resource_reference=str(row["resource_reference"]),
             resource_id=str(row["resource_id"]),
             resource_url=str(row["resource_url"]),
             resource_type=str(row["resource_type"]),
             grant_type=str(row["grant_type"]),
             selected_at=_parse_datetime(str(row["selected_at"])),
+            connector_instance_id=str(row["connector_instance_id"]),
         )
 
     def mark_connector_authorization_used(
         self,
-        connector: str,
+        connector_or_instance_id: str,
         *,
         used_at: datetime,
     ) -> None:
         """Record successful use without changing or reading a credential."""
 
+        connector_instance_id = self._required_connector_instance_id(
+            connector_or_instance_id
+        )
         timestamp = _serialize_datetime(used_at)
         with self.database.transaction() as connection:
             cursor = connection.execute(
                 """
                 UPDATE connector_authorizations
                 SET last_used_at = ?, updated_at = ?
-                WHERE connector = ?
+                WHERE connector_instance_id = ?
                 """,
-                (timestamp, timestamp, connector),
+                (timestamp, timestamp, connector_instance_id),
             )
             if cursor.rowcount != 1:
                 raise ValueError("connector authorization metadata is missing")
 
     def set_connector_authorization_health(
         self,
-        connector: str,
+        connector_or_instance_id: str,
         *,
         status: AuthorizationStatus,
         health: CredentialHealth,
@@ -353,6 +542,9 @@ class StateStore:
     ) -> None:
         """Update non-secret health after expiry or provider rejection."""
 
+        connector_instance_id = self._required_connector_instance_id(
+            connector_or_instance_id
+        )
         timestamp = _serialize_datetime(updated_at)
         with self.database.transaction() as connection:
             cursor = connection.execute(
@@ -361,31 +553,217 @@ class StateStore:
                 SET authorization_status = ?,
                     credential_health = ?,
                     updated_at = ?
-                WHERE connector = ?
+                WHERE connector_instance_id = ?
                 """,
-                (status.value, health.value, timestamp, connector),
+                (
+                    status.value,
+                    health.value,
+                    timestamp,
+                    connector_instance_id,
+                ),
             )
             if cursor.rowcount != 1:
                 raise ValueError("connector authorization metadata is missing")
 
-    def delete_connector_configuration(self, connector: str) -> None:
+    def delete_connector_configuration(self, connector_or_instance_id: str) -> None:
         """Delete non-secret metadata after credentials are removed."""
 
+        connector_instance_id = self._required_connector_instance_id(
+            connector_or_instance_id
+        )
         with self.database.transaction() as connection:
             connection.execute(
-                "DELETE FROM oauth_clients WHERE connector = ?",
-                (connector,),
+                "DELETE FROM oauth_clients WHERE connector_instance_id = ?",
+                (connector_instance_id,),
             )
 
-    def delete_connector_authorization(self, connector: str) -> bool:
+    def delete_connector_authorization(self, connector_or_instance_id: str) -> bool:
         """Delete only non-secret grant metadata after token cleanup."""
 
+        connector_instance_id = self._required_connector_instance_id(
+            connector_or_instance_id
+        )
         with self.database.transaction() as connection:
             cursor = connection.execute(
-                "DELETE FROM connector_authorizations WHERE connector = ?",
-                (connector,),
+                """
+                DELETE FROM connector_authorizations
+                WHERE connector_instance_id = ?
+                """,
+                (connector_instance_id,),
             )
+            if cursor.rowcount:
+                connection.execute(
+                    """
+                    UPDATE connector_instances
+                    SET enabled = 0,
+                        updated_at = strftime(
+                            '%Y-%m-%dT%H:%M:%f+00:00',
+                            'now'
+                        )
+                    WHERE id = ?
+                    """,
+                    (connector_instance_id,),
+                )
         return cursor.rowcount > 0
+
+    def _resolve_connector_instance_id(
+        self,
+        connector_or_instance_id: str,
+    ) -> str | None:
+        if not connector_or_instance_id.strip():
+            raise ValueError("connector identity must not be empty")
+        exact = self.database.connection.execute(
+            "SELECT id FROM connector_instances WHERE id = ?",
+            (connector_or_instance_id,),
+        ).fetchone()
+        if exact is not None:
+            return str(exact["id"])
+        rows = self.database.connection.execute(
+            "SELECT id FROM connector_instances WHERE provider = ? ORDER BY id",
+            (connector_or_instance_id,),
+        ).fetchall()
+        if len(rows) > 1:
+            raise ValueError(
+                "provider has multiple connector instances; use an instance ID"
+            )
+        return None if not rows else str(rows[0]["id"])
+
+    def _required_connector_instance_id(
+        self,
+        connector_or_instance_id: str,
+    ) -> str:
+        connector_instance_id = self._resolve_connector_instance_id(
+            connector_or_instance_id
+        )
+        if connector_instance_id is None:
+            raise ValueError("connector instance metadata is missing")
+        return connector_instance_id
+
+    def _ensure_connector_instance(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        provider: str,
+        connector_instance_id: str | None,
+        created_at: datetime,
+    ) -> str:
+        if not provider.strip():
+            raise ValueError("connector provider must not be empty")
+        if connector_instance_id is None:
+            rows = connection.execute(
+                "SELECT id FROM connector_instances WHERE provider = ? ORDER BY id",
+                (provider,),
+            ).fetchall()
+            if len(rows) > 1:
+                raise ValueError(
+                    "provider has multiple connector instances; use an instance ID"
+                )
+            if rows:
+                return str(rows[0]["id"])
+            connector_instance_id = f"{provider}:primary"
+        elif not connector_instance_id.strip():
+            raise ValueError("connector instance ID must not be empty")
+
+        timestamp = _serialize_datetime(created_at)
+        connection.execute(
+            """
+            INSERT INTO connector_instances(
+                id,
+                provider,
+                alias,
+                domain_classification,
+                approved_resource_boundary,
+                approved_scopes,
+                retrieval_configuration,
+                enabled,
+                retention_policy_reference,
+                created_at,
+                updated_at
+            )
+            VALUES (?, ?, ?, 'unclassified', ?, 'not-authorized',
+                    'provider-default', 0, 'adr-0004-default', ?, ?)
+            ON CONFLICT(id) DO NOTHING
+            """,
+            (
+                connector_instance_id,
+                provider,
+                provider.replace("_", " ").title(),
+                provider,
+                timestamp,
+                timestamp,
+            ),
+        )
+        row = connection.execute(
+            "SELECT provider FROM connector_instances WHERE id = ?",
+            (connector_instance_id,),
+        ).fetchone()
+        if row is None or str(row["provider"]) != provider:
+            raise ValueError("connector instance provider does not match metadata")
+        return connector_instance_id
+
+    def _source_snapshot_instance(
+        self,
+        *,
+        source: str,
+        connector_instance_id: str | None,
+        normalized_table: str,
+    ) -> str | None:
+        queries = {
+            "normalized_source_tasks": """
+                SELECT DISTINCT evidence.connector_instance_id
+                FROM source_evidence AS evidence
+                JOIN normalized_source_tasks AS normalized
+                    ON normalized.evidence_id = evidence.id
+                WHERE evidence.source = ?
+            """,
+            "normalized_jira_issues": """
+                SELECT DISTINCT evidence.connector_instance_id
+                FROM source_evidence AS evidence
+                JOIN normalized_jira_issues AS normalized
+                    ON normalized.evidence_id = evidence.id
+                WHERE evidence.source = ?
+            """,
+        }
+        query = queries.get(normalized_table)
+        if query is None:
+            raise ValueError("unsupported normalized source table")
+        if connector_instance_id is not None:
+            row = self.database.connection.execute(
+                "SELECT provider FROM connector_instances WHERE id = ?",
+                (connector_instance_id,),
+            ).fetchone()
+            if row is None or str(row["provider"]) != source:
+                raise ValueError(
+                    "connector instance does not match the source snapshot"
+                )
+            return connector_instance_id
+
+        rows = self.database.connection.execute(
+            query,
+            (source,),
+        ).fetchall()
+        instance_values = {
+            None
+            if row["connector_instance_id"] is None
+            else str(row["connector_instance_id"])
+            for row in rows
+        }
+        if len(instance_values) > 1:
+            raise ValueError(
+                "source has multiple connector instances; use an instance ID"
+            )
+        if instance_values:
+            return next(iter(instance_values))
+
+        provider_rows = self.database.connection.execute(
+            "SELECT id FROM connector_instances WHERE provider = ?",
+            (source,),
+        ).fetchall()
+        if len(provider_rows) > 1:
+            raise ValueError(
+                "provider has multiple connector instances; use an instance ID"
+            )
+        return None if not provider_rows else str(provider_rows[0]["id"])
 
     def add_briefing_run(self, run: BriefingRun) -> None:
         """Persist one versioned briefing-run record."""
@@ -439,6 +817,7 @@ class StateStore:
                 INSERT INTO source_evidence(
                     id,
                     connector_run_id,
+                    connector_instance_id,
                     source,
                     source_record_id,
                     display_url,
@@ -447,11 +826,12 @@ class StateStore:
                     retrieved_at,
                     freshness_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     evidence.id,
                     evidence.connector_run_id,
+                    evidence.connector_instance_id,
                     evidence.source,
                     evidence.source_record_id,
                     evidence.display_url,
@@ -592,11 +972,17 @@ class StateStore:
         *,
         source: str,
         retained_source_record_ids: frozenset[str],
+        connector_instance_id: str | None = None,
     ) -> int:
         """Delete stale selected-task snapshots unless correction state needs them."""
 
         if not source.strip():
             raise ValueError("source must not be empty")
+        connector_instance_id = self._source_snapshot_instance(
+            source=source,
+            connector_instance_id=connector_instance_id,
+            normalized_table="normalized_source_tasks",
+        )
         with self.database.transaction() as connection:
             rows = connection.execute(
                 """
@@ -605,13 +991,17 @@ class StateStore:
                 JOIN normalized_source_tasks AS task
                     ON task.evidence_id = evidence.id
                 WHERE evidence.source = ?
+                  AND (
+                      (? IS NULL AND evidence.connector_instance_id IS NULL)
+                      OR evidence.connector_instance_id = ?
+                  )
                   AND NOT EXISTS (
                       SELECT 1
                       FROM conclusion_evidence AS link
                       WHERE link.evidence_id = evidence.id
                   )
                 """,
-                (source,),
+                (source, connector_instance_id, connector_instance_id),
             ).fetchall()
             stale_evidence_ids = tuple(
                 str(row["id"])
@@ -629,6 +1019,7 @@ class StateStore:
         *,
         source: str,
         current_evidence_ids: dict[str, str],
+        connector_instance_id: str | None = None,
     ) -> SourceTaskReconciliation:
         """Replace source task snapshots while preserving conclusion evidence."""
 
@@ -639,6 +1030,11 @@ class StateStore:
             for key, value in current_evidence_ids.items()
         ):
             raise ValueError("current evidence identifiers must not be empty")
+        connector_instance_id = self._source_snapshot_instance(
+            source=source,
+            connector_instance_id=connector_instance_id,
+            normalized_table="normalized_source_tasks",
+        )
         with self.database.transaction() as connection:
             rows = connection.execute(
                 """
@@ -654,8 +1050,12 @@ class StateStore:
                 JOIN normalized_source_tasks AS task
                     ON task.evidence_id = evidence.id
                 WHERE evidence.source = ?
+                  AND (
+                      (? IS NULL AND evidence.connector_instance_id IS NULL)
+                      OR evidence.connector_instance_id = ?
+                  )
                 """,
-                (source,),
+                (source, connector_instance_id, connector_instance_id),
             ).fetchall()
             previous_ids = {
                 str(row["source_record_id"])
@@ -683,8 +1083,12 @@ class StateStore:
                 JOIN normalized_source_tasks AS task
                     ON task.evidence_id = evidence.id
                 WHERE evidence.source = ?
+                  AND (
+                      (? IS NULL AND evidence.connector_instance_id IS NULL)
+                      OR evidence.connector_instance_id = ?
+                  )
                 """,
-                (source,),
+                (source, connector_instance_id, connector_instance_id),
             ).fetchall()
             final_unique_count = len(
                 current_ids & {str(row["source_record_id"]) for row in final_rows}
@@ -703,6 +1107,7 @@ class StateStore:
         self,
         *,
         current_evidence_ids: dict[str, str],
+        connector_instance_id: str | None = None,
     ) -> SourceTaskReconciliation:
         """Replace the complete Jira issue snapshot while preserving dependencies."""
 
@@ -711,6 +1116,11 @@ class StateStore:
             for key, value in current_evidence_ids.items()
         ):
             raise ValueError("current Jira evidence identifiers must not be empty")
+        connector_instance_id = self._source_snapshot_instance(
+            source="jira",
+            connector_instance_id=connector_instance_id,
+            normalized_table="normalized_jira_issues",
+        )
         with self.database.transaction() as connection:
             rows = connection.execute(
                 """
@@ -726,7 +1136,12 @@ class StateStore:
                 JOIN normalized_jira_issues AS issue
                     ON issue.evidence_id = evidence.id
                 WHERE evidence.source = 'jira'
-                """
+                  AND (
+                      (? IS NULL AND evidence.connector_instance_id IS NULL)
+                      OR evidence.connector_instance_id = ?
+                  )
+                """,
+                (connector_instance_id, connector_instance_id),
             ).fetchall()
             previous_ids = {
                 str(row["source_record_id"])
@@ -754,7 +1169,12 @@ class StateStore:
                 JOIN normalized_jira_issues AS issue
                     ON issue.evidence_id = evidence.id
                 WHERE evidence.source = 'jira'
-                """
+                  AND (
+                      (? IS NULL AND evidence.connector_instance_id IS NULL)
+                      OR evidence.connector_instance_id = ?
+                  )
+                """,
+                (connector_instance_id, connector_instance_id),
             ).fetchall()
             final_unique_count = len(
                 current_ids & {str(row["source_record_id"]) for row in final_rows}
@@ -991,6 +1411,7 @@ class StateStore:
                 connection,
                 "normalized_jira_issue_links",
             ),
+            connector_instances=_table_count(connection, "connector_instances"),
         )
 
     def delete_disposition_history(self, conclusion_id: str) -> int:
@@ -1086,6 +1507,54 @@ def _parse_optional_datetime(value: str | None) -> datetime | None:
     return None if value is None else _parse_datetime(value)
 
 
+def _connector_instance_values(
+    metadata: ConnectorInstanceMetadata,
+) -> tuple[object, ...]:
+    return (
+        metadata.id,
+        metadata.provider,
+        metadata.alias,
+        metadata.domain_classification.value,
+        metadata.approved_resource_boundary,
+        metadata.approved_scopes,
+        metadata.retrieval_configuration,
+        (
+            None
+            if metadata.last_coverage_status is None
+            else metadata.last_coverage_status.value
+        ),
+        _serialize_optional_datetime(metadata.last_freshness_at),
+        int(metadata.enabled),
+        metadata.retention_policy_reference,
+        _serialize_datetime(metadata.created_at),
+        _serialize_datetime(metadata.updated_at),
+    )
+
+
+def _connector_instance_from_row(row: sqlite3.Row) -> ConnectorInstanceMetadata:
+    return ConnectorInstanceMetadata(
+        id=str(row["id"]),
+        provider=str(row["provider"]),
+        alias=str(row["alias"]),
+        domain_classification=ConnectorDomain(str(row["domain_classification"])),
+        approved_resource_boundary=str(row["approved_resource_boundary"]),
+        approved_scopes=str(row["approved_scopes"]),
+        retrieval_configuration=str(row["retrieval_configuration"]),
+        last_coverage_status=(
+            None
+            if row["last_coverage_status"] is None
+            else CoverageStatus(str(row["last_coverage_status"]))
+        ),
+        last_freshness_at=_parse_optional_datetime(
+            None if row["last_freshness_at"] is None else str(row["last_freshness_at"])
+        ),
+        enabled=bool(row["enabled"]),
+        retention_policy_reference=str(row["retention_policy_reference"]),
+        created_at=_parse_datetime(str(row["created_at"])),
+        updated_at=_parse_datetime(str(row["updated_at"])),
+    )
+
+
 def _source_evidence_from_row(row: sqlite3.Row) -> SourceEvidence:
     return SourceEvidence(
         id=str(row["id"]),
@@ -1100,6 +1569,11 @@ def _source_evidence_from_row(row: sqlite3.Row) -> SourceEvidence:
         retrieved_at=_parse_datetime(str(row["retrieved_at"])),
         freshness_at=_parse_optional_datetime(
             None if row["freshness_at"] is None else str(row["freshness_at"])
+        ),
+        connector_instance_id=(
+            None
+            if row["connector_instance_id"] is None
+            else str(row["connector_instance_id"])
         ),
     )
 
@@ -1150,6 +1624,7 @@ def _table_count(connection: sqlite3.Connection, table: str) -> int:
             "SELECT COUNT(*) AS count FROM connector_authorizations"
         ),
         "connector_resources": "SELECT COUNT(*) AS count FROM connector_resources",
+        "connector_instances": "SELECT COUNT(*) AS count FROM connector_instances",
         "source_evidence": "SELECT COUNT(*) AS count FROM source_evidence",
         "normalized_source_tasks": (
             "SELECT COUNT(*) AS count FROM normalized_source_tasks"

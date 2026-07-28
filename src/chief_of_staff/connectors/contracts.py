@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Protocol, runtime_checkable
 
-from chief_of_staff.domain import CoverageStatus
+from chief_of_staff.domain import ConnectorDomain, CoverageStatus
 
 type FactValue = str | int | bool | tuple[str, ...] | None
 
@@ -42,6 +42,9 @@ class SourceItem:
     display_url: str | None = None
     freshness_at: datetime | None = None
     connector_run_id: str | None = None
+    connector_instance_id: str | None = None
+    account_alias: str | None = None
+    domain_classification: ConnectorDomain | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,6 +75,9 @@ class SourceCoverage:
     candidate_count: int | None = None
     displayed_count: int | None = None
     context_resources: tuple[ContextResourceCoverage, ...] = ()
+    connector_instance_id: str | None = None
+    account_alias: str | None = None
+    domain_classification: ConnectorDomain | None = None
 
 
 @dataclass(frozen=True, slots=True)

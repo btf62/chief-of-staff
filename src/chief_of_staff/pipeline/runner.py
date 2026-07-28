@@ -7,9 +7,11 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 
 from chief_of_staff.connectors import (
+    ConnectorInstance,
     ConnectorRequest,
     ReadOnlyConnector,
     SourceCoverage,
+    connector_instance_key,
 )
 from chief_of_staff.domain import CoverageStatus
 from chief_of_staff.pipeline.briefing import (
@@ -56,6 +58,9 @@ class DeterministicBriefingPipeline:
         normalized: list[NormalizedRecord] = []
         coverage: list[SourceCoverage] = []
         for connector in connectors:
+            instance = (
+                connector.identity if isinstance(connector, ConnectorInstance) else None
+            )
             request = ConnectorRequest(
                 run_id=context.run_id,
                 briefing_date=context.briefing_date,
@@ -74,6 +79,13 @@ class DeterministicBriefingPipeline:
                         retrieved_at=datetime.now(UTC),
                         record_count=0,
                         error_category=type(error).__name__,
+                        connector_instance_id=(
+                            None if instance is None else instance.id
+                        ),
+                        account_alias=None if instance is None else instance.alias,
+                        domain_classification=(
+                            None if instance is None else instance.domain_classification
+                        ),
                     )
                 )
                 continue
@@ -84,6 +96,17 @@ class DeterministicBriefingPipeline:
                 )
             if result.coverage.record_count != len(result.items):
                 raise ValueError("connector coverage record count is inconsistent")
+            if instance is not None:
+                if result.coverage.connector_instance_id != instance.id:
+                    raise ValueError(
+                        "connector coverage instance does not match its identity"
+                    )
+                if any(
+                    item.connector_instance_id != instance.id for item in result.items
+                ):
+                    raise ValueError(
+                        "connector item instance does not match its identity"
+                    )
             coverage.append(result.coverage)
             normalized.extend(
                 normalize_item(
@@ -172,18 +195,29 @@ def _coverage_with_display_counts(
     coverage: tuple[SourceCoverage, ...],
 ) -> tuple[SourceCoverage, ...]:
     displayed_records = {
-        (source.source, source.source_record_id)
+        (
+            source.source,
+            source.connector_instance_id,
+            source.source_record_id,
+        )
         for section in plan.sections
         if section.name.value != "Source Coverage"
         for item in section.items
         for source in item.sources
     }
-    displayed = {
-        source: sum(item_source == source for item_source, _ in displayed_records)
-        for source in {item_source for item_source, _ in displayed_records}
-    }
+    displayed: dict[tuple[str, str], int] = {}
+    for source, instance_id, _ in displayed_records:
+        key = connector_instance_key(
+            source=source,
+            connector_instance_id=instance_id,
+        )
+        displayed[key] = displayed.get(key, 0) + 1
     candidates = {
-        audit.source: audit.candidate_count for audit in plan.task_candidate_audits
+        connector_instance_key(
+            source=audit.source,
+            connector_instance_id=audit.connector_instance_id,
+        ): audit.candidate_count
+        for audit in plan.task_candidate_audits
     }
     return tuple(
         replace(
@@ -198,8 +232,20 @@ def _coverage_with_display_counts(
                 if report.selected_count is None
                 else report.selected_count
             ),
-            candidate_count=candidates.get(report.source, 0),
-            displayed_count=displayed.get(report.source, 0),
+            candidate_count=candidates.get(
+                connector_instance_key(
+                    source=report.source,
+                    connector_instance_id=report.connector_instance_id,
+                ),
+                0,
+            ),
+            displayed_count=displayed.get(
+                connector_instance_key(
+                    source=report.source,
+                    connector_instance_id=report.connector_instance_id,
+                ),
+                0,
+            ),
         )
         for report in coverage
     )
@@ -233,7 +279,16 @@ def _associate_explicit_cross_source_records(
             by_id[related_id]
             for related_id in sorted(related_ids[record.id])
             if related_id in by_id
-            and by_id[related_id].provenance.source != record.provenance.source
+            and connector_instance_key(
+                source=by_id[related_id].provenance.source,
+                connector_instance_id=(
+                    by_id[related_id].provenance.connector_instance_id
+                ),
+            )
+            != connector_instance_key(
+                source=record.provenance.source,
+                connector_instance_id=record.provenance.connector_instance_id,
+            )
         )
         conflicts = {
             field
