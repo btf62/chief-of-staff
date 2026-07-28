@@ -19,6 +19,7 @@ from chief_of_staff.domain.models import (
     CredentialHealth,
     DispositionEvent,
     DispositionKind,
+    NormalizedJiraIssue,
     NormalizedSourceTask,
     OAuthClientMetadata,
     RecurrenceAction,
@@ -517,6 +518,75 @@ class StateStore:
                 ),
             )
 
+    def add_normalized_jira_issue(self, issue: NormalizedJiraIssue) -> None:
+        """Persist only the approved normalized Jira issue fields."""
+
+        with self.database.transaction() as connection:
+            connection.execute(
+                """
+                INSERT INTO normalized_jira_issues(
+                    evidence_id,
+                    issue_key,
+                    summary,
+                    project_key,
+                    issue_type,
+                    status,
+                    status_category,
+                    assignee_account_id,
+                    priority_name,
+                    due_date,
+                    created_at,
+                    updated_at,
+                    parent_key
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    issue.evidence_id,
+                    issue.issue_key,
+                    issue.summary,
+                    issue.project_key,
+                    issue.issue_type,
+                    issue.status,
+                    issue.status_category,
+                    issue.assignee_account_id,
+                    issue.priority_name,
+                    None if issue.due_date is None else issue.due_date.isoformat(),
+                    _serialize_datetime(issue.created_at),
+                    _serialize_datetime(issue.updated_at),
+                    issue.parent_key,
+                ),
+            )
+            connection.executemany(
+                """
+                INSERT INTO normalized_jira_issue_labels(evidence_id, label)
+                VALUES (?, ?)
+                """,
+                ((issue.evidence_id, label) for label in issue.labels),
+            )
+            connection.executemany(
+                """
+                INSERT INTO normalized_jira_issue_links(
+                    evidence_id,
+                    relationship,
+                    related_issue_id,
+                    related_issue_key,
+                    display_url
+                )
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    (
+                        issue.evidence_id,
+                        link.relationship,
+                        link.issue_id,
+                        link.issue_key,
+                        link.display_url,
+                    )
+                    for link in issue.links
+                ),
+            )
+
     def prune_unselected_source_tasks(
         self,
         *,
@@ -615,6 +685,76 @@ class StateStore:
                 WHERE evidence.source = ?
                 """,
                 (source,),
+            ).fetchall()
+            final_unique_count = len(
+                current_ids & {str(row["source_record_id"]) for row in final_rows}
+            )
+        return SourceTaskReconciliation(
+            previous_unique_count=len(previous_ids),
+            final_unique_count=final_unique_count,
+            newly_selected_count=len(current_ids - previous_ids),
+            retained_count=len(current_ids & previous_ids),
+            removed_count=len(previous_ids - current_ids),
+            superseded_snapshot_count=len(deletable_ids),
+            dependency_preserved_count=len(superseded) - len(deletable_ids),
+        )
+
+    def reconcile_jira_issue_snapshot(
+        self,
+        *,
+        current_evidence_ids: dict[str, str],
+    ) -> SourceTaskReconciliation:
+        """Replace the complete Jira issue snapshot while preserving dependencies."""
+
+        if any(
+            not key.strip() or not value.strip()
+            for key, value in current_evidence_ids.items()
+        ):
+            raise ValueError("current Jira evidence identifiers must not be empty")
+        with self.database.transaction() as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    evidence.id,
+                    evidence.source_record_id,
+                    EXISTS (
+                        SELECT 1
+                        FROM conclusion_evidence AS link
+                        WHERE link.evidence_id = evidence.id
+                    ) AS has_dependency
+                FROM source_evidence AS evidence
+                JOIN normalized_jira_issues AS issue
+                    ON issue.evidence_id = evidence.id
+                WHERE evidence.source = 'jira'
+                """
+            ).fetchall()
+            previous_ids = {
+                str(row["source_record_id"])
+                for row in rows
+                if str(row["id"]) not in current_evidence_ids.values()
+            }
+            current_ids = set(current_evidence_ids)
+            superseded = tuple(
+                row
+                for row in rows
+                if current_evidence_ids.get(str(row["source_record_id"]))
+                != str(row["id"])
+            )
+            deletable_ids = tuple(
+                str(row["id"]) for row in superseded if not bool(row["has_dependency"])
+            )
+            connection.executemany(
+                "DELETE FROM source_evidence WHERE id = ?",
+                ((evidence_id,) for evidence_id in deletable_ids),
+            )
+            final_rows = connection.execute(
+                """
+                SELECT DISTINCT evidence.source_record_id
+                FROM source_evidence AS evidence
+                JOIN normalized_jira_issues AS issue
+                    ON issue.evidence_id = evidence.id
+                WHERE evidence.source = 'jira'
+                """
             ).fetchall()
             final_unique_count = len(
                 current_ids & {str(row["source_record_id"]) for row in final_rows}
@@ -839,6 +979,18 @@ class StateStore:
                 connection,
                 "normalized_source_task_labels",
             ),
+            normalized_jira_issues=_table_count(
+                connection,
+                "normalized_jira_issues",
+            ),
+            normalized_jira_issue_labels=_table_count(
+                connection,
+                "normalized_jira_issue_labels",
+            ),
+            normalized_jira_issue_links=_table_count(
+                connection,
+                "normalized_jira_issue_links",
+            ),
         )
 
     def delete_disposition_history(self, conclusion_id: str) -> int:
@@ -1004,6 +1156,15 @@ def _table_count(connection: sqlite3.Connection, table: str) -> int:
         ),
         "normalized_source_task_labels": (
             "SELECT COUNT(*) AS count FROM normalized_source_task_labels"
+        ),
+        "normalized_jira_issues": (
+            "SELECT COUNT(*) AS count FROM normalized_jira_issues"
+        ),
+        "normalized_jira_issue_labels": (
+            "SELECT COUNT(*) AS count FROM normalized_jira_issue_labels"
+        ),
+        "normalized_jira_issue_links": (
+            "SELECT COUNT(*) AS count FROM normalized_jira_issue_links"
         ),
     }
     query = queries.get(table)

@@ -203,6 +203,9 @@ class StateInspection:
     connector_resources: int
     normalized_source_tasks: int
     normalized_source_task_labels: int
+    normalized_jira_issues: int
+    normalized_jira_issue_labels: int
+    normalized_jira_issue_links: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -271,3 +274,34 @@ class NormalizedSourceTask:
     created_at: datetime | None = None
     updated_at: datetime | None = None
     labels: tuple[tuple[str | None, str], ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class NormalizedJiraIssueLink:
+    """Minimum persisted reference to one Jira-linked issue."""
+
+    relationship: str
+    issue_id: str
+    issue_key: str
+    display_url: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class NormalizedJiraIssue:
+    """Approved Jira issue facts linked to one evidence snapshot."""
+
+    evidence_id: str
+    issue_key: str
+    summary: str
+    project_key: str
+    issue_type: str
+    status: str
+    status_category: str
+    assignee_account_id: str
+    priority_name: str | None
+    due_date: date | None
+    created_at: datetime
+    updated_at: datetime
+    parent_key: str | None = None
+    labels: tuple[str, ...] = ()
+    links: tuple[NormalizedJiraIssueLink, ...] = ()

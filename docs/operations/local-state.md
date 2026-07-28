@@ -2,10 +2,10 @@
 
 - **Status:** Draft
 - **Owner:** Brad
-- **Last updated:** 2026-07-25
+- **Last updated:** 2026-07-27
 
-This document describes the implemented Milestone 2 local-state foundation. It
-operates within
+This document describes the implemented local-state foundation and minimized
+task-source extensions. It operates within
 [ADR-0004](../decisions/0004-adopt-sqlite-and-bounded-local-data-lifecycle.md)
 and does not authorize production data, backups, connector caching, or broader
 product memory.
@@ -41,9 +41,12 @@ The implemented schema stores:
 - Explicit or inferred conclusions with processing versions.
 - Ordered conclusion-to-evidence links.
 - Append-oriented correction and disposition events.
+- Selected normalized Todoist task facts and only their referenced project,
+  section, and label context.
+- Selected normalized Jira issue facts, labels, and issue-link references.
 
-It does not define tables for credentials, tokens, full source payloads,
-attachments, or connector caches.
+It does not define tables for credentials, tokens, raw response pages,
+continuation cursors, full source payloads, attachments, or connector caches.
 
 ## Inspection and recurrence
 

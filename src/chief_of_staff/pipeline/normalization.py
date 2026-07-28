@@ -57,7 +57,6 @@ class NormalizedRecord:
     issue_type: str | None = None
     status_category: str | None = None
     assignee_reference: str | None = None
-    reporter_reference: str | None = None
     parent_reference: str | None = None
     labels: tuple[str, ...] = ()
     dependency_references: tuple[str, ...] = ()
@@ -68,6 +67,8 @@ class NormalizedRecord:
     source_owned_risk: bool = False
     source_created_at: datetime | None = None
     source_updated_at: datetime | None = None
+    associated_provenance: tuple[Provenance, ...] = ()
+    association_conflicts: tuple[str, ...] = ()
 
 
 def normalize_item(
@@ -130,7 +131,6 @@ def normalize_item(
         issue_type=_optional_string(item, "issue_type"),
         status_category=_optional_string(item, "status_category"),
         assignee_reference=_optional_string(item, "assignee_reference"),
-        reporter_reference=_optional_string(item, "reporter_reference"),
         parent_reference=_optional_string(item, "parent_reference"),
         labels=_string_tuple(item, "labels"),
         dependency_references=_string_tuple(item, "dependency_references"),

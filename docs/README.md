@@ -11,11 +11,12 @@ The Version 1 design baseline for Daily Briefing v1 is accepted. The
 complete after an explicitly approved, bounded primary-calendar trial.
 Milestone 5 has completed its accepted Todoist boundary, combined
 Calendar-and-Todoist trial, and one explicitly approved complete-retrieval and
-normal-workday quality validation. Jira has completed its mocked issue phase
-and one explicitly approved resource-restricted, project-only discovery trial.
-It is stopped at its issue-retrieval gate. No JQL, live Jira issue retrieval,
-repeat project discovery, authorization refresh, or repeat Calendar or
-Todoist access is authorized.
+normal-workday quality validation. Jira has completed its mocked phase,
+resource-restricted project discovery, and one explicitly approved
+exact-project issue-retrieval trial integrated with a deterministic briefing.
+Work is stopped before Asana or another connector. No repeat Jira query,
+project discovery, authorization refresh, or repeat Calendar or Todoist access
+is authorized.
 Design acceptance authorizes implementation within the accepted scope; it does
 not mean the complete Daily Briefing has passed operational acceptance.
 
@@ -54,8 +55,8 @@ not mean the complete Daily Briefing has passed operational acceptance.
 - [Todoist connector](architecture/connectors/todoist.md) — accepted
   read-only task boundary and completed bounded live trial
 - [Jira connector](architecture/connectors/jira.md) — accepted
-  resource-restricted project discovery and synthetic issue boundary, stopped
-  before live issue retrieval
+  resource-restricted project discovery, exact-project enhanced search, and
+  completed bounded issue trial
 - [Decision records](decisions/README.md) — architecture and significant
   product decisions
 

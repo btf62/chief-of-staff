@@ -101,7 +101,6 @@ def _semantic_signature(record: NormalizedRecord) -> tuple[object, ...]:
         record.issue_type,
         record.status_category,
         record.assignee_reference,
-        record.reporter_reference,
         record.parent_reference,
         record.labels,
         record.dependency_references,
@@ -112,6 +111,8 @@ def _semantic_signature(record: NormalizedRecord) -> tuple[object, ...]:
         record.source_owned_risk,
         record.source_created_at,
         record.source_updated_at,
+        record.associated_provenance,
+        record.association_conflicts,
     )
 
 
@@ -150,6 +151,7 @@ def _conflicting_fields(
         ("title", first.title, second.title),
         ("status", first.status, second.status),
         ("due_at", first.due_at, second.due_at),
+        ("source_priority", first.source_priority, second.source_priority),
     )
     return tuple(
         field

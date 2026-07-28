@@ -45,13 +45,21 @@ def main(arguments: list[str] | None = None) -> int:
     interactive_register_parser.add_argument("--application-name", required=True)
     interactive_register_parser.add_argument("--application-owner", required=True)
 
+    authorize_only_parser = subparsers.add_parser("authorize")
     authorize_parser = subparsers.add_parser("authorize-and-discover")
-    authorize_parser.add_argument(
-        "--expected-account",
-        default="bfiles@northridgerochester.com",
-    )
-    authorize_parser.add_argument("--account-reference", default="primary-user")
-    authorize_parser.add_argument("--resource-reference", default="approved-site")
+    for selected_parser in (authorize_only_parser, authorize_parser):
+        selected_parser.add_argument(
+            "--expected-account",
+            default="bfiles@northridgerochester.com",
+        )
+        selected_parser.add_argument(
+            "--account-reference",
+            default="primary-user",
+        )
+        selected_parser.add_argument(
+            "--resource-reference",
+            default="approved-site",
+        )
 
     subparsers.add_parser("status")
 
@@ -94,7 +102,7 @@ def main(arguments: list[str] | None = None) -> int:
             _print_status(state_store, keychain)
             return 0
 
-        if parsed.command == "authorize-and-discover":
+        if parsed.command in {"authorize", "authorize-and-discover"}:
             authorization = JiraInstalledAppOAuth(
                 keychain=keychain,
                 state_store=state_store,
@@ -103,6 +111,25 @@ def main(arguments: list[str] | None = None) -> int:
                 expected_account_identity=parsed.expected_account,
                 resource_reference=parsed.resource_reference,
             )
+            if parsed.command == "authorize":
+                _print_json(
+                    {
+                        "access_token_issued": authorization.access_token_issued,
+                        "account_identity": authorization.metadata.account_identity,
+                        "account_identity_source": (
+                            authorization.account_identity_source
+                        ),
+                        "credential_health": (
+                            authorization.metadata.credential_health.value
+                        ),
+                        "granted_scope": authorization.metadata.granted_scope,
+                        "grant_type": authorization.resource.grant_type,
+                        "refresh_token_issued": authorization.refresh_token_issued,
+                        "site_url": authorization.resource.resource_url,
+                        "token_expires_at": (authorization.metadata.token_expires_at),
+                    }
+                )
+                return 0
             access_reference = KeychainSecretReference(
                 service=authorization.metadata.credential_service,
                 account=authorization.metadata.access_token_account,

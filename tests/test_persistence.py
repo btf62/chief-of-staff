@@ -19,6 +19,8 @@ from chief_of_staff.domain import (
     CoverageStatus,
     DispositionEvent,
     DispositionKind,
+    NormalizedJiraIssue,
+    NormalizedJiraIssueLink,
     NormalizedSourceTask,
     RecurrenceAction,
     SourceEvidence,
@@ -139,7 +141,7 @@ def test_fresh_database_applies_all_migrations_and_enforces_foreign_keys(
     with Database.open(tmp_path / "state.sqlite3") as database:
         inspection = StateStore(database).inspect_state()
 
-        assert inspection.schema_versions == (1, 2, 3, 4, 5)
+        assert inspection.schema_versions == (1, 2, 3, 4, 5, 6)
         assert database.connection.execute("PRAGMA foreign_keys").fetchone()[0] == 1
 
 
@@ -167,7 +169,7 @@ def test_database_upgrades_from_first_migration_and_is_idempotent(
             "SELECT version FROM schema_migrations ORDER BY version"
         )
     ]
-    assert upgraded_versions == [1, 2, 3, 4, 5]
+    assert upgraded_versions == [1, 2, 3, 4, 5, 6]
     connection.close()
 
 
@@ -208,6 +210,60 @@ def test_selected_normalized_task_persists_minimum_context_and_cascades(
         assert store.delete_source_evidence("evidence-1")
         assert store.inspect_state().normalized_source_tasks == 0
         assert store.inspect_state().normalized_source_task_labels == 0
+
+
+def test_normalized_jira_issue_persists_only_approved_facts_and_cascades(
+    tmp_path: Path,
+) -> None:
+    with Database.open(tmp_path / "jira-state.sqlite3") as database:
+        store = StateStore(database)
+        store.add_connector_run(_connector_run())
+        store.add_source_evidence(_evidence())
+        store.add_normalized_jira_issue(
+            NormalizedJiraIssue(
+                evidence_id="evidence-1",
+                issue_key="NRC-900000001",
+                summary="Synthetic approved issue",
+                project_key="NRC",
+                issue_type="Task",
+                status="In Progress",
+                status_category="In Progress",
+                assignee_account_id="synthetic-account",
+                priority_name="High",
+                due_date=date(2026, 7, 28),
+                created_at=NOW,
+                updated_at=NOW,
+                parent_key="NRC-900000002",
+                labels=("synthetic-label",),
+                links=(
+                    NormalizedJiraIssueLink(
+                        relationship="is blocked by",
+                        issue_id="3",
+                        issue_key="NRC-900000003",
+                        display_url=("https://example.invalid/browse/NRC-900000003"),
+                    ),
+                ),
+            )
+        )
+
+        inspection = store.inspect_state()
+        assert inspection.normalized_jira_issues == 1
+        assert inspection.normalized_jira_issue_labels == 1
+        assert inspection.normalized_jira_issue_links == 1
+        row = database.connection.execute(
+            "SELECT * FROM normalized_jira_issues"
+        ).fetchone()
+        assert row is not None
+        assert row["issue_key"] == "NRC-900000001"
+        assert row["project_key"] == "NRC"
+        columns = set(row.keys())
+        assert "description" not in columns
+        assert "reporter" not in columns
+        assert "comment" not in columns
+        assert store.delete_source_evidence("evidence-1")
+        assert store.inspect_state().normalized_jira_issues == 0
+        assert store.inspect_state().normalized_jira_issue_labels == 0
+        assert store.inspect_state().normalized_jira_issue_links == 0
 
 
 def test_task_cleanup_removes_stale_records_but_preserves_correction_evidence(
@@ -558,7 +614,7 @@ def test_reset_removes_product_state_but_preserves_migrations(tmp_path: Path) ->
 
         inspection = store.reset()
 
-        assert inspection.schema_versions == (1, 2, 3, 4, 5)
+        assert inspection.schema_versions == (1, 2, 3, 4, 5, 6)
         assert inspection.connector_runs == 0
         assert inspection.briefing_runs == 0
         assert inspection.source_evidence == 0

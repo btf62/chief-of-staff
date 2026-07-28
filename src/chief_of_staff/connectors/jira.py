@@ -1,4 +1,4 @@
-"""Bounded read-only Jira contract with mocked and synthetic transports only."""
+"""Bounded read-only Jira issue contract for synthetic and approved live use."""
 
 from __future__ import annotations
 
@@ -26,6 +26,13 @@ from chief_of_staff.domain import (
 JIRA_ENHANCED_SEARCH_OPERATION: Final = "POST /rest/api/3/search/jql"
 JIRA_PAGE_LIMIT: Final = 50
 JIRA_DEFAULT_MAX_PAGES: Final = 20
+JIRA_APPROVED_PROJECT_KEY: Final = "NRC"
+JIRA_APPROVED_JQL: Final = (
+    "project = NRC\n"
+    "AND statusCategory != Done\n"
+    "AND assignee = currentUser()\n"
+    "ORDER BY updated DESC, key ASC"
+)
 JIRA_INITIAL_FIELDS: Final = (
     "summary",
     "project",
@@ -62,6 +69,10 @@ class JiraRateLimitError(JiraRetrievalError):
     """Raised when Jira rate-limits the bounded retrieval."""
 
 
+class JiraInvalidJqlError(JiraRetrievalError):
+    """Raised when Jira rejects the exact approved JQL."""
+
+
 @dataclass(frozen=True, slots=True)
 class JiraAuthorization:
     """Non-secret mocked authorization metadata supplied to a transport."""
@@ -72,6 +83,7 @@ class JiraAuthorization:
     cloud_resource_reference: str
     granted_scopes: frozenset[str]
     credential_reference: str
+    current_user_assignment_prevalidated: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,7 +102,7 @@ class JiraSearchRequest:
 
     boundary: JiraQueryBoundary
     fields: tuple[str, ...]
-    next_page_token: str | None
+    next_page_token: str | None = field(repr=False)
     max_results: int = JIRA_PAGE_LIMIT
 
 
@@ -117,7 +129,6 @@ class JiraIssue:
     status_category: str
     display_url: str
     assignee_account_id: str | None = None
-    reporter_account_id: str | None = None
     priority_name: str | None = None
     due_date: date | None = None
     created_at: datetime | None = None
@@ -136,7 +147,7 @@ class JiraIssuePage:
     """One synthetic Jira search page plus safe coverage limitations."""
 
     issues: tuple[JiraIssue, ...]
-    next_page_token: str | None = None
+    next_page_token: str | None = field(default=None, repr=False)
     permission_denied_project_count: int = 0
     inaccessible_fields: tuple[str, ...] = ()
 
@@ -220,10 +231,10 @@ class JiraConnector:
         if self.max_pages < 1:
             raise ValueError("Jira max_pages must be positive")
         self.approved_scope = (
-            f"mocked Jira account={self.account_reference}; "
+            f"Jira account={self.account_reference}; "
             f"site={self.site_reference}; projects="
             f"{','.join(self.approved_project_keys)}; "
-            f"operation={JIRA_ENHANCED_SEARCH_OPERATION}; no live access"
+            f"operation={JIRA_ENHANCED_SEARCH_OPERATION}; read-only"
         )
 
     def retrieve(self, request: ConnectorRequest) -> ConnectorResult:
@@ -266,6 +277,9 @@ class JiraConnector:
             if self._issue_is_selected(
                 issue,
                 account_identity=authorization.account_identity,
+                current_user_assignment_prevalidated=(
+                    authorization.current_user_assignment_prevalidated
+                ),
             )
         )
         omitted_count = len(issues) - len(selected)
@@ -394,6 +408,7 @@ class JiraConnector:
                 JiraAuthenticationError,
                 JiraPermissionError,
                 JiraRateLimitError,
+                JiraInvalidJqlError,
                 JiraRetrievalError,
             ) as error:
                 error_category = type(error).__name__
@@ -403,8 +418,11 @@ class JiraConnector:
                 break
             page_count += 1
             for issue in page.issues:
-                if issue.id in issues:
+                existing = issues.get(issue.id)
+                if existing is not None:
                     duplicate_count += 1
+                    if _issue_order_key(existing) <= _issue_order_key(issue):
+                        continue
                 issues[issue.id] = issue
             if page.permission_denied_project_count:
                 warnings.append(
@@ -432,7 +450,7 @@ class JiraConnector:
             warnings.append(f"Jira retrieval reached the {self.max_pages}-page limit")
             error_category = "JiraPageLimit"
         return (
-            tuple(issues.values()),
+            tuple(sorted(issues.values(), key=_issue_order_key)),
             page_count,
             duplicate_count,
             warnings,
@@ -444,15 +462,19 @@ class JiraConnector:
         issue: JiraIssue,
         *,
         account_identity: str,
+        current_user_assignment_prevalidated: bool,
     ) -> bool:
         if issue.project_key not in self.approved_project_keys:
             return False
         if issue.status_category.casefold() == "done":
             return False
+        assigned_to_current_user = issue.assignee_account_id is not None and (
+            issue.assignee_account_id == account_identity
+            or current_user_assignment_prevalidated
+        )
         return (
-            issue.assignee_account_id is not None
-            and issue.assignee_account_id == account_identity
-        ) or issue.key in self.explicitly_linked_issue_keys
+            assigned_to_current_user or issue.key in self.explicitly_linked_issue_keys
+        )
 
     def _coverage_result(
         self,
@@ -552,7 +574,6 @@ def _issue_to_source_item(
         "issue_type": issue.issue_type,
         "status_category": issue.status_category,
         "assignee_reference": issue.assignee_account_id,
-        "reporter_reference": issue.reporter_account_id,
         "parent_reference": issue.parent_key,
         "labels": issue.labels,
         "dependency_references": dependency_references,
@@ -614,3 +635,12 @@ def _source_evidence(
 def _validate_optional_aware(value: datetime | None) -> None:
     if value is not None and (value.tzinfo is None or value.utcoffset() is None):
         raise ValueError("Jira timestamps must be timezone-aware")
+
+
+def _issue_order_key(issue: JiraIssue) -> tuple[float, str, str]:
+    """Preserve the approved updated-descending, key-ascending order."""
+
+    updated_timestamp = (
+        issue.updated_at.timestamp() if issue.updated_at is not None else float("-inf")
+    )
+    return (-updated_timestamp, issue.key.casefold(), issue.id)

@@ -1,16 +1,16 @@
 # Jira Connector
 
 - **Status:** Accepted
-- **Version:** 2
+- **Version:** 3
 - **Owner:** Brad
 - **Last updated:** 2026-07-27
 
-This specification defines the read-only Jira connector through its completed
-resource-restricted authorization and project-discovery phase. It accepts the
-project-only live boundary plus the mocked issue connector, normalization,
-failure handling, and deterministic briefing behavior described below. It does
-not authorize live issue search, issue normalization, issue persistence,
-another project discovery, or external mutation.
+This specification defines the read-only Jira connector through its bounded
+issue-retrieval phase. It accepts the resource-restricted authorization,
+project discovery, exact-project enhanced JQL search, minimized issue
+persistence, and deterministic briefing behavior described below. It does not
+authorize another issue retrieval, another project, broader fields or scopes,
+refresh capability, or external mutation.
 
 ## Source authority
 
@@ -38,21 +38,23 @@ The implemented phase contains:
   `cloudId`, `action=browse`, and minimal project metadata.
 - One private ignored project-selection report with no project catalog in
   SQLite.
-- A structured, non-executable query boundary.
-- A read-only issue-search transport protocol.
-- Synthetic issue pages and mocked non-secret authorization metadata.
+- An exact `NRC` project boundary and executable, fixed JQL.
+- A live enhanced-search HTTP transport restricted to the selected `cloudId`.
+- Cursor pagination with a stable query, field list, and page size.
+- Synthetic issue pages and mocked non-secret authorization for contract
+  tests.
 - A mocked OAuth state-validation preview that cannot open a provider flow or
   exchange an authorization code.
 - Pagination, partial-page retention, field and permission limitations, rate
   limits, and authorization failure categories.
-- Provider-neutral source items, normalized task records, source evidence,
-  connector-run records, provenance, and coverage counts.
-- Deterministic briefing integration using synthetic issue data only.
+- Provider-neutral source items plus dedicated minimized Jira persistence,
+  source evidence, connector-run records, provenance, and coverage counts.
+- Deterministic briefing integration across approved repository context,
+  primary Calendar, Todoist, and Jira without hosted inference.
 
-There is no live issue-search HTTP transport, executable JQL, issue
-normalization from Jira, background poller, refresh path, or hosted-inference
-path. Project discovery and synthetic issue behavior remain separate
-boundaries.
+There is no background poller, refresh-token path, hosted-inference path,
+external write, unrestricted search, or other-project access. Project
+discovery and issue retrieval remain separate bounded operations.
 
 ## Accepted account, site, and application boundary
 
@@ -109,10 +111,9 @@ Atlassian's current documented confidential-client 3LO sequence does not
 specify PKCE parameters, so this implementation does not invent unsupported
 parameters.
 
-The initial trial should use a short-lived access token without refresh
-capability. Any future refresh token or unattended operation requires separate
-approval of `offline_access`, rotation behavior, revocation, retention, and
-scheduling.
+The bounded trial uses a short-lived access token without refresh capability.
+Any future refresh token or unattended operation requires separate approval of
+`offline_access`, rotation behavior, revocation, retention, and scheduling.
 
 The client secret and short-lived access token belong only in macOS Keychain
 under reviewed lookup references. SQLite contains only non-secret account,
@@ -166,42 +167,31 @@ The connector does not implement or expose:
 Contract tests verify that mutation methods do not exist on either the
 connector or transport interface.
 
-## Proposed bounded query
+## Approved bounded query
 
-The mocked connector carries a structured boundary rather than executable
-JQL. It represents:
-
-- Unresolved issues.
-- Assigned to the authorized current user.
-- Within explicitly approved project keys.
-- Plus explicitly linked issue keys within those same approved projects.
-
-The proposed JQL for live-gate review is:
+The live transport accepts only the approved `NRC` project, unresolved state,
+and `currentUser()` assignment boundary. Explicitly linked keys outside the
+project are not approved. It executes exactly this logical query:
 
 ```text
-project in (<APPROVED_PROJECT_KEYS>)
+project = NRC
 AND statusCategory != Done
-AND (
-  assignee = currentUser()
-  OR key in (<EXPLICITLY_LINKED_ISSUE_KEYS>)
-)
+AND assignee = currentUser()
 ORDER BY updated DESC, key ASC
 ```
 
-The placeholder list must be resolved and Brad must approve the final
-expression before it is stored or executed. When there are no explicitly
-linked keys, the corresponding clause should be omitted rather than supplied
-an invalid or broad value. The connector must not substitute a broader query
-after a permission or syntax failure.
+The connector must not substitute or retry with a broader query after a
+permission, syntax, or provider failure.
 
-The proposed first-trial page size is 50 with a 20-page hard stop, for a
-maximum of 1,000 returned issue records. Both limits remain gate decisions.
-Opaque continuation tokens are followed without decoding or persistence.
+The page size is 50 with a 20-page hard stop, for a maximum of 1,000 returned
+issue records. Opaque continuation tokens are followed without decoding,
+logging, caching, or persistence. Jira enhanced search is eventually
+consistent; the connector reports that concurrent changes cannot be excluded.
 
-## Proposed issue fields
+## Approved issue fields
 
-Stable issue ID and key are top-level response identity. The proposed initial
-field list is:
+Stable issue ID and key are top-level response identity. The approved field
+list is:
 
 ```text
 summary
@@ -218,23 +208,20 @@ labels
 issuelinks
 ```
 
-Reporter is supported as an optional normalized fact but is not proposed for
-the initial trial. It should be added only if Brad approves a concrete use
-that cannot be satisfied by assignee and issue history already in scope.
-
-Descriptions, comments, attachments, changelogs, worklogs, votes, watches,
-rendered fields, arbitrary properties, and field expansions are excluded.
-Issue descriptions require a separate privacy and product justification.
+Reporter, descriptions, comments, attachments, changelogs, worklogs, votes,
+watches, rendered fields, names, schema, arbitrary properties, and field
+expansions are excluded. Unrequested response fields remain transient and are
+discarded.
 
 ## Normalization and provenance
 
-Synthetic Jira issues preserve, as available:
+Jira issues preserve, as available:
 
 - Stable issue ID and key
 - Clean summary
 - Project key and issue type
 - Status and status category
-- Assignee and optional reporter reference
+- Assignee account reference sufficient to support the `currentUser()` query
 - Jira priority name
 - Due date as an all-day date in Brad's configured timezone
 - Created and updated timestamps
@@ -251,16 +238,17 @@ Missing optional fields remain `None` or empty tuples; they are not invented.
 Required identity or classification fields that are empty cause the issue to
 be omitted with partial coverage.
 
-Each normalized issue produces minimal source evidence linked to the synthetic
-connector run. The evidence fingerprint uses source identity and freshness.
-No credential value or raw response is part of a source, task, evidence, or
-connector-run model.
+Each normalized issue produces minimal source evidence linked to its connector
+run. The evidence fingerprint uses source identity and freshness. Dedicated
+SQLite tables store only approved facts, labels, and issue-link references.
+No credential value, cursor, unrequested field, or raw response is part of a
+source, issue, evidence, or connector-run model.
 
 ## Selection and deterministic briefing behavior
 
-Provider retrieval applies the approved project, unresolved-state, current
-assignee, and explicit-link boundary. A separate date-specific daily-candidate
-gate then requires current briefing evidence.
+Provider retrieval applies the approved project, unresolved-state, and current
+assignee boundary. A separate date-specific daily-candidate gate then requires
+current briefing evidence.
 
 Assignment, overdue state, or Jira priority alone is insufficient. Supported
 daily signals include:
@@ -270,9 +258,10 @@ daily signals include:
 - Explicit preparation
 - Link to an approved active priority
 - Jira-owned blocker or dependency risk
+- An overdue due date combined with a recent source update
 - A separately supported explicit commitment
 
-Synthetic Jira records can support:
+Jira records can support:
 
 - Today's Outcomes when the due date or separate explicit evidence supports
   an outcome.
@@ -290,20 +279,21 @@ human promise. Section quotas are never filled with unsupported issues.
 
 ## Cross-source association
 
-Jira and Todoist remain separate authoritative records. The current
-conservative association rule requires an explicit cross-source identifier.
-Associated records are not merged or used to overwrite one another.
+Jira and Todoist remain separate authoritative records. The conservative
+association rule requires an explicit stable cross-source identifier, such as
+a Jira key in Todoist content or an already normalized stable reference.
+Associated records are not destructively merged or used to overwrite one
+another.
 
 The association retains:
 
 - Both normalized records
 - Both authoritative links
 - The explicit association basis
-- Conflicting titles, statuses, or due dates
+- Conflicting statuses, due dates, or source priorities
 
-Title similarity alone is not enough to associate records in this phase.
-Broader probabilistic matching belongs to later inference work and requires
-separate evaluation.
+One combined recommendation may carry both authoritative links when explicit
+association evidence supports it. Title similarity alone is not enough.
 
 ## Coverage, pagination, and failures
 
@@ -311,7 +301,7 @@ Coverage reports:
 
 - Retrieved issue count
 - Selected issue count
-- Persisted count, currently zero
+- Persisted count
 - Date-specific daily-candidate count
 - Displayed count
 - Complete or partial status
@@ -333,28 +323,22 @@ Failure meanings remain distinct:
 - Page-limit exhaustion: `partial`; do not broaden or retry aggressively.
 
 Completed pages remain usable after a later-page failure. Duplicate issue IDs
-retain the latest synthetic page representation and are counted. Continuation
-tokens and raw pages remain transient.
+are counted and retain the newest representation by Jira's `updated` fact.
+Continuation tokens and raw pages remain transient.
 
 ## Persistence and lifecycle
 
-The completed project-discovery phase applies
+The project-discovery and bounded issue phases apply
 [ADR-0004](../../decisions/0004-adopt-sqlite-and-bounded-local-data-lifecycle.md):
 
 - Raw response bytes and provider dictionaries remain transient.
-- The complete project catalog, project names, and project keys do not persist
-  in SQLite.
+- The complete project catalog and project names do not persist in SQLite.
 - One minimized connector run, coverage record, catalog provenance reference,
   authorization-health record, and selected-site boundary may persist.
 - The private report under `.local/` is mode `0600`, ignored by Git, and
   retained only long enough for Brad to approve project keys.
 - Credentials never enter SQLite.
-- No issue fact is normalized or persisted.
-
-A future issue trial must first confirm Brad's project selection and the Jira
-task-to-SQLite mapping:
-
-- Only approved, selected, minimized source facts, provenance, evidence,
+- Only approved, selected, minimized issue facts, provenance, evidence,
   freshness, coverage, and run metadata may persist.
 - Descriptions and excluded resources do not persist.
 - Complete retrieval may reconcile absence; partial retrieval may not drive
@@ -375,13 +359,15 @@ Tests demonstrate:
 - Project-only endpoint, field minimization, pagination, and browse filtering.
 - Distinct missing-site, ambiguous-site, authentication, permission,
   rate-limit, empty-project, and partial-pagination outcomes.
-- Private report permissions, proposed unexecuted JQL, and absence of project
-  catalog or credentials from SQLite.
-- No reachable issue or mutation operation in the live discovery transport.
+- Private report permissions and absence of project catalog or credentials
+  from SQLite.
+- No reachable mutation operation in either live transport.
 - Mocked OAuth state matching and replay rejection.
-- Exact proposed read-scope matching in mock metadata.
+- Exact read-scope matching in mock metadata.
 - Read-only-only connector and transport interfaces.
-- Pagination with stable fields and boundaries.
+- Exact enhanced-search endpoint, JQL, fields, page size, selected site, and
+  `cloudId`.
+- Cursor pagination with stable fields and boundaries.
 - Partial-page retention.
 - Empty, unauthorized, permission, field-access, rate-limit, and pagination
   distinctions.
@@ -394,26 +380,16 @@ Tests demonstrate:
 - Preservation of conflicting cross-source facts and links.
 - No Jira-only People Waiting or human-commitment claim.
 - Retrieved, selected, persisted, candidate, and displayed funnel counts.
-- Synthetic canonical-section integration and presentation budgets.
-- Absence of credentials, live data, hosted inference, and external writes.
+- Canonical-section integration and presentation budgets.
+- Absence of credentials, private live fixtures, hosted inference, and
+  external writes.
 
-## Mandatory issue-retrieval gate
+## Mandatory stop after the issue trial
 
-Work stops after the one project-discovery trial. Brad must inspect the private
-report and explicitly approve:
-
-1. Project keys.
-2. Whether every selected project should be searched.
-3. Whether explicitly linked issue keys outside those projects are allowed.
-4. The filled JQL or equivalent query boundary.
-5. The exact issue fields, with description and reporter excluded unless a
-   later approval changes that boundary.
-6. Page size, page limit, retrieval window, normalization, persistence, and
-   briefing behavior.
-
-No JQL, issue endpoint, issue normalization, issue persistence, repeat project
-discovery, authorization refresh, or Jira mutation is authorized before that
-approval.
+The approved issue gate permits one bounded retrieval and combined briefing.
+After that trial, work stops. Another Jira query, project discovery,
+authorization refresh, scope or project expansion, field expansion, external
+mutation, or another connector requires new explicit approval.
 
 ## Official references
 

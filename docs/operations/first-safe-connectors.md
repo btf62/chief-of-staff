@@ -5,11 +5,11 @@
 - **Last updated:** 2026-07-27
 
 This document describes the implemented repository, Calendar, Todoist, and
-Jira project-discovery boundaries. The synthetic demonstrations, bounded
-Calendar and Todoist trials, Todoist workday-quality validation, and one
-resource-restricted Jira project-only discovery are complete. Live access is
-now stopped. None of the credential or live-retrieval commands below may be
-repeated without new explicit approval.
+Jira boundaries. The synthetic demonstrations, bounded Calendar and Todoist
+trials, Todoist workday-quality validation, Jira project discovery, and one
+exact-project Jira issue trial are complete. Live access is now stopped. None
+of the credential or live-retrieval commands below may be repeated without new
+explicit approval.
 
 ## Run the safe connector demonstration
 
@@ -172,6 +172,37 @@ through issue search, project details, roles, components, versions, boards,
 sprints, filters, permission details, or configuration. It exposed no Jira
 mutation operation.
 
+## Bounded Jira issue trial
+
+The later approved Jira issue trial was invoked once with:
+
+```text
+python -m chief_of_staff.jira_issue_live_cli trial \
+  --briefing-date 2026-07-27
+```
+
+It:
+
+- Reused the selected site and its locally stored `cloudId`.
+- Used exact `read:jira-work` scope and a short-lived Keychain token without
+  requesting a refresh token.
+- Posted only to `/rest/api/3/search/jql`.
+- Restricted JQL to unresolved `NRC` issues assigned to `currentUser()`.
+- Requested only the accepted summary, project, type, status, assignee,
+  priority, due date, timestamps, parent, label, and issue-link fields.
+- Followed opaque continuation tokens with a stable query and field list.
+- Discarded unrequested fields and raw response pages.
+- Persisted only minimized normalized issues, labels, links, evidence,
+  freshness, coverage, and run metadata.
+- Combined one approved repository, primary Calendar, Todoist, and Jira
+  retrieval into a private deterministic normal-workday briefing.
+- Omitted Jira display items when none had enough current evidence.
+- Used no hosted inference, external write, other project, or other connector.
+
+Jira enhanced search is eventually consistent, so the report does not claim
+that concurrent provider changes were impossible during pagination. The
+private briefing remains under ignored mode-`0600` local state.
+
 ## Bounded live trial
 
 The completed trial was invoked on demand with:
@@ -266,12 +297,13 @@ complete task and context pagination, duplicate-ID handling, priority
 semantics, independent selection attribution, snapshot reconciliation,
 candidate-versus-display accounting, minimized persistence, independent
 failures, non-workday suppression, and no task-system mutation.
-Jira project-discovery tests additionally cover exact scope, state and account
-confirmation, resource-level one-site selection, rejection of an unselected
-`cloudId`, Keychain isolation, the project-only endpoint and minimal fields,
-pagination, distinct authorization and retrieval failures, private report
-permissions, minimized SQLite persistence, transient raw pages, and absence of
-issue or mutation operations.
+Jira tests additionally cover exact scope, state and account confirmation,
+resource-level one-site selection, rejection of an unselected `cloudId`,
+Keychain isolation, project discovery, exact enhanced-search JQL and fields,
+cursor pagination, duplicate IDs, distinct authorization and retrieval
+failures, minimized issue persistence, transient raw pages and cursors,
+conservative cross-source association, daily relevance, and absence of
+mutation operations.
 
 ## Current limitations and stop condition
 
@@ -282,13 +314,12 @@ issue or mutation operations.
   automatic refresh.
 - Todoist refresh credentials exist in Keychain, but their presence does not
   authorize scheduled, unattended, or repeated retrieval.
-- Jira uses a short-lived access token without refresh capability. The private
-  project report requires Brad's explicit selection before any issue trial.
+- Jira uses a short-lived access token without refresh capability.
 - Calendar events remain evidence for deterministic output; inference-only
   briefing sections are not implemented.
 - Daily Briefing v1 has not been accepted for operational use.
 
 The bounded trials and validation are complete. Do not repeat live Calendar,
-Todoist, or Jira project retrieval; refresh authorization; execute JQL;
-retrieve Jira issues; broaden any boundary; or begin another live connector
-without new explicit approval.
+Todoist, Jira project retrieval, or Jira issue retrieval; refresh
+authorization; broaden any boundary; or begin another live connector without
+new explicit approval.

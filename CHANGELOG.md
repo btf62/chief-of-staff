@@ -81,7 +81,17 @@ No strict versioning scheme is promised before a distributable product exists.
   integration stopped before live access.
 - A resource-restricted Jira 3LO flow with exact `read:jira-work`, Keychain-
   only secrets, one-site binding, bounded project-only discovery, a private
-  selection report, and no live issue endpoint.
+  selection report, and a mandatory gate before issue access.
+- An exact-project Jira enhanced-search transport with fixed JQL and fields,
+  cursor pagination, minimized parsing, distinct failures, and no mutation
+  operations.
+- Dedicated normalized Jira issue, label, and issue-link persistence with
+  transient raw pages and continuation tokens.
+- Conservative explicit-key Jira–Todoist association that preserves both
+  source records, links, and conflicting facts while avoiding duplicate
+  recommendations.
+- One bounded combined repository, primary Calendar, Todoist, and Jira
+  deterministic briefing trial without hosted inference or external writes.
 
 ### Changed
 
@@ -106,3 +116,5 @@ No strict versioning scheme is promised before a distributable product exists.
   live-access approval gate.
 - Completed one bounded Jira authorization and project-discovery trial and
   stopped before project selection or live issue retrieval.
+- Completed one bounded exact-project Jira issue trial and stopped before
+  Asana, another connector, or any repeat live retrieval.

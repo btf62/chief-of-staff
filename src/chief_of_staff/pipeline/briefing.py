@@ -299,6 +299,10 @@ def build_reduced_plan(
         task_records,
         key=lambda record: _priority_sort_key(record, today),
     )
+    prioritized_tasks = _collapse_associated_task_candidates(
+        prioritized_tasks,
+        today,
+    )
     outcome_candidates = tuple(
         record for record in prioritized_tasks if _is_outcome_candidate(record, today)
     )[:MAX_OUTCOMES]
@@ -1216,7 +1220,41 @@ def _jira_task_is_daily_candidate(
         or record.source_owned_risk
     ):
         return True
-    return bool(due_date is not None and today <= due_date <= today + timedelta(days=7))
+    if due_date is not None and today <= due_date <= today + timedelta(days=7):
+        return True
+    return bool(
+        due_date is not None
+        and due_date < today
+        and _is_recently_updated(record, today)
+    )
+
+
+def _collapse_associated_task_candidates(
+    records: list[NormalizedRecord],
+    today: date,
+) -> list[NormalizedRecord]:
+    """Present one recommendation per explicit task association."""
+
+    candidates = {record.id: record for record in records}
+    suppressed: set[str] = set()
+    for record in records:
+        group = tuple(
+            candidate
+            for candidate_id in record.related_source_ids
+            if (candidate := candidates.get(candidate_id)) is not None
+        )
+        if not group:
+            continue
+        representative = min(
+            (record, *group),
+            key=lambda candidate: _priority_sort_key(candidate, today),
+        )
+        suppressed.update(
+            candidate.id
+            for candidate in (record, *group)
+            if candidate.id != representative.id
+        )
+    return [record for record in records if record.id not in suppressed]
 
 
 def _todoist_task_is_daily_candidate(
@@ -1452,7 +1490,7 @@ def _recommended_focus_section(
     sources = tuple(
         dict.fromkeys(
             (
-                *(() if primary_outcome is None else (_source_link(primary_outcome),)),
+                *(() if primary_outcome is None else _source_links(primary_outcome)),
                 *(_source_link(event) for event in focus_window.supporting_events),
             )
         )
@@ -1700,8 +1738,8 @@ def _outcome_item(record: NormalizedRecord, today: date) -> BriefingItem:
     return BriefingItem(
         key=f"outcome:{record.id}",
         headline=_display_title(record),
-        detail=f"{inputs.explanation()}. {deadline}",
-        sources=(_source_link(record),),
+        detail=f"{inputs.explanation()}. {deadline}{_association_detail(record)}",
+        sources=_source_links(record),
         priority_inputs=inputs,
     )
 
@@ -1782,8 +1820,8 @@ def _record_item(
     return BriefingItem(
         key=f"{key_prefix}:{record.id}",
         headline=_display_title(record),
-        detail=detail,
-        sources=(_source_link(record),),
+        detail=detail + _association_detail(record),
+        sources=_source_links(record),
     )
 
 
@@ -1831,6 +1869,31 @@ def _source_link(record: NormalizedRecord) -> SourceLink:
         source_record_id=record.provenance.source_record_id,
         display_url=record.provenance.display_url,
     )
+
+
+def _source_links(record: NormalizedRecord) -> tuple[SourceLink, ...]:
+    links = [_source_link(record)]
+    links.extend(
+        SourceLink(
+            source=provenance.source,
+            source_record_id=provenance.source_record_id,
+            display_url=provenance.display_url,
+        )
+        for provenance in record.associated_provenance
+    )
+    return tuple(links)
+
+
+def _association_detail(record: NormalizedRecord) -> str:
+    if not record.associated_provenance:
+        return ""
+    if record.association_conflicts:
+        return (
+            " Explicitly associated source records disagree on "
+            + ", ".join(record.association_conflicts)
+            + "; both remain authoritative."
+        )
+    return " Explicitly associated source records support one combined item."
 
 
 def _render_source(source: SourceLink) -> str:

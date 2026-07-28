@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo
 from chief_of_staff.connectors import (
     ContextResourceCoverage,
     GoogleCalendarConnector,
+    JiraConnector,
     RepositoryContextConnector,
     TodoistConnector,
     task_due_at,
@@ -26,6 +27,8 @@ from chief_of_staff.domain import (
     ConnectorStatus,
     CoverageStatus,
     CredentialHealth,
+    NormalizedJiraIssue,
+    NormalizedJiraIssueLink,
     NormalizedSourceTask,
     SourceEvidence,
 )
@@ -700,6 +703,404 @@ class LiveTodoistTrialRunner:
             displayed_task_count=coverage.displayed_count or 0,
             displayed_sections=displayed_sections,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class JiraIssuePersistenceResult:
+    """Privacy-safe Jira snapshot persistence and reconciliation counts."""
+
+    issues_persisted: int
+    labels_persisted: int
+    links_persisted: int
+    reconciliation: SourceTaskReconciliation
+
+
+@dataclass(frozen=True, slots=True)
+class LiveJiraIssueTrialReport:
+    """Private-content-free facts from the one approved Jira issue trial."""
+
+    oauth_application_name: str
+    oauth_application_owner: str
+    account_identity: str
+    account_identity_source: str
+    site_url: str
+    approved_project: str
+    granted_scope: str
+    credential_health: str
+    endpoint: str
+    jql_shape: str
+    requested_fields: tuple[str, ...]
+    issue_page_count: int
+    total_issue_count: int
+    duplicate_issue_id_count: int
+    selected_issue_count: int
+    persisted_issue_count: int
+    newly_persisted_issue_count: int
+    retained_issue_count: int
+    removed_issue_count: int
+    dependency_preserved_issue_count: int
+    superseded_snapshot_count_removed: int
+    daily_candidate_count: int
+    displayed_issue_count: int
+    due_state_counts: tuple[tuple[str, int], ...]
+    status_category_counts: tuple[tuple[str, int], ...]
+    issues_with_parent_count: int
+    issues_with_labels_count: int
+    issues_with_links_count: int
+    label_reference_count: int
+    link_reference_count: int
+    retrieval_status: str
+    pagination_occurred: bool
+    concurrent_changes_cannot_be_excluded: bool
+    raw_payload_persisted: bool
+    cursor_persisted: bool
+    description_persisted: bool
+    refresh_token_requested: bool
+    hosted_inference_used: bool
+    external_mutation_used: bool
+    briefing: BriefingValidationSummary
+
+
+@dataclass(frozen=True, slots=True)
+class LiveJiraIssueTrialRunner:
+    """Run one repository, Calendar, Todoist, and bounded Jira briefing."""
+
+    state_store: StateStore
+    repository_root: Path
+    repository_paths: tuple[Path, ...]
+    calendar_connector: GoogleCalendarConnector
+    todoist_connector: TodoistConnector
+    jira_connector: JiraConnector
+    output_directory: Path
+    briefing_date_override: date | None = None
+    timezone: str = "America/New_York"
+    clock: Callable[[], datetime] = field(
+        default=lambda: datetime.now(UTC),
+        repr=False,
+        compare=False,
+    )
+
+    def run(self) -> LiveJiraIssueTrialReport:
+        """Retrieve each approved source once and persist only minimized facts."""
+
+        started_at = self.clock()
+        briefing_date = (
+            self.briefing_date_override
+            or started_at.astimezone(ZoneInfo(self.timezone)).date()
+        )
+        run_id = f"live-jira-{uuid.uuid4().hex}"
+        context = resolve_context(
+            run_id=run_id,
+            briefing_date=briefing_date,
+            timezone=self.timezone,
+            invocation_mode="bounded_jira_issue_live_trial",
+            lookahead_days=7,
+        )
+        result = DeterministicBriefingPipeline().run(
+            context,
+            (
+                RepositoryContextConnector(
+                    root=self.repository_root,
+                    approved_paths=self.repository_paths,
+                    clock=self.clock,
+                ),
+                self.calendar_connector,
+                self.todoist_connector,
+                self.jira_connector,
+            ),
+        )
+        completed_at = self.clock()
+        coverage_by_source = {
+            coverage.source: coverage for coverage in result.plan.coverage
+        }
+        for source in ("google_calendar", "todoist", "jira"):
+            coverage = coverage_by_source[source]
+            if coverage.status is CoverageStatus.UNAUTHORIZED:
+                raise LiveTrialError(f"{source} authorization failed")
+            if coverage.status is CoverageStatus.UNAVAILABLE:
+                raise LiveTrialError(f"{source} retrieval was unavailable")
+
+        jira_audit = self.jira_connector.last_audit
+        todoist_audit = self.todoist_connector.last_audit
+        if jira_audit is None or todoist_audit is None:
+            raise LiveTrialError("live source lifecycle audit is unavailable")
+        client = self.state_store.get_oauth_client("jira")
+        authorization = self.state_store.get_connector_authorization("jira")
+        resource = self.state_store.get_connector_resource("jira")
+        if client is None or authorization is None or resource is None:
+            raise LiveTrialError("Jira authorization metadata is missing")
+
+        persistence_helper = LiveCalendarTrialRunner(
+            state_store=self.state_store,
+            repository_root=self.repository_root,
+            repository_paths=self.repository_paths,
+            calendar_connector=self.calendar_connector,
+            output_directory=self.output_directory,
+            timezone=self.timezone,
+            clock=self.clock,
+        )
+        _connector_run_ids, evidence_ids = persistence_helper._persist_run_graph(
+            run_id=run_id,
+            started_at=started_at,
+            completed_at=completed_at,
+            context=context,
+            result=result,
+        )
+        todoist_persistence = LiveTodoistTrialRunner(
+            state_store=self.state_store,
+            repository_root=self.repository_root,
+            repository_paths=self.repository_paths,
+            calendar_connector=self.calendar_connector,
+            todoist_connector=self.todoist_connector,
+            output_directory=self.output_directory,
+            timezone=self.timezone,
+            clock=self.clock,
+        )._persist_todoist_tasks(
+            evidence_ids=evidence_ids,
+            timezone=context.timezone,
+            prune_stale=(
+                coverage_by_source["todoist"].status is CoverageStatus.COMPLETE
+            ),
+        )
+        jira_persistence = self._persist_jira_issues(
+            evidence_ids=evidence_ids,
+            prune_stale=coverage_by_source["jira"].status is CoverageStatus.COMPLETE,
+        )
+        result = _with_persistence_coverage(
+            result=result,
+            persisted_by_source={
+                source: sum(
+                    evidence_source == source
+                    for evidence_source, _source_record_id in evidence_ids
+                )
+                for source in coverage_by_source
+            },
+            context_persisted_by_source={
+                "todoist": {
+                    "projects": todoist_persistence.projects_persisted,
+                    "sections": todoist_persistence.sections_persisted,
+                    "labels": todoist_persistence.labels_persisted,
+                }
+            },
+        )
+        briefing = LiveTodoistTrialRunner(
+            state_store=self.state_store,
+            repository_root=self.repository_root,
+            repository_paths=self.repository_paths,
+            calendar_connector=self.calendar_connector,
+            todoist_connector=self.todoist_connector,
+            output_directory=self.output_directory,
+            timezone=self.timezone,
+            clock=self.clock,
+        )._briefing_summary(
+            helper=persistence_helper,
+            briefing_date=briefing_date,
+            run_id=run_id,
+            result=result,
+        )
+        for connector in ("google_calendar", "todoist", "jira"):
+            self.state_store.mark_connector_authorization_used(
+                connector,
+                used_at=completed_at,
+            )
+
+        selected = jira_audit.selected_issues
+        jira_candidate_audit = next(
+            (
+                audit
+                for audit in result.plan.task_candidate_audits
+                if audit.source == "jira"
+            ),
+            None,
+        )
+        jira_coverage = coverage_by_source["jira"]
+        return LiveJiraIssueTrialReport(
+            oauth_application_name=client.oauth_project_id,
+            oauth_application_owner=client.application_owner or "unspecified",
+            account_identity=authorization.account_identity,
+            account_identity_source="user-confirmed",
+            site_url=resource.resource_url,
+            approved_project="NRC",
+            granted_scope=authorization.granted_scope,
+            credential_health=authorization.credential_health.value,
+            endpoint="POST /rest/api/3/search/jql",
+            jql_shape=(
+                "project = NRC AND statusCategory != Done AND "
+                "assignee = currentUser() ORDER BY updated DESC, key ASC"
+            ),
+            requested_fields=(
+                "summary",
+                "project",
+                "issuetype",
+                "status",
+                "assignee",
+                "priority",
+                "duedate",
+                "created",
+                "updated",
+                "parent",
+                "labels",
+                "issuelinks",
+            ),
+            issue_page_count=jira_audit.page_count,
+            total_issue_count=jira_audit.retrieved_count,
+            duplicate_issue_id_count=jira_audit.duplicate_issue_count,
+            selected_issue_count=jira_audit.selected_count,
+            persisted_issue_count=(jira_persistence.reconciliation.final_unique_count),
+            newly_persisted_issue_count=(
+                jira_persistence.reconciliation.newly_selected_count
+            ),
+            retained_issue_count=jira_persistence.reconciliation.retained_count,
+            removed_issue_count=jira_persistence.reconciliation.removed_count,
+            dependency_preserved_issue_count=(
+                jira_persistence.reconciliation.dependency_preserved_count
+            ),
+            superseded_snapshot_count_removed=(
+                jira_persistence.reconciliation.superseded_snapshot_count
+            ),
+            daily_candidate_count=(
+                0
+                if jira_candidate_audit is None
+                else jira_candidate_audit.candidate_count
+            ),
+            displayed_issue_count=jira_coverage.displayed_count or 0,
+            due_state_counts=_jira_due_state_counts(selected, briefing_date),
+            status_category_counts=_jira_status_category_counts(selected),
+            issues_with_parent_count=sum(
+                issue.parent_key is not None for issue in selected
+            ),
+            issues_with_labels_count=sum(bool(issue.labels) for issue in selected),
+            issues_with_links_count=sum(bool(issue.links) for issue in selected),
+            label_reference_count=jira_persistence.labels_persisted,
+            link_reference_count=jira_persistence.links_persisted,
+            retrieval_status=jira_coverage.status.value,
+            pagination_occurred=jira_audit.pagination_occurred,
+            concurrent_changes_cannot_be_excluded=True,
+            raw_payload_persisted=False,
+            cursor_persisted=False,
+            description_persisted=False,
+            refresh_token_requested=False,
+            hosted_inference_used=False,
+            external_mutation_used=False,
+            briefing=briefing,
+        )
+
+    def _persist_jira_issues(
+        self,
+        *,
+        evidence_ids: dict[tuple[str, str], str],
+        prune_stale: bool,
+    ) -> JiraIssuePersistenceResult:
+        audit = self.jira_connector.last_audit
+        if audit is None:
+            raise LiveTrialError("Jira lifecycle audit is unavailable")
+        persisted = 0
+        label_count = 0
+        link_count = 0
+        current_evidence_ids: dict[str, str] = {}
+        for issue in audit.selected_issues:
+            evidence_id = evidence_ids.get(("jira", issue.key))
+            if (
+                evidence_id is None
+                or issue.assignee_account_id is None
+                or issue.created_at is None
+                or issue.updated_at is None
+            ):
+                continue
+            self.state_store.add_normalized_jira_issue(
+                NormalizedJiraIssue(
+                    evidence_id=evidence_id,
+                    issue_key=issue.key,
+                    summary=issue.summary,
+                    project_key=issue.project_key,
+                    issue_type=issue.issue_type,
+                    status=issue.status,
+                    status_category=issue.status_category,
+                    assignee_account_id=issue.assignee_account_id,
+                    priority_name=issue.priority_name,
+                    due_date=issue.due_date,
+                    created_at=issue.created_at,
+                    updated_at=issue.updated_at,
+                    parent_key=issue.parent_key,
+                    labels=issue.labels,
+                    links=tuple(
+                        NormalizedJiraIssueLink(
+                            relationship=link.relationship,
+                            issue_id=link.issue_id,
+                            issue_key=link.issue_key,
+                            display_url=link.display_url,
+                        )
+                        for link in issue.links
+                    ),
+                )
+            )
+            persisted += 1
+            label_count += len(issue.labels)
+            link_count += len(issue.links)
+            current_evidence_ids[issue.key] = evidence_id
+        reconciliation = (
+            self.state_store.reconcile_jira_issue_snapshot(
+                current_evidence_ids=current_evidence_ids,
+            )
+            if prune_stale
+            else SourceTaskReconciliation(
+                previous_unique_count=0,
+                final_unique_count=persisted,
+                newly_selected_count=persisted,
+                retained_count=0,
+                removed_count=0,
+                superseded_snapshot_count=0,
+                dependency_preserved_count=0,
+            )
+        )
+        return JiraIssuePersistenceResult(
+            issues_persisted=persisted,
+            labels_persisted=label_count,
+            links_persisted=link_count,
+            reconciliation=reconciliation,
+        )
+
+
+def _jira_due_state_counts(
+    issues: tuple[object, ...],
+    briefing_date: date,
+) -> tuple[tuple[str, int], ...]:
+    from chief_of_staff.connectors import JiraIssue
+
+    typed = tuple(issue for issue in issues if isinstance(issue, JiraIssue))
+    counts = {
+        "no_due_date": 0,
+        "overdue": 0,
+        "due_today": 0,
+        "due_next_7_days": 0,
+        "due_later": 0,
+    }
+    for issue in typed:
+        if issue.due_date is None:
+            counts["no_due_date"] += 1
+        elif issue.due_date < briefing_date:
+            counts["overdue"] += 1
+        elif issue.due_date == briefing_date:
+            counts["due_today"] += 1
+        elif issue.due_date <= briefing_date + timedelta(days=7):
+            counts["due_next_7_days"] += 1
+        else:
+            counts["due_later"] += 1
+    return tuple(counts.items())
+
+
+def _jira_status_category_counts(
+    issues: tuple[object, ...],
+) -> tuple[tuple[str, int], ...]:
+    from chief_of_staff.connectors import JiraIssue
+
+    counts: dict[str, int] = {}
+    for issue in issues:
+        if not isinstance(issue, JiraIssue):
+            continue
+        category = issue.status_category.casefold().replace(" ", "_")
+        counts[category] = counts.get(category, 0) + 1
+    return tuple(sorted(counts.items()))
 
 
 def _with_persistence_coverage(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 
@@ -93,7 +94,8 @@ class DeterministicBriefingPipeline:
                 for item in result.items
             )
 
-        deduplication = deduplicate_records(tuple(normalized))
+        associated = _associate_explicit_cross_source_records(tuple(normalized))
+        deduplication = deduplicate_records(associated)
         context = _reconcile_workday_context(context, deduplication.records)
         plan = build_reduced_plan(
             context,
@@ -201,3 +203,58 @@ def _coverage_with_display_counts(
         )
         for report in coverage
     )
+
+
+def _associate_explicit_cross_source_records(
+    records: tuple[NormalizedRecord, ...],
+) -> tuple[NormalizedRecord, ...]:
+    """Associate only explicit stable cross-references without merging records."""
+
+    jira_by_key = {
+        record.provenance.source_record_id: record
+        for record in records
+        if record.provenance.source == "jira" and record.kind is RecordKind.TASK
+    }
+    related_ids = {record.id: set(record.related_source_ids) for record in records}
+    for record in records:
+        if record.provenance.source != "todoist" or record.kind is not RecordKind.TASK:
+            continue
+        for key, jira_record in jira_by_key.items():
+            pattern = rf"(?<![A-Z0-9_]){re.escape(key)}(?![A-Z0-9_])"
+            if re.search(pattern, record.title, flags=re.IGNORECASE) is None:
+                continue
+            related_ids[record.id].add(jira_record.id)
+            related_ids[jira_record.id].add(record.id)
+
+    by_id = {record.id: record for record in records}
+    associated: list[NormalizedRecord] = []
+    for record in records:
+        linked = tuple(
+            by_id[related_id]
+            for related_id in sorted(related_ids[record.id])
+            if related_id in by_id
+            and by_id[related_id].provenance.source != record.provenance.source
+        )
+        conflicts = {
+            field
+            for related in linked
+            for field, first, second in (
+                ("status", record.status, related.status),
+                ("due date", record.due_at, related.due_at),
+                (
+                    "source priority",
+                    record.source_priority,
+                    related.source_priority,
+                ),
+            )
+            if first is not None and second is not None and first != second
+        }
+        associated.append(
+            replace(
+                record,
+                related_source_ids=tuple(sorted(related_ids[record.id])),
+                associated_provenance=tuple(related.provenance for related in linked),
+                association_conflicts=tuple(sorted(conflicts)),
+            )
+        )
+    return tuple(associated)

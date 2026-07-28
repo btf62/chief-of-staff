@@ -8,12 +8,11 @@ specification, architecture, and ADR-0001 through ADR-0006 are accepted.
 Milestones 0 through 4 are complete. Milestone 5 has completed the accepted
 Todoist connector, one combined Calendar-and-Todoist trial, and one explicitly
 approved complete-retrieval and workday-quality validation. Jira has completed
-one explicitly approved resource-restricted authorization and project-only
-discovery trial; its issue connector remains synthetic. Work is paused at the
-Jira issue-retrieval gate and before Asana or another connector. No JQL, live
-Jira issue retrieval, repeat Jira project discovery, authorization refresh,
-repeat Todoist or Calendar retrieval, scope change, or broader live access is
-authorized.
+its mocked phase, one resource-restricted project-discovery trial, and one
+exact-project live issue trial integrated with the deterministic briefing.
+Work is paused before Asana or another connector. No repeat JQL, Jira issue
+retrieval, Jira project discovery, authorization refresh, Todoist or Calendar
+retrieval, scope change, or broader live access is authorized.
 
 ## Working rules
 
@@ -76,10 +75,10 @@ The Version 1 design-readiness requirements have been met:
    acceptance gates, and exclusions.
 
 Implementation may proceed only when a task explicitly authorizes it. The
-Google Calendar and Todoist gates, including the bounded workday-quality
-validation, have been exercised; do not repeat live retrieval, broaden access,
-refresh authorization, retrieve Jira issues, repeat Jira project discovery, or
-begin Asana or another connector without new explicit approval. Satisfy a
+Google Calendar, Todoist, Jira project-discovery, and Jira issue gates have
+been exercised; do not repeat live retrieval, broaden access, refresh
+authorization, repeat Jira project discovery, or begin Asana or another
+connector without new explicit approval. Satisfy a
 milestone's acceptance gate before beginning dependent work. Record material
 new product or architecture decisions before implementing them.
 

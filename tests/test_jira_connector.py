@@ -22,6 +22,7 @@ from chief_of_staff.connectors import (
     JiraAuthorization,
     JiraAuthorizationUnavailable,
     JiraConnector,
+    JiraInvalidJqlError,
     JiraIssue,
     JiraIssueLink,
     JiraIssuePage,
@@ -130,6 +131,7 @@ def _issue(
     calendar_dependency: bool = False,
     explicit_priority_link: bool = False,
     related_source_ids: tuple[str, ...] = (),
+    updated_at: datetime = NOW,
 ) -> JiraIssue:
     issue_key = key or f"SYN-{issue_id}"
     return JiraIssue(
@@ -142,11 +144,10 @@ def _issue(
         status_category=status_category,
         display_url=f"https://example.invalid/browse/{issue_key}",
         assignee_account_id=assignee_account_id,
-        reporter_account_id=None,
         priority_name=priority_name,
         due_date=due_date,
         created_at=None,
-        updated_at=NOW,
+        updated_at=updated_at,
         parent_key=None,
         labels=(),
         links=links,
@@ -273,7 +274,6 @@ def test_pagination_normalization_and_domain_records_preserve_fields() -> None:
     assert normalized.issue_type == "Task"
     assert normalized.status_category == "In Progress"
     assert normalized.assignee_reference == ACCOUNT_IDENTITY
-    assert normalized.reporter_reference is None
     assert normalized.source_priority == "Highest"
     assert normalized.due_at is not None
     assert normalized.due_at.date() == BRIEFING_DATE
@@ -294,7 +294,6 @@ def test_pagination_normalization_and_domain_records_preserve_fields() -> None:
         timezone="America/New_York",
     )
     assert optional.source_priority is None
-    assert optional.reporter_reference is None
     assert optional.parent_reference is None
     assert optional.labels == ()
     assert optional.due_at is None
@@ -339,6 +338,8 @@ def test_empty_unauthorized_and_scope_mismatch_are_distinct() -> None:
         ),
         (JiraPermissionError(), "JiraPermissionError", CoverageStatus.UNAVAILABLE),
         (JiraRateLimitError(), "JiraRateLimitError", CoverageStatus.UNAVAILABLE),
+        (JiraInvalidJqlError(), "JiraInvalidJqlError", CoverageStatus.UNAVAILABLE),
+        (JiraRetrievalError(), "JiraRetrievalError", CoverageStatus.UNAVAILABLE),
     ],
 )
 def test_first_page_failures_remain_distinct(
@@ -474,6 +475,7 @@ def test_jira_priority_assignment_and_overdue_state_do_not_create_priority() -> 
         "1001",
         priority_name="Highest",
         due_date=date(2026, 7, 20),
+        updated_at=datetime(2026, 7, 20, 12, 0, tzinfo=UTC),
     )
     connector = _connector(_ReadOnlyTransport(pages=(JiraIssuePage(issues=(issue,)),)))
 
@@ -493,6 +495,29 @@ def test_jira_priority_assignment_and_overdue_state_do_not_create_priority() -> 
         ("overdue Jira issue without another current signal", 1),
     )
     assert result.plan.coverage[0].displayed_count == 0
+    assert "high priority in the source" not in result.rendered.text
+
+
+def test_recent_update_combined_with_an_overdue_date_can_create_candidate() -> None:
+    issue = _issue(
+        "1001",
+        priority_name="Low",
+        due_date=date(2026, 7, 20),
+        updated_at=NOW,
+    )
+    connector = _connector(_ReadOnlyTransport(pages=(JiraIssuePage(issues=(issue,)),)))
+
+    result = DeterministicBriefingPipeline().run(
+        resolve_context(
+            run_id="jira-overdue-and-current",
+            briefing_date=BRIEFING_DATE,
+            timezone="America/New_York",
+        ),
+        (connector,),
+    )
+
+    assert result.plan.task_candidate_audits[0].candidate_count == 1
+    assert "recently updated in the source" in result.rendered.text
     assert "high priority in the source" not in result.rendered.text
 
 
@@ -580,6 +605,83 @@ def test_jira_todoist_association_preserves_conflicting_records_and_links() -> N
         "https://example.invalid/browse/SYN-1001",
         "https://example.invalid/todoist/todo-1",
     }
+
+
+def test_jira_todoist_association_requires_an_explicit_key_and_combines_display() -> (
+    None
+):
+    jira_issue = _issue(
+        "1001",
+        key="SYN-1001",
+        summary="Source-owned work",
+        due_date=BRIEFING_DATE,
+    )
+    jira = _connector(_ReadOnlyTransport(pages=(JiraIssuePage(issues=(jira_issue,)),)))
+    todoist = StaticConnector(
+        source_name="todoist",
+        approved_scope="synthetic Todoist",
+        status=CoverageStatus.COMPLETE,
+        items=(
+            SourceItem(
+                id="explicit",
+                source_record_id="explicit",
+                item_type="task",
+                facts={
+                    "title": "Prepare source-owned work for SYN-1001",
+                    "status": "open",
+                    "importance": 1,
+                    "provider_priority": 1,
+                    "all_day": True,
+                    "due_at": "2026-07-28T00:00:00-04:00",
+                },
+                display_url="https://example.invalid/todoist/explicit",
+                retrieved_at=NOW,
+                freshness_at=NOW,
+            ),
+            SourceItem(
+                id="similar",
+                source_record_id="similar",
+                item_type="task",
+                facts={
+                    "title": "Source-owned work",
+                    "status": "open",
+                    "importance": 1,
+                    "provider_priority": 1,
+                    "all_day": True,
+                    "due_at": "2026-07-28T00:00:00-04:00",
+                },
+                display_url="https://example.invalid/todoist/similar",
+                retrieved_at=NOW,
+                freshness_at=NOW,
+            ),
+        ),
+    )
+
+    result = DeterministicBriefingPipeline().run(
+        resolve_context(
+            run_id="jira-todoist-explicit-key",
+            briefing_date=BRIEFING_DATE,
+            timezone="America/New_York",
+        ),
+        (jira, todoist),
+    )
+
+    assert len(result.deduplication.records) == 3
+    assert len(result.deduplication.associations) == 1
+    association = result.deduplication.associations[0]
+    assert association.member_ids == ("jira:1001", "todoist:explicit")
+    assert "todoist:similar" not in association.member_ids
+    outcome = next(
+        section
+        for section in result.plan.sections
+        if section.name is BriefingSectionName.TODAYS_OUTCOMES
+    )
+    assert len(outcome.items) == 1
+    assert {source.source for source in outcome.items[0].sources} == {
+        "jira",
+        "todoist",
+    }
+    assert "disagree on due date, status" in outcome.items[0].detail
 
 
 def test_synthetic_jira_records_support_bounded_briefing_sections_and_funnel() -> None:
@@ -671,6 +773,7 @@ def test_initial_jira_models_exclude_broad_or_write_resources() -> None:
     issue_fields = {item.name for item in fields(JiraIssue)}
     excluded = {
         "description",
+        "reporter",
         "comments",
         "attachments",
         "changelog",
@@ -681,7 +784,5 @@ def test_initial_jira_models_exclude_broad_or_write_resources() -> None:
 
     assert issue_fields.isdisjoint(excluded)
     assert set(JIRA_INITIAL_FIELDS).isdisjoint(excluded)
-    assert not hasattr(jira_module, "JiraHttpTransport")
-    assert not hasattr(jira_module, "StoredJiraAuthorizationProvider")
     assert not hasattr(jira_module, "MacOSKeychain")
     assert not hasattr(jira_module, "OpenAI")

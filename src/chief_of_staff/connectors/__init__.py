@@ -27,6 +27,8 @@ from chief_of_staff.connectors.google_calendar_live import (
     StoredGoogleCalendarAuthorizationProvider,
 )
 from chief_of_staff.connectors.jira import (
+    JIRA_APPROVED_JQL,
+    JIRA_APPROVED_PROJECT_KEY,
     JIRA_ENHANCED_SEARCH_OPERATION,
     JIRA_INITIAL_FIELDS,
     JIRA_PAGE_LIMIT,
@@ -35,6 +37,7 @@ from chief_of_staff.connectors.jira import (
     JiraAuthorizationProvider,
     JiraAuthorizationUnavailable,
     JiraConnector,
+    JiraInvalidJqlError,
     JiraIssue,
     JiraIssueLink,
     JiraIssuePage,
@@ -72,6 +75,10 @@ from chief_of_staff.connectors.jira_discovery import (
     JiraProjectRetrievalError,
     JiraSiteBoundaryError,
     StoredJiraDiscoveryAuthorizationProvider,
+)
+from chief_of_staff.connectors.jira_live import (
+    JiraEnhancedSearchHttpTransport,
+    StoredJiraAuthorizationProvider,
 )
 from chief_of_staff.connectors.repository import RepositoryContextConnector
 from chief_of_staff.connectors.static import StaticConnector
@@ -113,6 +120,8 @@ from chief_of_staff.connectors.todoist_live import (
 __all__ = (
     "GOOGLE_CALENDAR_EVENTS_OWNED_READONLY_SCOPE",
     "JIRA_API_ROOT",
+    "JIRA_APPROVED_JQL",
+    "JIRA_APPROVED_PROJECT_KEY",
     "JIRA_ENHANCED_SEARCH_OPERATION",
     "JIRA_EXCLUDED_ISSUE_FIELDS",
     "JIRA_INITIAL_FIELDS",
@@ -146,6 +155,8 @@ __all__ = (
     "JiraDiscoveryAuthenticationError",
     "JiraDiscoveryAuthorization",
     "JiraDiscoveryAuthorizationUnavailable",
+    "JiraEnhancedSearchHttpTransport",
+    "JiraInvalidJqlError",
     "JiraIssue",
     "JiraIssueLink",
     "JiraIssuePage",
@@ -178,6 +189,7 @@ __all__ = (
     "SourceItem",
     "StaticConnector",
     "StoredGoogleCalendarAuthorizationProvider",
+    "StoredJiraAuthorizationProvider",
     "StoredJiraDiscoveryAuthorizationProvider",
     "StoredTodoistAuthorizationProvider",
     "TodoistAuthenticationError",
