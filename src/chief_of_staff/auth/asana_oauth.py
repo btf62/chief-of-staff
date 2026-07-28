@@ -76,6 +76,15 @@ class AsanaOAuthTokenResponse:
 
 
 @dataclass(frozen=True, slots=True)
+class AsanaOAuthRefreshResponse:
+    """Validated refreshed token material without requiring identity data."""
+
+    access_token: str = field(repr=False)
+    refresh_token: str = field(repr=False)
+    expires_in_seconds: int
+
+
+@dataclass(frozen=True, slots=True)
 class AsanaTokenInspection:
     """Non-secret token health and exact granted scope set."""
 
@@ -119,7 +128,7 @@ class AsanaOAuthTokenClientProtocol(Protocol):
         client_id: str,
         client_secret: str,
         refresh_token: str,
-    ) -> AsanaOAuthTokenResponse:
+    ) -> AsanaOAuthTokenResponse | AsanaOAuthRefreshResponse:
         """Exchange a refresh token through the same app registration."""
 
     def revoke(
@@ -461,7 +470,7 @@ class AsanaInstalledAppOAuth:
         *,
         account_reference: str,
         account_identity: str,
-        token: AsanaOAuthTokenResponse,
+        token: AsanaOAuthTokenResponse | AsanaOAuthRefreshResponse,
         authorized_at: datetime | None = None,
     ) -> ConnectorAuthorizationMetadata:
         now = self.clock()
@@ -559,14 +568,36 @@ class AsanaOAuthTokenClient:
         client_id: str,
         client_secret: str,
         refresh_token: str,
-    ) -> AsanaOAuthTokenResponse:
-        return self._token_request(
+    ) -> AsanaOAuthRefreshResponse:
+        payload = _post_form(
+            ASANA_TOKEN_ENDPOINT,
             {
                 "grant_type": "refresh_token",
                 "client_id": client_id,
                 "client_secret": client_secret,
                 "refresh_token": refresh_token,
-            }
+            },
+        )
+        access_token = payload.get("access_token")
+        rotated_refresh_token = payload.get("refresh_token", refresh_token)
+        expires_in = payload.get("expires_in")
+        token_type = payload.get("token_type")
+        if (
+            not isinstance(access_token, str)
+            or not access_token
+            or not isinstance(rotated_refresh_token, str)
+            or not rotated_refresh_token
+            or not isinstance(expires_in, int)
+            or isinstance(expires_in, bool)
+            or expires_in <= 0
+            or not isinstance(token_type, str)
+            or token_type.casefold() != "bearer"
+        ):
+            raise AsanaOAuthError("Asana refresh response omitted required fields")
+        return AsanaOAuthRefreshResponse(
+            access_token=access_token,
+            refresh_token=rotated_refresh_token,
+            expires_in_seconds=expires_in,
         )
 
     def revoke(

@@ -203,7 +203,7 @@ Jira enhanced search is eventually consistent, so the report does not claim
 that concurrent provider changes were impossible during pagination. The
 private briefing remains under ignored mode-`0600` local state.
 
-## Asana authorization and workspace-discovery boundary
+## Asana authorization, workspace, and project-discovery boundary
 
 The Asana connector uses the private, workspace-restricted OAuth application
 `Chief of Staff (Local) — Asana`. Brad is its sole current owner; no separate
@@ -237,6 +237,9 @@ python -m chief_of_staff.asana_live_cli \
   register-client-from-stdin \
   --application-owner "Brad Files (sole owner)"
 python -m chief_of_staff.asana_live_cli authorize-and-discover
+python -m chief_of_staff.asana_live_cli \
+  approve-workspace-and-discover-projects \
+  --workspace-report .local/asana/<private-workspace-report>.md
 python -m chief_of_staff.asana_live_cli status
 ```
 
@@ -253,10 +256,29 @@ rule wrote their selection details only to an ignored mode-`0600` report under
 `.local/asana/` and stopped before the
 `GET /api/1.0/workspaces/{workspace_gid}/projects` operation.
 
-No workspace was selected or persisted. No project, task, user, search,
-hosted-inference, other-connector, or mutation endpoint was called. Raw
-provider responses, offsets, authorization code, PKCE verifier, temporary TLS
-material, and transient credential transfer were released after use.
+Brad later selected one organization workspace from that private report. The
+project-only command resolved its GID from the report, refreshed the expired
+grant without changing scopes, and bound the connector instance to that local
+resource. It did not call the workspace-list endpoint again.
+
+The one approved project trial called only
+`GET /api/1.0/workspaces/{workspace_gid}/projects` for the selected GID with
+`archived=false`, a page size of 100, provider offsets, and:
+
+```text
+gid,name,archived,public,permalink_url
+```
+
+The complete project catalog exists only in an ignored mode-`0600` report
+under `.local/asana/`. SQLite retains the approved workspace GID, safe resource
+reference, connector-run, catalog-reference, coverage, freshness, and
+credential-use metadata. It contains no project catalog, raw response, offset,
+or credential.
+
+No task, user, section, team, search, hosted-inference, other-connector, or
+mutation endpoint was called. Raw provider responses and offsets were released
+after the report was created. Provider offset pagination completed, although
+concurrent project changes can affect point-in-time catalog completeness.
 
 ## Bounded live trial
 
@@ -361,10 +383,11 @@ conservative cross-source association, daily relevance, and absence of
 mutation operations.
 Asana tests additionally cover exact discovery scopes, state and PKCE,
 account confirmation, token introspection, Keychain isolation, refresh,
-revocation, reauthorization, workspace and project pagination, conservative
-duplicate handling, the multiple-workspace stop, private report permissions,
-partial task-contract coverage, transient raw responses and offsets, and
-absence of live task or mutation operations.
+revocation, reauthorization, fixed approved-workspace binding, workspace and
+project pagination, stable active-project parameters, conservative duplicate
+handling, timeout and page-limit stops, private report permissions,
+project-catalog isolation, partial task-contract coverage, transient raw
+responses and offsets, and absence of live task or mutation operations.
 
 ## Current limitations and stop condition
 
@@ -377,7 +400,7 @@ absence of live task or mutation operations.
   authorize scheduled, unattended, or repeated retrieval.
 - Jira uses a short-lived access token without refresh capability.
 - Asana access and refresh credentials exist in Keychain, but their presence
-  does not authorize refresh, repeat discovery, project retrieval, task
+  does not authorize refresh, repeat workspace or project discovery, task
   retrieval, scheduling, or unattended operation.
 - Asana app ownership is currently Brad-only; no separate Northridge
   administrator ownership was confirmed.
@@ -386,7 +409,7 @@ absence of live task or mutation operations.
 - Daily Briefing v1 has not been accepted for operational use.
 
 The bounded trials and validation are complete. Do not repeat live Calendar,
-Todoist, Jira project retrieval, Jira issue retrieval, Asana authorization, or
-Asana workspace discovery; refresh authorization; retrieve Asana projects or
-tasks; broaden any boundary; or begin another live connector without new
-explicit approval.
+Todoist, Jira project retrieval, Jira issue retrieval, Asana authorization,
+Asana workspace discovery, or Asana project discovery; refresh authorization;
+retrieve Asana tasks; broaden any boundary; or begin another live connector
+without new explicit approval.

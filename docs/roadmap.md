@@ -12,8 +12,9 @@ bounded primary-calendar trial. Milestone 5 has completed its accepted Todoist
 boundary, combined Calendar-and-Todoist trial, and one explicitly approved
 complete-retrieval and normal-workday quality validation. Jira has completed
 its mocked phase, project discovery, and one exact-project live issue trial.
-Asana has completed its mocked phase and one bounded OAuth workspace-discovery
-trial, which stopped before projects after returning multiple workspaces.
+Asana has completed its mocked phase, bounded OAuth workspace discovery, and
+one explicitly approved active-project discovery inside the selected
+organization workspace. Work is stopped before live task retrieval.
 Dates and estimates remain intentionally omitted until implementation
 evidence supports them.
 
@@ -171,7 +172,7 @@ explicit approval for another Calendar retrieval or any later connector.
 
 ## Milestone 5 — Task-System Connectors
 
-- **Status:** In progress — Todoist and Jira trials complete; Asana stopped at workspace selection
+- **Status:** In progress — Todoist and Jira trials complete; Asana stopped at task-boundary selection
 - **Intended user-visible outcome:** Brad's factual briefing can include
   relevant source-owned work across Todoist, Jira, and Asana without replacing
   any task system.
@@ -237,11 +238,19 @@ surface.
 One explicitly approved Asana trial authorized the confirmed account with
 exactly `workspaces:read projects:read` and retrieved only minimal workspace
 metadata. It found multiple accessible workspaces, wrote the private selection
-report, and stopped before project or task retrieval as required.
+report, and stopped.
 
-Work is stopped at Asana workspace selection. Repeat Asana or Jira retrieval,
-Asana project or task access, authorization refresh, Calendar, or Todoist
-access remains unauthorized.
+Brad then approved one organization workspace from that private report. One
+bounded project-only trial refreshed the existing exact-scope grant, bound the
+connector instance to the approved private GID, retrieved only active compact
+project records, and wrote the complete catalog to a new ignored mode-`0600`
+selection report. It did not repeat workspace discovery or call any task,
+user, section, search, mutation, hosted-inference, or other connector
+operation.
+
+Work is stopped at Asana task-boundary selection. Repeat Asana or Jira
+retrieval, Asana project or task access, authorization refresh, Calendar, or
+Todoist access remains unauthorized.
 
 ## Milestone 6 — Gmail and Google Drive Connectors
 

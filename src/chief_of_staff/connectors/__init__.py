@@ -18,10 +18,13 @@ from chief_of_staff.connectors.asana import (
 )
 from chief_of_staff.connectors.asana_discovery import (
     ASANA_API_ROOT,
+    ASANA_APPROVED_WORKSPACE_ALIAS,
     ASANA_PROJECT_FIELDS,
     ASANA_PROJECT_OPERATION,
     ASANA_WORKSPACE_FIELDS,
     ASANA_WORKSPACE_OPERATION,
+    AsanaApprovedWorkspaceProjectDiscoveryService,
+    AsanaApprovedWorkspaceProjectTrialRunner,
     AsanaDiscovery,
     AsanaDiscoveryAuthenticationError,
     AsanaDiscoveryAuthorization,
@@ -34,6 +37,7 @@ from chief_of_staff.connectors.asana_discovery import (
     AsanaDiscoveryReport,
     AsanaDiscoveryRetrievalError,
     AsanaDiscoveryService,
+    AsanaDiscoveryTimeoutError,
     AsanaDiscoveryTransport,
     AsanaDiscoveryTrialRunner,
     AsanaProject,
@@ -43,6 +47,7 @@ from chief_of_staff.connectors.asana_discovery import (
     AsanaWorkspacePage,
     AsanaWorkspaceRequest,
     StoredAsanaDiscoveryAuthorizationProvider,
+    approved_workspace_from_private_report,
 )
 from chief_of_staff.connectors.contracts import (
     ConnectorRequest,
@@ -173,6 +178,7 @@ from chief_of_staff.connectors.todoist_live import (
 
 __all__ = (
     "ASANA_API_ROOT",
+    "ASANA_APPROVED_WORKSPACE_ALIAS",
     "ASANA_PRIMARY_INSTANCE",
     "ASANA_PROJECT_FIELDS",
     "ASANA_PROJECT_OPERATION",
@@ -199,6 +205,8 @@ __all__ = (
     "TODOIST_DATA_READ_SCOPE",
     "TODOIST_FILTER_QUERY",
     "TODOIST_PRIMARY_INSTANCE",
+    "AsanaApprovedWorkspaceProjectDiscoveryService",
+    "AsanaApprovedWorkspaceProjectTrialRunner",
     "AsanaAuthenticationError",
     "AsanaAuthorization",
     "AsanaAuthorizationProvider",
@@ -216,6 +224,7 @@ __all__ = (
     "AsanaDiscoveryReport",
     "AsanaDiscoveryRetrievalError",
     "AsanaDiscoveryService",
+    "AsanaDiscoveryTimeoutError",
     "AsanaDiscoveryTransport",
     "AsanaDiscoveryTrialRunner",
     "AsanaMembership",
@@ -314,6 +323,7 @@ __all__ = (
     "TodoistTaskPage",
     "TodoistTransport",
     "TodoistUser",
+    "approved_workspace_from_private_report",
     "connector_instance_key",
     "partition_source_items_by_domain",
     "qualify_todoist_task",

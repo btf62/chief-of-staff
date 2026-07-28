@@ -5,12 +5,13 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final, Protocol, cast
@@ -40,6 +41,7 @@ from chief_of_staff.persistence import StateStore
 ASANA_API_ROOT: Final = "https://app.asana.com/api/1.0"
 ASANA_WORKSPACE_OPERATION: Final = "GET /api/1.0/workspaces"
 ASANA_PROJECT_OPERATION: Final = "GET /api/1.0/workspaces/{workspace_gid}/projects"
+ASANA_APPROVED_WORKSPACE_ALIAS: Final = "northridgerochester.com"
 ASANA_PAGE_SIZE: Final = 100
 ASANA_MAX_PAGES: Final = 20
 ASANA_WORKSPACE_FIELDS: Final = ("gid", "name", "is_organization")
@@ -75,6 +77,10 @@ class AsanaDiscoveryRateLimitError(AsanaDiscoveryError):
 
 class AsanaDiscoveryRetrievalError(AsanaDiscoveryError):
     """Raised when one provider page is unavailable or invalid."""
+
+
+class AsanaDiscoveryTimeoutError(AsanaDiscoveryRetrievalError):
+    """Raised when Asana does not complete the approved endpoint in time."""
 
 
 class AsanaDiscoveryPaginationError(AsanaDiscoveryError):
@@ -184,6 +190,17 @@ class AsanaDiscoveryTransport(Protocol):
         """Retrieve one minimal active-project page."""
 
 
+class AsanaProjectDiscoveryTransport(Protocol):
+    """The complete API surface for approved-workspace project discovery."""
+
+    def list_projects(
+        self,
+        authorization: AsanaDiscoveryAuthorization,
+        request: AsanaProjectRequest,
+    ) -> AsanaProjectPage:
+        """Retrieve one minimal active-project page."""
+
+
 @dataclass(frozen=True, slots=True)
 class AsanaDiscovery:
     """In-memory discovery result; private names are excluded from repr."""
@@ -220,6 +237,10 @@ class AsanaDiscoveryReport:
     raw_payload_persisted: bool = False
     offset_persisted: bool = False
     complete_project_catalog_persisted: bool = False
+    duplicate_project_count: int = 0
+    discovery_complete: bool = True
+    concurrent_change_could_affect_completeness: bool = True
+    timeout_or_permission_issue: bool = False
 
     @property
     def workspace_pagination_occurred(self) -> bool:
@@ -376,7 +397,15 @@ class AsanaDiscoveryHttpTransport:
             raise AsanaDiscoveryRetrievalError(
                 "Asana discovery request failed"
             ) from None
-        except urllib.error.URLError, TimeoutError:
+        except TimeoutError:
+            raise AsanaDiscoveryTimeoutError(
+                "Asana discovery request timed out"
+            ) from None
+        except urllib.error.URLError as error:
+            if isinstance(error.reason, TimeoutError):
+                raise AsanaDiscoveryTimeoutError(
+                    "Asana discovery request timed out"
+                ) from None
             raise AsanaDiscoveryRetrievalError(
                 "Asana discovery request was unavailable"
             ) from None
@@ -500,6 +529,45 @@ class AsanaDiscoveryService:
             offset = _validated_next_offset(page.next_offset, seen_offsets)
         raise AsanaDiscoveryPaginationError(
             "Asana project discovery reached its page limit"
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class AsanaApprovedWorkspaceProjectDiscoveryService:
+    """Discover projects only inside one explicitly approved workspace."""
+
+    authorization_provider: AsanaDiscoveryAuthorizationProvider
+    transport: AsanaProjectDiscoveryTransport
+    approved_workspace: AsanaWorkspace = field(repr=False)
+
+    def discover(self) -> tuple[AsanaDiscoveryAuthorization, AsanaDiscovery]:
+        """Retrieve active projects without listing or inspecting workspaces."""
+
+        authorization = self.authorization_provider.get_authorization()
+        if authorization.granted_scopes != ASANA_DISCOVERY_SCOPES:
+            raise AsanaDiscoveryAuthorizationUnavailable(
+                "Asana discovery scope does not match the approved boundary"
+            )
+        if self.approved_workspace.name != ASANA_APPROVED_WORKSPACE_ALIAS:
+            raise AsanaDiscoveryPermissionError(
+                "The Asana workspace is outside the explicit approval boundary"
+            )
+        if not self.approved_workspace.is_organization:
+            raise AsanaDiscoveryPermissionError(
+                "The approved Asana resource is not an organization workspace"
+            )
+        projects, project_pages, duplicate_projects = _retrieve_projects(
+            transport=self.transport,
+            authorization=authorization,
+            workspace_gid=self.approved_workspace.gid,
+        )
+        return authorization, AsanaDiscovery(
+            workspaces=(self.approved_workspace,),
+            projects=projects,
+            workspace_page_count=0,
+            project_page_count=project_pages,
+            project_discovery_performed=True,
+            duplicate_project_count=duplicate_projects,
         )
 
 
@@ -642,6 +710,234 @@ class AsanaDiscoveryTrialRunner:
                 )
             )
         return output_path
+
+
+@dataclass(frozen=True, slots=True)
+class AsanaApprovedWorkspaceProjectTrialRunner:
+    """Bind one approved workspace and run project-only discovery once."""
+
+    state_store: StateStore
+    discovery_service: AsanaApprovedWorkspaceProjectDiscoveryService
+    output_directory: Path
+    application_name: str
+    application_owner: str
+    account_identity_source: str
+    clock: Callable[[], datetime] = field(
+        default=lambda: datetime.now(UTC),
+        repr=False,
+        compare=False,
+    )
+
+    def run(self) -> AsanaDiscoveryReport:
+        """Persist only approved-workspace and project-run metadata."""
+
+        started_at = self.clock()
+        self._bind_approved_workspace(selected_at=started_at)
+        _authorization, discovery = self.discovery_service.discover()
+        completed_at = self.clock()
+        run_id = f"asana-project-discovery-{uuid.uuid4().hex}"
+        self.state_store.add_connector_run(
+            ConnectorRun(
+                id=run_id,
+                source="asana_project_discovery",
+                approved_scope=(
+                    f"{ASANA_DISCOVERY_SCOPE_STRING}; "
+                    f"operation={ASANA_PROJECT_OPERATION}; archived=false; "
+                    "approved workspace only; no workspace listing; no tasks"
+                ),
+                started_at=started_at,
+                completed_at=completed_at,
+                status=ConnectorStatus.SUCCEEDED,
+                coverage_status=CoverageStatus.COMPLETE,
+                freshness_at=completed_at,
+                page_count=discovery.project_page_count,
+                connector_instance_id=ASANA_PRIMARY_INSTANCE,
+            )
+        )
+        fingerprint = hashlib.sha256(
+            (
+                f"asana-project-discovery\0{len(discovery.projects)}\0"
+                f"{completed_at.isoformat()}"
+            ).encode()
+        ).hexdigest()
+        self.state_store.add_source_evidence(
+            SourceEvidence(
+                id=f"{run_id}:catalog-reference",
+                connector_run_id=run_id,
+                connector_instance_id=ASANA_PRIMARY_INSTANCE,
+                source="asana_project_discovery",
+                source_record_id="approved-workspace-project-discovery",
+                evidence_fingerprint=fingerprint,
+                retrieved_at=completed_at,
+                freshness_at=completed_at,
+            )
+        )
+        self.state_store.update_connector_instance_coverage(
+            ASANA_PRIMARY_INSTANCE,
+            coverage_status=CoverageStatus.COMPLETE,
+            freshness_at=completed_at,
+            updated_at=completed_at,
+        )
+        self.state_store.mark_connector_authorization_used(
+            ASANA_PRIMARY_INSTANCE,
+            used_at=completed_at,
+        )
+        output_path = self._write_private_report(
+            generated_at=completed_at,
+            discovery=discovery,
+        )
+        metadata = self.state_store.get_connector_authorization(ASANA_PRIMARY_INSTANCE)
+        if metadata is None:
+            raise AsanaDiscoveryError(
+                "Asana authorization metadata disappeared during discovery"
+            )
+        return AsanaDiscoveryReport(
+            application_name=self.application_name,
+            application_owner=self.application_owner,
+            account_identity_source=self.account_identity_source,
+            granted_scope=metadata.granted_scope,
+            credential_health=metadata.credential_health.value,
+            refresh_health=(
+                "unavailable"
+                if metadata.refresh_health is None
+                else metadata.refresh_health.value
+            ),
+            workspace_count=1,
+            workspace_page_count=0,
+            project_discovery_performed=True,
+            project_count=len(discovery.projects),
+            project_page_count=discovery.project_page_count,
+            private_report_path=output_path,
+            connector_run_id=run_id,
+            duplicate_project_count=discovery.duplicate_project_count,
+        )
+
+    def _bind_approved_workspace(self, *, selected_at: datetime) -> None:
+        workspace = self.discovery_service.approved_workspace
+        instance = self.state_store.get_connector_instance(ASANA_PRIMARY_INSTANCE)
+        if instance is None:
+            raise AsanaDiscoveryAuthorizationUnavailable(
+                "Asana connector instance metadata is unavailable"
+            )
+        self.state_store.save_connector_instance(
+            replace(
+                instance,
+                approved_resource_boundary=(
+                    "one explicitly approved organization workspace"
+                ),
+                approved_scopes=ASANA_DISCOVERY_SCOPE_STRING,
+                retrieval_configuration="approved-workspace-active-project-discovery",
+                enabled=True,
+                updated_at=selected_at,
+            )
+        )
+        self.state_store.save_connector_resource(
+            ConnectorResourceMetadata(
+                connector=ASANA_CONNECTOR,
+                connector_instance_id=ASANA_PRIMARY_INSTANCE,
+                resource_reference="approved-organization-workspace",
+                resource_id=workspace.gid,
+                resource_url=f"https://app.asana.com/0/{workspace.gid}/list",
+                resource_type="workspace",
+                grant_type="explicit-user-approval",
+                selected_at=selected_at,
+            )
+        )
+
+    def _write_private_report(
+        self,
+        *,
+        generated_at: datetime,
+        discovery: AsanaDiscovery,
+    ) -> Path:
+        self.output_directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        self.output_directory.chmod(0o700)
+        output_path = self.output_directory / (
+            f"asana-project-discovery-{generated_at:%Y%m%dT%H%M%SZ}.md"
+        )
+        descriptor = os.open(
+            output_path,
+            os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+            0o600,
+        )
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            stream.write(
+                _private_project_selection_report_text(
+                    generated_at=generated_at,
+                    discovery=discovery,
+                )
+            )
+        return output_path
+
+
+def approved_workspace_from_private_report(
+    *,
+    report_path: Path,
+    approved_alias: str,
+) -> AsanaWorkspace:
+    """Resolve one explicit organization selection from the private report."""
+
+    if not approved_alias.strip():
+        raise ValueError("approved Asana workspace alias must not be empty")
+    report = report_path.read_text(encoding="utf-8")
+    pattern = re.compile(
+        rf"^- {re.escape(approved_alias)} "
+        r"\(`(?P<gid>[0-9]+)`\); organization=(?P<organization>true|false)$",
+        flags=re.MULTILINE,
+    )
+    matches = {
+        (match.group("gid"), match.group("organization") == "true")
+        for match in pattern.finditer(report)
+    }
+    report = ""
+    if len(matches) != 1:
+        raise AsanaDiscoveryPermissionError(
+            "The private discovery report did not contain one exact approved workspace"
+        )
+    gid, is_organization = matches.pop()
+    if not is_organization:
+        raise AsanaDiscoveryPermissionError(
+            "The approved Asana workspace is not an organization"
+        )
+    return AsanaWorkspace(
+        gid=gid,
+        name=approved_alias.strip(),
+        is_organization=True,
+    )
+
+
+def _retrieve_projects(
+    *,
+    transport: AsanaProjectDiscoveryTransport,
+    authorization: AsanaDiscoveryAuthorization,
+    workspace_gid: str,
+) -> tuple[tuple[AsanaProject, ...], int, int]:
+    values: dict[str, AsanaProject] = {}
+    duplicates = 0
+    offset: str | None = None
+    seen_offsets: set[str] = set()
+    for page_count in range(1, ASANA_MAX_PAGES + 1):
+        page = transport.list_projects(
+            authorization,
+            AsanaProjectRequest(
+                workspace_gid=workspace_gid,
+                archived=False,
+                limit=ASANA_PAGE_SIZE,
+                fields=ASANA_PROJECT_FIELDS,
+                offset=offset,
+            ),
+        )
+        duplicates += _merge_unique(values, page.projects, kind="project")
+        if page.next_offset is None:
+            return (
+                tuple(values[key] for key in sorted(values)),
+                page_count,
+                duplicates,
+            )
+        offset = _validated_next_offset(page.next_offset, seen_offsets)
+    raise AsanaDiscoveryPaginationError(
+        "Asana project discovery reached its page limit"
+    )
 
 
 def _merge_unique(
@@ -810,6 +1106,151 @@ def _private_report_text(
             "- Exclude notes, stories, attachments, followers, likes, custom "
             "fields, time tracking, portfolios, goals, users, tags, and all "
             "mutation operations unless separately justified and approved.",
+            "",
+        )
+    )
+    return "\n".join(lines)
+
+
+def _private_project_selection_report_text(
+    *,
+    generated_at: datetime,
+    discovery: AsanaDiscovery,
+) -> str:
+    if len(discovery.workspaces) != 1 or not discovery.project_discovery_performed:
+        raise ValueError("project-selection report requires one approved workspace")
+    workspace = discovery.workspaces[0]
+    lines = [
+        "# Private Asana Project Selection",
+        "",
+        f"- Generated: {generated_at.isoformat()}",
+        f"- Approved workspace: {workspace.name} (`{workspace.gid}`)",
+        f"- Organization: {str(workspace.is_organization).lower()}",
+        f"- Project pages: {discovery.project_page_count}",
+        f"- Active projects: {len(discovery.projects)}",
+        f"- Duplicate project GIDs: {discovery.duplicate_project_count}",
+        "- Project discovery complete: true",
+        (
+            "- Completeness caveat: provider-offset pagination completed, but "
+            "concurrent project changes may have affected the catalog."
+        ),
+        "- Workspace-list endpoint called: false",
+        "- Task endpoint called: false",
+        "",
+        "## Active projects",
+        "",
+    ]
+    lines.extend(
+        f"- {project.name} (`{project.gid}`); "
+        f"archived={str(project.archived).lower()}; "
+        f"public={str(project.public).lower()}; "
+        f"[open]({project.permalink_url})"
+        for project in discovery.projects
+    )
+    if not discovery.projects:
+        lines.append("- None returned.")
+    lines.extend(
+        (
+            "",
+            "## Explicit approval choices for the later task gate",
+            "",
+            "- [ ] Approve one or more projects.",
+            (
+                "- [ ] Allow all assigned incomplete tasks in the approved "
+                "workspace regardless of project membership."
+            ),
+            "- [ ] Include tasks with no project.",
+            "- [ ] Include My Tasks.",
+            (
+                "- [ ] Include explicit task GIDs linked from another "
+                "separately approved source."
+            ),
+            ("- [ ] Require approved project membership in briefing context."),
+            (
+                "- [ ] Require section membership in briefing context; this "
+                "requires a separate scope decision."
+            ),
+            (
+                "- [ ] Mark any selected project as more important than "
+                "another, with an explicit reason."
+            ),
+            "",
+            (
+                "Project names, visibility, and discovery order do not imply "
+                "approval or priority."
+            ),
+            "",
+            "## Later task-retrieval options — not executed",
+            "",
+            ("### Option A — Assigned tasks across the approved workspace"),
+            "",
+            (
+                "Use `GET /api/1.0/tasks` with `assignee=me`, the approved "
+                "workspace, provider-supported incomplete-task semantics, and "
+                "stable offset pagination. This can include tasks outside "
+                "selected projects and tasks with no project."
+            ),
+            "",
+            "### Option B — Tasks from explicitly approved projects",
+            "",
+            (
+                "Call the project-task endpoint separately for each approved "
+                "project. Deduplicate by stable task GID while preserving every "
+                "approved project membership because one task may belong to "
+                "multiple projects."
+            ),
+            "",
+            "### Option C — Hybrid boundary",
+            "",
+            (
+                "Retrieve assigned incomplete tasks across the approved "
+                "workspace plus unassigned-to-Brad tasks from explicitly "
+                "approved projects only when both categories are separately "
+                "approved."
+            ),
+            "",
+            (
+                "Do not use workspace task search as the normal proposal "
+                "unless standard endpoints cannot satisfy the approved "
+                "boundary."
+            ),
+            "",
+            "## Proposed later scopes — not requested",
+            "",
+            "- `tasks:read`",
+            "- retain `workspaces:read`",
+            "- retain `projects:read`",
+            (
+                "- add `project_sections:read` only if section context is "
+                "approved and required"
+            ),
+            "",
+            (
+                "Do not add user, tag, story, attachment, OpenID Connect, "
+                "write, delete, full-permission, or administrative scopes "
+                "without a separate demonstrated requirement."
+            ),
+            "",
+            "## Proposed later task fields — not retrieved",
+            "",
+            "- `gid`",
+            "- `name`",
+            "- `completed`",
+            "- `assignee.gid`",
+            "- `due_on`",
+            "- `due_at`",
+            "- `start_on`",
+            "- `start_at`",
+            "- `created_at`",
+            "- `modified_at`",
+            "- `resource_subtype`",
+            "- `parent.gid`",
+            "- approved project memberships",
+            "- approved section memberships only if later authorized",
+            "- dependency and dependent references",
+            "- `permalink_url`",
+            "",
+            "Task notes and descriptions remain excluded by default.",
             "",
         )
     )

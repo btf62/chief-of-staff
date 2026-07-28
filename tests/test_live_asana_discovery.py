@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import urllib.parse
+import urllib.request
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -22,7 +24,9 @@ from chief_of_staff.auth.asana_oauth import (
     AsanaAuthorizationResult,
     AsanaInstalledAppOAuth,
     AsanaOAuthClientRegistrar,
+    AsanaOAuthRefreshResponse,
     AsanaOAuthStateMismatch,
+    AsanaOAuthTokenClient,
     AsanaOAuthTokenResponse,
     AsanaTokenInspection,
     _pkce_challenge,
@@ -32,13 +36,19 @@ from chief_of_staff.auth.keychain import (
     SecurityCommandResult,
 )
 from chief_of_staff.connectors import (
+    ASANA_APPROVED_WORKSPACE_ALIAS,
     ASANA_PROJECT_FIELDS,
     ASANA_WORKSPACE_FIELDS,
+    AsanaApprovedWorkspaceProjectDiscoveryService,
+    AsanaApprovedWorkspaceProjectTrialRunner,
     AsanaDiscovery,
     AsanaDiscoveryAuthorization,
     AsanaDiscoveryAuthorizationUnavailable,
+    AsanaDiscoveryHttpTransport,
     AsanaDiscoveryPaginationError,
+    AsanaDiscoveryPermissionError,
     AsanaDiscoveryService,
+    AsanaDiscoveryTimeoutError,
     AsanaDiscoveryTrialRunner,
     AsanaProject,
     AsanaProjectPage,
@@ -46,6 +56,7 @@ from chief_of_staff.connectors import (
     AsanaWorkspace,
     AsanaWorkspacePage,
     AsanaWorkspaceRequest,
+    approved_workspace_from_private_report,
 )
 from chief_of_staff.connectors.instances import ASANA_PRIMARY_INSTANCE
 from chief_of_staff.domain import AuthorizationStatus, CredentialHealth
@@ -239,6 +250,34 @@ class _DiscoveryTransport:
         assert authorization.access_token == ACCESS_TOKEN
         self.project_calls.append(request)
         return self.project_pages[len(self.project_calls) - 1]
+
+
+@dataclass(slots=True)
+class _TimeoutProjectTransport:
+    calls: list[AsanaProjectRequest] = field(default_factory=list)
+
+    def list_projects(
+        self,
+        authorization: AsanaDiscoveryAuthorization,
+        request: AsanaProjectRequest,
+    ) -> AsanaProjectPage:
+        assert authorization.access_token == ACCESS_TOKEN
+        self.calls.append(request)
+        raise AsanaDiscoveryTimeoutError("synthetic timeout")
+
+
+@dataclass(frozen=True, slots=True)
+class _HttpResponse:
+    payload: bytes
+
+    def __enter__(self) -> _HttpResponse:
+        return self
+
+    def __exit__(self, *_arguments: object) -> None:
+        return None
+
+    def read(self, _limit: int) -> bytes:
+        return self.payload
 
 
 def _workspace(
@@ -458,6 +497,37 @@ def test_refresh_disconnect_and_reauthorization_are_instance_scoped(
         )
 
 
+def test_refresh_accepts_provider_response_without_rotated_refresh_or_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def post_form(
+        url: str,
+        form: dict[str, str],
+        *,
+        allow_empty: bool = False,
+    ) -> dict[str, object]:
+        assert not allow_empty
+        assert url.endswith("/-/oauth_token")
+        assert form["grant_type"] == "refresh_token"
+        return {
+            "access_token": ACCESS_TOKEN,
+            "expires_in": 3600,
+            "token_type": "bearer",
+        }
+
+    monkeypatch.setattr("chief_of_staff.auth.asana_oauth._post_form", post_form)
+    refreshed = AsanaOAuthTokenClient().refresh(
+        client_id="synthetic-client-id",
+        client_secret=CLIENT_SECRET,
+        refresh_token=REFRESH_TOKEN,
+    )
+
+    assert isinstance(refreshed, AsanaOAuthRefreshResponse)
+    assert refreshed.access_token == ACCESS_TOKEN
+    assert refreshed.refresh_token == REFRESH_TOKEN
+    assert refreshed.expires_in_seconds == 3600
+
+
 def test_workspace_pagination_and_multiple_workspace_stop_before_projects() -> None:
     transport = _DiscoveryTransport(
         workspace_pages=(
@@ -529,6 +599,163 @@ def test_single_workspace_permits_minimal_paginated_project_discovery() -> None:
     assert all(call.fields == ASANA_PROJECT_FIELDS for call in transport.project_calls)
 
 
+def test_approved_workspace_project_discovery_uses_only_exact_bound_project() -> None:
+    approved = _workspace(name=ASANA_APPROVED_WORKSPACE_ALIAS)
+    transport = _DiscoveryTransport(
+        workspace_pages=(
+            AsanaWorkspacePage(
+                workspaces=(
+                    _workspace(
+                        gid="9000000000000999",
+                        name="Excluded Synthetic Workspace",
+                    ),
+                )
+            ),
+        ),
+        project_pages=(
+            AsanaProjectPage(
+                projects=(_project(),),
+                next_offset="provider-project-offset",
+            ),
+            AsanaProjectPage(
+                projects=(
+                    _project(
+                        gid="8000000000000002",
+                        name="Second Synthetic Project",
+                    ),
+                )
+            ),
+        ),
+    )
+
+    _authorization, discovery = AsanaApprovedWorkspaceProjectDiscoveryService(
+        authorization_provider=_AuthorizationProvider(),
+        transport=transport,
+        approved_workspace=approved,
+    ).discover()
+
+    assert transport.workspace_calls == []
+    assert discovery.workspace_page_count == 0
+    assert discovery.project_page_count == 2
+    assert [call.workspace_gid for call in transport.project_calls] == [
+        approved.gid,
+        approved.gid,
+    ]
+    assert [call.offset for call in transport.project_calls] == [
+        None,
+        "provider-project-offset",
+    ]
+    assert all(not call.archived for call in transport.project_calls)
+    assert all(call.fields == ASANA_PROJECT_FIELDS for call in transport.project_calls)
+
+
+def test_http_project_request_is_minimal_read_only_and_workspace_bound(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[urllib.request.Request] = []
+
+    def open_request(
+        request: urllib.request.Request,
+        *,
+        timeout: int,
+    ) -> _HttpResponse:
+        assert timeout == 30
+        captured.append(request)
+        return _HttpResponse(
+            json.dumps(
+                {
+                    "data": [
+                        {
+                            "gid": PROJECT_GID,
+                            "name": PROJECT_NAME,
+                            "archived": False,
+                            "public": False,
+                            "permalink_url": (
+                                f"https://app.asana.com/0/{PROJECT_GID}/list"
+                            ),
+                        }
+                    ],
+                    "next_page": None,
+                }
+            ).encode()
+        )
+
+    monkeypatch.setattr(urllib.request, "urlopen", open_request)
+    page = AsanaDiscoveryHttpTransport().list_projects(
+        _AuthorizationProvider().get_authorization(),
+        AsanaProjectRequest(
+            workspace_gid=WORKSPACE_GID,
+            archived=False,
+            limit=100,
+            fields=ASANA_PROJECT_FIELDS,
+        ),
+    )
+
+    assert len(page.projects) == 1
+    assert len(captured) == 1
+    request = captured[0]
+    parsed = urllib.parse.urlparse(request.full_url)
+    query = urllib.parse.parse_qs(parsed.query)
+    assert request.get_method() == "GET"
+    assert parsed.path == f"/api/1.0/workspaces/{WORKSPACE_GID}/projects"
+    assert query == {
+        "archived": ["false"],
+        "limit": ["100"],
+        "opt_fields": [",".join(ASANA_PROJECT_FIELDS)],
+    }
+    assert request.headers["Authorization"].startswith("Bearer ")
+
+
+def test_unapproved_workspace_is_rejected_before_any_provider_call() -> None:
+    transport = _DiscoveryTransport(
+        workspace_pages=(),
+        project_pages=(AsanaProjectPage(projects=()),),
+    )
+
+    with pytest.raises(AsanaDiscoveryPermissionError):
+        AsanaApprovedWorkspaceProjectDiscoveryService(
+            authorization_provider=_AuthorizationProvider(),
+            transport=transport,
+            approved_workspace=_workspace(name="Excluded Synthetic Workspace"),
+        ).discover()
+
+    assert transport.workspace_calls == []
+    assert transport.project_calls == []
+
+
+def test_private_report_resolves_only_the_explicit_organization_selection(
+    tmp_path: Path,
+) -> None:
+    report_path = tmp_path / "workspace-selection.md"
+    report_path.write_text(
+        "\n".join(
+            (
+                "# Private synthetic report",
+                "",
+                "- Excluded Synthetic Workspace (`9000000000000999`); "
+                "organization=true",
+                f"- {ASANA_APPROVED_WORKSPACE_ALIAS} (`{WORKSPACE_GID}`); "
+                "organization=true",
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    approved = approved_workspace_from_private_report(
+        report_path=report_path,
+        approved_alias=ASANA_APPROVED_WORKSPACE_ALIAS,
+    )
+
+    assert approved.gid == WORKSPACE_GID
+    assert approved.name == ASANA_APPROVED_WORKSPACE_ALIAS
+    assert approved.is_organization
+    with pytest.raises(AsanaDiscoveryPermissionError):
+        approved_workspace_from_private_report(
+            report_path=report_path,
+            approved_alias="Missing Synthetic Workspace",
+        )
+
+
 def test_duplicate_gids_are_deduplicated_only_when_identical() -> None:
     duplicate = _workspace()
     service = AsanaDiscoveryService(
@@ -566,6 +793,77 @@ def test_duplicate_gids_are_deduplicated_only_when_identical() -> None:
     )
     with pytest.raises(AsanaDiscoveryPaginationError):
         conflicting.discover()
+
+
+def test_approved_project_duplicates_are_conservative() -> None:
+    duplicate = _project()
+    transport = _DiscoveryTransport(
+        workspace_pages=(),
+        project_pages=(
+            AsanaProjectPage(
+                projects=(duplicate,),
+                next_offset="next",
+            ),
+            AsanaProjectPage(projects=(duplicate,)),
+        ),
+    )
+    _authorization, discovery = AsanaApprovedWorkspaceProjectDiscoveryService(
+        authorization_provider=_AuthorizationProvider(),
+        transport=transport,
+        approved_workspace=_workspace(name=ASANA_APPROVED_WORKSPACE_ALIAS),
+    ).discover()
+    assert len(discovery.projects) == 1
+    assert discovery.duplicate_project_count == 1
+
+    conflicting_transport = _DiscoveryTransport(
+        workspace_pages=(),
+        project_pages=(
+            AsanaProjectPage(
+                projects=(duplicate,),
+                next_offset="next",
+            ),
+            AsanaProjectPage(
+                projects=(_project(name="Conflicting Synthetic Project"),)
+            ),
+        ),
+    )
+    with pytest.raises(AsanaDiscoveryPaginationError):
+        AsanaApprovedWorkspaceProjectDiscoveryService(
+            authorization_provider=_AuthorizationProvider(),
+            transport=conflicting_transport,
+            approved_workspace=_workspace(name=ASANA_APPROVED_WORKSPACE_ALIAS),
+        ).discover()
+
+
+def test_timeout_and_page_limit_stop_without_endpoint_substitution() -> None:
+    timeout_transport = _TimeoutProjectTransport()
+    with pytest.raises(AsanaDiscoveryTimeoutError):
+        AsanaApprovedWorkspaceProjectDiscoveryService(
+            authorization_provider=_AuthorizationProvider(),
+            transport=timeout_transport,
+            approved_workspace=_workspace(name=ASANA_APPROVED_WORKSPACE_ALIAS),
+        ).discover()
+    assert len(timeout_transport.calls) == 1
+
+    oversized_transport = _DiscoveryTransport(
+        workspace_pages=(),
+        project_pages=tuple(
+            AsanaProjectPage(
+                projects=(),
+                next_offset=f"provider-offset-{index}",
+            )
+            for index in range(20)
+        ),
+    )
+    with pytest.raises(AsanaDiscoveryPaginationError):
+        AsanaApprovedWorkspaceProjectDiscoveryService(
+            authorization_provider=_AuthorizationProvider(),
+            transport=oversized_transport,
+            approved_workspace=_workspace(name=ASANA_APPROVED_WORKSPACE_ALIAS),
+        ).discover()
+    assert len(oversized_transport.project_calls) == 20
+    assert not hasattr(timeout_transport, "list_workspaces")
+    assert not hasattr(timeout_transport, "list_tasks")
 
 
 def test_authorization_failure_is_distinct_from_empty_workspace_discovery() -> None:
@@ -661,6 +959,85 @@ def test_trial_persists_only_allowed_metadata_and_private_report(
                 "SELECT count(*) FROM connector_resources WHERE provider = 'asana'"
             ).fetchone()[0]
             == 1
+        )
+
+
+def test_approved_workspace_trial_persists_boundary_not_project_catalog(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "state.sqlite3"
+    keychain, _keychain_runner = _keychain()
+    callback = _CallbackRunner()
+    transport = _DiscoveryTransport(
+        workspace_pages=(),
+        project_pages=(
+            AsanaProjectPage(
+                projects=(_project(),),
+                next_offset="transient-project-offset",
+            ),
+            AsanaProjectPage(
+                projects=(
+                    _project(
+                        gid="8000000000000002",
+                        name="Second Synthetic Project",
+                    ),
+                )
+            ),
+        ),
+    )
+    with Database.open(database_path) as database:
+        store = StateStore(database)
+        authorization, _token_client = _register_and_authorize(
+            store,
+            keychain,
+            callback,
+        )
+        report = AsanaApprovedWorkspaceProjectTrialRunner(
+            state_store=store,
+            discovery_service=AsanaApprovedWorkspaceProjectDiscoveryService(
+                authorization_provider=_AuthorizationProvider(),
+                transport=transport,
+                approved_workspace=_workspace(name=ASANA_APPROVED_WORKSPACE_ALIAS),
+            ),
+            output_directory=tmp_path / ".local/asana",
+            application_name=ASANA_APPLICATION_NAME,
+            application_owner="Northridge-approved synthetic owner",
+            account_identity_source=authorization.account_identity_source,
+            clock=lambda: NOW,
+        ).run()
+
+        private_report = report.private_report_path.read_text(encoding="utf-8")
+        assert PROJECT_NAME in private_report
+        assert PROJECT_GID in private_report
+        assert "Option A" in private_report
+        assert "Option B" in private_report
+        assert "Option C" in private_report
+        assert "Workspace-list endpoint called: false" in private_report
+        assert "Task endpoint called: false" in private_report
+        assert report.private_report_path.stat().st_mode & 0o777 == 0o600
+        assert report.duplicate_project_count == 0
+        assert not report.task_endpoint_called
+        assert report.discovery_complete
+        assert transport.workspace_calls == []
+
+        database_bytes = database_path.read_bytes()
+        assert WORKSPACE_GID.encode() in database_bytes
+        assert PROJECT_NAME.encode() not in database_bytes
+        assert PROJECT_GID.encode() not in database_bytes
+        assert b"transient-project-offset" not in database_bytes
+        assert ACCESS_TOKEN.encode() not in database_bytes
+        assert REFRESH_TOKEN.encode() not in database_bytes
+        resource = store.get_connector_resource(ASANA_PRIMARY_INSTANCE)
+        assert resource is not None
+        assert resource.resource_id == WORKSPACE_GID
+        assert resource.grant_type == "explicit-user-approval"
+        instance = store.get_connector_instance(ASANA_PRIMARY_INSTANCE)
+        assert instance is not None
+        assert instance.enabled
+        assert instance.approved_scopes == ASANA_DISCOVERY_SCOPE_STRING
+        assert (
+            instance.retrieval_configuration
+            == "approved-workspace-active-project-discovery"
         )
 
 

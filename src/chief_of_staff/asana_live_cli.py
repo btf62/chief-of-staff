@@ -16,10 +16,14 @@ from chief_of_staff.auth.asana_oauth import (
 )
 from chief_of_staff.auth.keychain import KeychainSecretReference, MacOSKeychain
 from chief_of_staff.connectors.asana_discovery import (
+    ASANA_APPROVED_WORKSPACE_ALIAS,
+    AsanaApprovedWorkspaceProjectDiscoveryService,
+    AsanaApprovedWorkspaceProjectTrialRunner,
     AsanaDiscoveryHttpTransport,
     AsanaDiscoveryService,
     AsanaDiscoveryTrialRunner,
     StoredAsanaDiscoveryAuthorizationProvider,
+    approved_workspace_from_private_report,
 )
 from chief_of_staff.connectors.instances import ASANA_PRIMARY_INSTANCE
 from chief_of_staff.persistence import Database, StateStore
@@ -31,7 +35,7 @@ DISCOVERY_DIRECTORY = LOCAL_ROOT / "asana"
 
 
 def main(arguments: list[str] | None = None) -> int:
-    """Register, inspect, or run the sole approved Asana discovery command."""
+    """Register, inspect, or run one explicitly approved Asana gate."""
 
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -53,6 +57,9 @@ def main(arguments: list[str] | None = None) -> int:
     authorize_parser = subparsers.add_parser("authorize-and-discover")
     authorize_parser.add_argument("--account-reference", default="primary-user")
     authorize_parser.add_argument("--timeout-seconds", type=int, default=300)
+
+    project_parser = subparsers.add_parser("approve-workspace-and-discover-projects")
+    project_parser.add_argument("--workspace-report", type=Path, required=True)
 
     subparsers.add_parser("status")
 
@@ -159,6 +166,71 @@ def main(arguments: list[str] | None = None) -> int:
                     "workspace_pagination_occurred": (
                         report.workspace_pagination_occurred
                     ),
+                }
+            )
+            return 0
+
+        if parsed.command == "approve-workspace-and-discover-projects":
+            workspace = approved_workspace_from_private_report(
+                report_path=parsed.workspace_report,
+                approved_alias=ASANA_APPROVED_WORKSPACE_ALIAS,
+            )
+            stored_authorization = state_store.get_connector_authorization(
+                ASANA_PRIMARY_INSTANCE
+            )
+            if stored_authorization is None:
+                raise RuntimeError("Asana authorization metadata is unavailable")
+            if stored_authorization.token_expires_at <= datetime.now(UTC):
+                stored_authorization = AsanaInstalledAppOAuth(
+                    keychain=keychain,
+                    state_store=state_store,
+                ).refresh_authorization(
+                    account_reference=stored_authorization.account_reference,
+                )
+            client = state_store.get_oauth_client(ASANA_PRIMARY_INSTANCE)
+            if client is None:
+                raise RuntimeError("Asana OAuth client metadata is unavailable")
+            if client.application_owner is None:
+                raise RuntimeError("Asana OAuth application owner is missing")
+            report = AsanaApprovedWorkspaceProjectTrialRunner(
+                state_store=state_store,
+                discovery_service=AsanaApprovedWorkspaceProjectDiscoveryService(
+                    authorization_provider=StoredAsanaDiscoveryAuthorizationProvider(
+                        state_store=state_store,
+                        keychain=keychain,
+                    ),
+                    transport=AsanaDiscoveryHttpTransport(),
+                    approved_workspace=workspace,
+                ),
+                output_directory=DISCOVERY_DIRECTORY,
+                application_name=client.oauth_project_id,
+                application_owner=client.application_owner,
+                account_identity_source="existing-confirmed-grant",
+            ).run()
+            _print_json(
+                {
+                    "account_alias": "Asana",
+                    "approved_workspace_alias": ASANA_APPROVED_WORKSPACE_ALIAS,
+                    "complete_project_catalog_persisted": (
+                        report.complete_project_catalog_persisted
+                    ),
+                    "concurrent_change_could_affect_completeness": (
+                        report.concurrent_change_could_affect_completeness
+                    ),
+                    "credential_health": report.credential_health,
+                    "discovery_complete": report.discovery_complete,
+                    "duplicate_project_count": report.duplicate_project_count,
+                    "granted_scope": report.granted_scope,
+                    "offset_persisted": report.offset_persisted,
+                    "private_report_path": report.private_report_path,
+                    "project_count": report.project_count,
+                    "project_page_count": report.project_page_count,
+                    "project_pagination_occurred": (report.project_pagination_occurred),
+                    "raw_payload_persisted": report.raw_payload_persisted,
+                    "refresh_health": report.refresh_health,
+                    "task_endpoint_called": report.task_endpoint_called,
+                    "timeout_or_permission_issue": (report.timeout_or_permission_issue),
+                    "workspace_list_endpoint_called": False,
                 }
             )
             return 0

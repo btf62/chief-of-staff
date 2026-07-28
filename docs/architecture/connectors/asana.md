@@ -1,15 +1,16 @@
 # Asana Connector
 
 - **Status:** Accepted
-- **Version:** 2
+- **Version:** 3
 - **Owner:** Brad
 - **Last updated:** 2026-07-28
 
-This specification defines the read-only Asana connector through one bounded
-workspace-and-project discovery gate. It prepares a synthetic task contract
-for later review, but it does not authorize or implement live task retrieval.
-It does not authorize another discovery, a different account, broader scopes,
-hosted inference, or an external mutation.
+This specification defines the read-only Asana connector through bounded
+workspace discovery and one explicitly approved organization-workspace
+project discovery. It prepares a synthetic task contract for later review, but
+it does not authorize or implement live task retrieval. It does not authorize
+another discovery, a different account, broader scopes, hosted inference, or
+an external mutation.
 
 ## Source authority
 
@@ -54,7 +55,8 @@ The implemented boundary contains:
 - Mocked authorization, workspace, project, task, pagination, failure, and
   partial-coverage behavior.
 - Provider-neutral task normalization for the approved future field model.
-- A live transport exposing only workspace and active-project discovery.
+- A live transport exposing only workspace and active-project discovery, with
+  a project-only service that cannot list workspaces.
 - Exact-scope OAuth authorization code handling with random `state`, PKCE
   `S256`, token introspection, refresh support, revocation, and reauthorization.
 - Keychain-only client-secret, access-token, and refresh-token storage.
@@ -62,9 +64,11 @@ The implemented boundary contains:
   reference, discovered-workspace, freshness, and coverage metadata.
 - A private ignored selection report containing the discovery catalog.
 
-The explicitly authorized live trial completed with three accessible
-workspaces. The multiple-workspace rule stopped execution before project
-discovery. No task operation was called.
+The first explicitly authorized live trial completed with three accessible
+workspaces and stopped. Brad then approved the organization workspace using
+the GID already recorded in the private discovery report. The bounded
+project-only gate is restricted to that local resource binding and cannot
+repeat workspace discovery. No task operation is authorized.
 
 ## OAuth application and authorization
 
@@ -140,8 +144,9 @@ and [pagination guide](https://developers.asana.com/docs/pagination).
 
 ## Bounded active-project discovery
 
-Only when workspace discovery returns exactly one workspace, the connector
-calls:
+After Brad explicitly selects one organization workspace from the private
+workspace report, the connector binds the instance to that workspace GID and
+calls only:
 
 ```text
 GET /api/1.0/workspaces/{workspace_gid}/projects
@@ -153,28 +158,41 @@ Every page sets `archived=false`, uses a limit of 100, and requests only:
 gid,name,archived,public,permalink_url
 ```
 
+The selected-workspace gate does not call the workspace-list endpoint and
+rejects any workspace other than the explicitly approved organization alias.
+The actual workspace GID remains private local metadata rather than committed
+configuration.
+
 The same offset safeguards and 20-page ceiling apply. An archived project,
 conflicting duplicate GID, ambiguous permission, timeout, invalid response,
 rate limit, or excessive pagination stops the trial rather than changing
 endpoints or broadening retrieval. Descriptions, members, owners, teams,
 counts, tasks, sections, custom fields, portfolios, goals, templates, status
-updates, and other project configuration are not retrieved.
+updates, and other project configuration are not retrieved. Provider-offset
+pagination is complete when no next offset remains, but concurrent project
+changes may still affect catalog completeness.
 
 See the official
-[project-list endpoint](https://developers.asana.com/reference/getprojects).
+[workspace-project endpoint](https://developers.asana.com/reference/getprojectsforworkspace).
 
 ## Private selection report
 
-The trial writes one ignored mode-`0600` Markdown report under `.local/asana/`.
-Workspace and project names, GIDs, visibility, and authoritative project links
-exist only in that private report and transient memory, never in chat or Git.
-The report asks Brad to approve:
+Each discovery gate writes one ignored mode-`0600` Markdown report under
+`.local/asana/`. Workspace and project names, GIDs, visibility, archived state,
+and authoritative project links exist only in private reports and transient
+memory, never in chat or Git. The project-selection report asks Brad to
+approve:
 
-- Exactly one workspace
-- Optional project restrictions
-- Whether assigned tasks outside approved projects are allowed
+- One or more projects
+- Whether all assigned incomplete tasks in the approved workspace are allowed
+- Whether tasks with no project are allowed
 - Whether My Tasks is included
 - Whether another approved source may nominate explicit task GIDs
+- Whether project or section membership is needed for briefing context
+- Whether any selected project has explicit priority over another
+
+It also presents assigned-workspace, approved-project, and hybrid
+task-retrieval options without choosing among them.
 
 Discovery does not imply approval. The complete project catalog, raw provider
 responses, and pagination offsets are not persisted. Transient response data,
@@ -264,8 +282,8 @@ Permitted durable data is limited to:
 - Exact scope, expiry, authorization status, credential and refresh health
 - Keychain lookup references
 - One connector run and minimized source-evidence reference
-- Discovered-workspace reference marked `discovered-not-approved` when exactly
-  one workspace is visible
+- One explicitly approved organization-workspace GID and safe resource
+  reference
 - Coverage and freshness metadata
 - The ignored private selection report
 
@@ -274,7 +292,7 @@ client secret, authorization code, PKCE verifier, and temporary certificate
 material are excluded from SQLite and Git. The private report is deleted
 through the local-state lifecycle when it is no longer required.
 
-## Completed discovery checkpoint
+## Completed workspace-discovery checkpoint
 
 The one approved live trial:
 
@@ -296,9 +314,30 @@ The one approved live trial:
 - Called no project, task, user, hosted-inference, other-connector, or mutation
   operation.
 
-Brad must review the private report and select one workspace before any
-project discovery. This checkpoint does not authorize another OAuth flow,
-workspace retrieval, project retrieval, or task retrieval.
+Brad selected one organization workspace from this private report. That
+selection authorizes one bounded project-only discovery but does not authorize
+another OAuth flow, workspace retrieval, task retrieval, or a different
+workspace.
+
+## Approved project-discovery checkpoint
+
+The approved project-only gate:
+
+- Uses the existing work-account connector instance and exact
+  `workspaces:read projects:read` grant.
+- Resolves the approved workspace GID from the prior private report and stores
+  it as the instance's explicit local resource boundary.
+- Calls only the active-project endpoint for that GID with `archived=false`
+  and the five approved project fields.
+- Follows only provider-returned offsets and stops on timeout, permission
+  ambiguity, conflicting duplicates, invalid pagination, or the page ceiling.
+- Writes the complete catalog only to a new private mode-`0600` report.
+- Persists only the approved workspace boundary, connector-run, source
+  reference, coverage, freshness, and credential-use metadata.
+- Calls no workspace-list, task, user, section, search, hosted-inference,
+  other-connector, or mutation operation.
+
+This checkpoint must stop for Brad to select a later task-retrieval boundary.
 
 ## Acceptance
 
@@ -306,19 +345,21 @@ The mocked contract is accepted when formatting, linting, strict type checks,
 unit and integration tests, Markdown validation, credential and private-data
 checks, lifecycle audit, and wheel packaging pass.
 
-The bounded live gate is complete only after:
+The bounded project live gate is complete only after:
 
 1. The private app ownership and exact registered scopes are confirmed.
 2. The browser account is explicitly confirmed and API-verified.
 3. Token introspection reports exactly the approved discovery scopes.
-4. Workspace pagination completes.
-5. Project discovery runs only when exactly one workspace is returned.
-6. The private report is mode `0600`.
-7. No task, user, hosted-inference, other-connector, or mutation operation is
+4. The instance is bound to the previously discovered, explicitly approved
+   organization workspace GID.
+5. No workspace-list endpoint is called.
+6. Active-project pagination completes without endpoint substitution.
+7. The private report is mode `0600`.
+8. No task, user, hosted-inference, other-connector, or mutation operation is
    called.
-8. Persisted and transient data satisfy the lifecycle boundary.
-9. The complete repository validation passes.
-10. Execution stops for Brad's explicit task-boundary selection.
+9. Persisted and transient data satisfy the lifecycle boundary.
+10. The complete repository validation passes.
+11. Execution stops for Brad's explicit task-boundary selection.
 
 ## Related documents
 

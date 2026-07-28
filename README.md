@@ -17,11 +17,12 @@ Todoist connector, its combined Calendar trial, and one explicitly approved
 complete-retrieval and normal-workday quality validation now satisfy the
 Todoist portion of Milestone 5. Jira has completed its resource-restricted
 authorization, project discovery, and one explicitly approved, exact-project
-issue-retrieval trial integrated with the deterministic briefing. Work is
-stopped after one bounded Asana authorization and workspace-discovery trial.
-The trial returned multiple workspaces and therefore stopped before projects.
-No repeat Asana or Jira query, discovery, authorization refresh, repeat
-Calendar or Todoist retrieval, task access, or broader access is authorized.
+issue-retrieval trial integrated with the deterministic briefing. Asana has
+completed bounded workspace discovery and one explicitly approved,
+organization-workspace active-project discovery. Work is stopped before Asana
+task retrieval. No repeat Asana or Jira query, discovery, authorization
+refresh, repeat Calendar or Todoist retrieval, task access, or broader access
+is authorized.
 
 ## Repository map
 

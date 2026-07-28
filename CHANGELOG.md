@@ -129,3 +129,5 @@ No strict versioning scheme is promised before a distributable product exists.
 - Completed one bounded Asana OAuth and workspace-discovery trial; multiple
   accessible workspaces caused the required stop before project or task
   retrieval.
+- Completed one explicitly approved Asana active-project discovery inside the
+  selected organization workspace and stopped before task retrieval.
