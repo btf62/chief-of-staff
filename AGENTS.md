@@ -10,14 +10,17 @@ Todoist connector, one combined Calendar-and-Todoist trial, and one explicitly
 approved complete-retrieval and workday-quality validation. Jira has completed
 its mocked phase, one resource-restricted project-discovery trial, and one
 exact-project live issue trial integrated with the deterministic briefing.
-Milestone 5 now covers only Todoist and Jira and is complete. No repeat JQL,
-Jira issue retrieval, Jira project discovery, authorization refresh, Todoist
-or Calendar retrieval, scope change, or broader live access is authorized
-except for the single combined MVP trial explicitly bounded by Milestone 6.
-Work Gmail is the final MVP input connector. Its synthetic implementation gate
-is complete, and one bounded live Work Gmail trial remains authorized.
-Personal Gmail and Google Drive are deferred until after MVP validation and
-are not authorized.
+Milestone 5 now covers only Todoist and Jira and is complete. Work Gmail is the
+final MVP input connector, and its synthetic implementation gate is complete.
+The one authorized combined Work Gmail trial was attempted and consumed. It
+stopped before Gmail metadata or body analysis and did not produce Gmail
+records, a briefing run, a review artifact, or a combined briefing, so
+Milestone 6 remains in progress and its acceptance gate is not satisfied. Live
+validation is paused pending offline diagnostic remediation. No repeat source
+retrieval, authorization refresh, scope change, or broader live access is
+authorized. Existing OAuth configuration and healthy credentials do not
+authorize another retrieval. Personal Gmail and Google Drive remain deferred
+and unauthorized.
 
 ## Working rules
 
@@ -80,13 +83,12 @@ The Version 1 design-readiness requirements have been met:
    acceptance gates, and exclusions.
 
 Implementation may proceed only when a task explicitly authorizes it. The
-Google Calendar, Todoist, Jira project-discovery, and Jira issue gates have
-been exercised; do not repeat live retrieval, broaden access, refresh
-authorization, repeat discovery, or begin another connector except for the
-single fresh Calendar, Todoist, Jira, and Work Gmail retrieval explicitly
-approved for the Milestone 6 input-complete trial. Satisfy a milestone's
-acceptance gate before beginning dependent work. Record material new product
-or architecture decisions before implementing them.
+Google Calendar, Todoist, Jira project-discovery, Jira issue, and Work Gmail
+trial gates have been exercised. Do not repeat live retrieval, broaden access,
+refresh authorization, repeat discovery, or begin another connector without
+new explicit approval from Brad. Satisfy a milestone's acceptance gate before
+beginning dependent work. Record material new product or architecture
+decisions before implementing them.
 
 ## Validation
 

@@ -18,11 +18,14 @@ complete-retrieval and normal-workday quality validation now satisfy the
 Todoist portion of Milestone 5. Jira has completed its resource-restricted
 authorization, project discovery, and one explicitly approved, exact-project
 issue-retrieval trial integrated with the deterministic briefing. Milestone 5
-now covers only Todoist and Jira. No repeat Jira query, discovery,
-authorization refresh, repeat Calendar or Todoist retrieval, task access, or
-broader access is authorized except for the one fresh combined retrieval
-explicitly bounded by Milestone 6. Work Gmail is the final MVP input connector;
-Personal Gmail and Google Drive are deferred until after MVP validation.
+now covers only Todoist and Jira. Work Gmail is the final MVP input connector.
+Its one authorized combined trial was attempted and consumed, stopped before
+Gmail metadata or body analysis, and produced no Gmail records, briefing run,
+review artifact, or combined briefing. Milestone 6 remains in progress, with
+live validation paused for offline diagnostic remediation. Existing OAuth
+configuration and healthy credentials do not authorize another retrieval; new
+explicit approval from Brad is required. Personal Gmail and Google Drive
+remain deferred and unauthorized.
 
 ## Repository map
 

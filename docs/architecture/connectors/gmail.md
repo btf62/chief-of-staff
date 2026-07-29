@@ -6,10 +6,12 @@
 - **Last updated:** 2026-07-28
 
 This specification defines Work Gmail as the final input connector for the
-Daily Briefing v1 MVP. It authorizes synthetic implementation and one bounded
-live trial within the exact account, scope, retrieval, privacy, and
-read-only boundaries below. It does not authorize Personal Gmail, Google
-Drive, hosted inference, scheduling, or external writes.
+Daily Briefing v1 MVP. The one authorized bounded trial was attempted and
+consumed without satisfying the acceptance gate. No additional live retrieval
+is authorized. The exact account, scope, retrieval, privacy, and read-only
+boundaries below remain accepted for a future trial only after new explicit
+approval from Brad. This specification does not authorize Personal Gmail,
+Google Drive, hosted inference, scheduling, or external writes.
 
 ## Source responsibility
 
@@ -348,7 +350,7 @@ enters Git, logs, or chat output.
 ## Live trial and acceptance gate
 
 Synthetic, contract, security, minimization, persistence, and end-to-end tests
-must pass before authorization. The one approved live trial then:
+must pass before authorization. A separately approved live trial must then:
 
 1. Confirms the exact Northridge-owned OAuth project and internal audience.
 2. Authorizes only `gmail:work` with the exact approved scope and account.
@@ -366,6 +368,19 @@ Brad must review every displayed People Waiting item, email commitment, and
 Commitment at Risk item plus the private review artifact and combined briefing.
 A false positive in a high-confidence relationship or commitment claim blocks
 MVP acceptance.
+
+### Consumed trial status
+
+The authorized combined trial was attempted and consumed on 2026-07-28. It
+stopped before Gmail metadata or body analysis and produced no Gmail records,
+briefing run, review artifact, or combined briefing. It therefore did not
+satisfy the Milestone 6 acceptance gate.
+
+Live validation is paused pending offline diagnostic remediation. Existing
+OAuth configuration and healthy Keychain credentials are configuration state,
+not authorization for another retrieval. A future live attempt requires new
+explicit approval from Brad. Personal Gmail and Google Drive remain deferred
+and unauthorized.
 
 ## Related documents
 

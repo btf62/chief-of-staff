@@ -8,8 +8,11 @@ This document describes the implemented repository, Calendar, Todoist, Jira,
 and Work Gmail boundaries. The synthetic demonstrations, bounded Calendar and
 Todoist trials, Todoist workday-quality validation, Jira project discovery,
 and one exact-project Jira issue trial are complete. The Work Gmail synthetic
-gate is complete; one exact-scope authorization and combined MVP trial is
-explicitly authorized but has not yet been performed.
+gate is complete. Its one authorized combined trial was attempted and consumed
+without satisfying the Milestone 6 acceptance gate. It stopped before Gmail
+metadata or body analysis and produced no Gmail records, briefing run, review
+artifact, or combined briefing. Live validation is paused for offline
+diagnostic remediation.
 
 ## Run the safe connector demonstration
 
@@ -370,8 +373,8 @@ briefing integration, and absence of attachment or mutation operations.
   and commitments are intentionally omitted.
 - Daily Briefing v1 has not been accepted for operational use.
 
-Only the one explicitly authorized Work Gmail and combined input-complete MVP
-trial may now proceed. Do not otherwise repeat live Calendar, Todoist, or Jira
-retrieval; refresh authorization outside the accepted connector behavior;
-broaden any boundary; or begin another connector without new explicit
-approval.
+No live connector retrieval may now proceed. Existing OAuth configuration and
+healthy credentials do not authorize retrieval. Do not repeat Work Gmail,
+Calendar, Todoist, or Jira access; refresh authorization; broaden any boundary;
+or begin another connector without new explicit approval from Brad. Personal
+Gmail and Google Drive remain deferred and unauthorized.

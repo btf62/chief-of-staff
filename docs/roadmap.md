@@ -235,8 +235,8 @@ approval.
 
 ## Milestone 6 — Work Gmail and the Input-Complete MVP Gate
 
-- **Status:** In progress — accepted specification; synthetic implementation
-  and one bounded live trial authorized
+- **Status:** In progress — live trial consumed without satisfying the
+  acceptance gate; offline diagnostic remediation in progress
 - **Intended user-visible outcome:** Brad can review one input-complete,
   on-demand MVP briefing that adds high-confidence work correspondence,
   explicit requests, and explicit sent commitments to the existing Calendar,
@@ -273,12 +273,17 @@ approval.
 The Work Gmail specification and synthetic implementation gate are complete.
 Exact-scope OAuth, metadata-first retrieval, MIME minimization, high-precision
 deterministic detection, minimized persistence, correction recurrence, private
-review artifacts, and briefing integration have passed the full synthetic
-quality gate. One bounded live Work Gmail trial and one fresh retrieval from
-the already accepted primary Calendar, Todoist, and exact-project Jira
-boundaries remain authorized solely for the combined input-complete briefing.
-Personal Gmail, Drive, hosted inference, another connector, and repeat live
-retrieval beyond that trial remain unauthorized.
+review artifacts, and briefing integration passed the synthetic quality gate.
+The authorized combined trial was attempted and consumed on 2026-07-28. It
+stopped before Gmail metadata or body analysis and produced no Gmail records,
+briefing run, review artifact, or combined briefing, so the acceptance gate
+was not satisfied.
+
+Live validation is paused pending offline diagnostic remediation. Existing
+OAuth configuration and healthy credentials do not authorize another
+retrieval. A future live attempt requires new explicit approval from Brad.
+Personal Gmail, Google Drive, hosted inference, another connector, and all
+repeat live retrieval remain unauthorized.
 
 ## Milestone 7 — Explicit Commitment and Preparation Detection
 
