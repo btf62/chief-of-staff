@@ -2,7 +2,7 @@
 
 - **Status:** Draft
 - **Owner:** Brad
-- **Last updated:** 2026-07-27
+- **Last updated:** 2026-07-28
 
 This document describes the implemented local-state foundation and minimized
 task-source extensions. It operates within
@@ -44,9 +44,13 @@ The implemented schema stores:
 - Selected normalized Todoist task facts and only their referenced project,
   section, and label context.
 - Selected normalized Jira issue facts, labels, and issue-link references.
+- Minimized normalized Work Gmail message and thread facts for explicit
+  detections, including direction, timestamp, classification, processing
+  version, and only necessary local evidence.
 
 It does not define tables for credentials, tokens, raw response pages,
-continuation cursors, full source payloads, attachments, or connector caches.
+continuation cursors, full source payloads, complete message bodies, raw HTML,
+attachments, or connector caches.
 
 ## Inspection and recurrence
 

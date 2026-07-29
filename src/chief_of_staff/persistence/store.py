@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -22,6 +23,7 @@ from chief_of_staff.domain.models import (
     CredentialHealth,
     DispositionEvent,
     DispositionKind,
+    NormalizedGmailMessage,
     NormalizedJiraIssue,
     NormalizedSourceTask,
     OAuthClientMetadata,
@@ -854,6 +856,24 @@ class StateStore:
                 ),
             )
 
+    def update_source_evidence_excerpt(
+        self,
+        evidence_id: str,
+        excerpt: str,
+    ) -> None:
+        """Attach one minimized local excerpt after transient source processing."""
+
+        minimized = excerpt.strip()
+        if not minimized or len(minimized) > 2000:
+            raise ValueError("source evidence excerpt is invalid")
+        with self.database.transaction() as connection:
+            cursor = connection.execute(
+                "UPDATE source_evidence SET excerpt = ? WHERE id = ?",
+                (minimized, evidence_id),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError("source evidence is missing")
+
     def add_normalized_source_task(self, task: NormalizedSourceTask) -> None:
         """Persist one selected task and only its minimal resolved context."""
 
@@ -976,6 +996,38 @@ class StateStore:
                         link.display_url,
                     )
                     for link in issue.links
+                ),
+            )
+
+    def add_normalized_gmail_message(self, message: NormalizedGmailMessage) -> None:
+        """Persist only minimized Work Gmail facts needed after retrieval."""
+
+        with self.database.transaction() as connection:
+            connection.execute(
+                """
+                INSERT INTO normalized_gmail_messages(
+                    evidence_id,
+                    thread_id,
+                    direction,
+                    occurred_at,
+                    participant_references,
+                    subject,
+                    label_classification,
+                    detection_type,
+                    processing_version
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    message.evidence_id,
+                    message.thread_id,
+                    message.direction,
+                    _serialize_datetime(message.occurred_at),
+                    json.dumps(message.participant_references),
+                    message.subject,
+                    message.label_classification,
+                    message.detection_type,
+                    message.processing_version,
                 ),
             )
 
@@ -1423,6 +1475,10 @@ class StateStore:
                 connection,
                 "normalized_jira_issue_links",
             ),
+            normalized_gmail_messages=_table_count(
+                connection,
+                "normalized_gmail_messages",
+            ),
             connector_instances=_table_count(connection, "connector_instances"),
         )
 
@@ -1652,6 +1708,9 @@ def _table_count(connection: sqlite3.Connection, table: str) -> int:
         ),
         "normalized_jira_issue_links": (
             "SELECT COUNT(*) AS count FROM normalized_jira_issue_links"
+        ),
+        "normalized_gmail_messages": (
+            "SELECT COUNT(*) AS count FROM normalized_gmail_messages"
         ),
     }
     query = queries.get(table)

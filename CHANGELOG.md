@@ -104,6 +104,15 @@ No strict versioning scheme is promised before a distributable product exists.
 - An accepted Work Gmail connector specification with exact scope, account,
   metadata-first retrieval, minimization, deterministic detection, persistence,
   review-artifact, and live-trial boundaries.
+- A read-only Work Gmail implementation with dedicated installed-app OAuth,
+  state and PKCE validation, exact-account enforcement, instance-specific
+  Keychain credentials, refresh, revocation, and fixed Gmail API endpoints.
+- Bounded metadata-first Gmail retrieval with stable pagination, message and
+  candidate caps, inert MIME minimization, no attachment or raw-message path,
+  high-precision request and promise rules, local correction recurrence, and
+  canonical briefing integration.
+- Minimized normalized Gmail persistence and private mode-`0600` review and
+  input-complete briefing trial artifacts under ignored local state.
 
 ### Changed
 

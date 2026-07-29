@@ -268,12 +268,15 @@ approval.
 
 ### Current checkpoint
 
-The Work Gmail specification is accepted and authorizes synthetic
-implementation followed by one bounded live Work Gmail trial. This milestone
-also authorizes one fresh retrieval from the already accepted primary Calendar,
-Todoist, and exact-project Jira boundaries solely for the combined
-input-complete briefing. It does not authorize Personal Gmail, Drive, hosted
-inference, another connector, or repeat live retrieval beyond that trial.
+The Work Gmail specification and synthetic implementation gate are complete.
+Exact-scope OAuth, metadata-first retrieval, MIME minimization, high-precision
+deterministic detection, minimized persistence, correction recurrence, private
+review artifacts, and briefing integration have passed the full synthetic
+quality gate. One bounded live Work Gmail trial and one fresh retrieval from
+the already accepted primary Calendar, Todoist, and exact-project Jira
+boundaries remain authorized solely for the combined input-complete briefing.
+Personal Gmail, Drive, hosted inference, another connector, and repeat live
+retrieval beyond that trial remain unauthorized.
 
 ## Milestone 7 — Explicit Commitment and Preparation Detection
 

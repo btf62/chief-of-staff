@@ -4,12 +4,12 @@
 - **Owner:** Brad
 - **Last updated:** 2026-07-28
 
-This document describes the implemented repository, Calendar, Todoist, and
-Jira boundaries. The synthetic demonstrations, bounded Calendar and Todoist
-trials, Todoist workday-quality validation, Jira project discovery, and one
-exact-project Jira issue trial are complete. Live access is now stopped. None
-of the credential or live-retrieval commands below may be repeated without new
-explicit approval.
+This document describes the implemented repository, Calendar, Todoist, Jira,
+and Work Gmail boundaries. The synthetic demonstrations, bounded Calendar and
+Todoist trials, Todoist workday-quality validation, Jira project discovery,
+and one exact-project Jira issue trial are complete. The Work Gmail synthetic
+gate is complete; one exact-scope authorization and combined MVP trial is
+explicitly authorized but has not yet been performed.
 
 ## Run the safe connector demonstration
 
@@ -203,6 +203,43 @@ Jira enhanced search is eventually consistent, so the report does not claim
 that concurrent provider changes were impossible during pagination. The
 private briefing remains under ignored mode-`0600` local state.
 
+## Work Gmail authorization and bounded trial
+
+The implemented Work Gmail connector uses a dedicated Desktop OAuth client in
+the Northridge-controlled `nrc-chief-of-staff` project and requests exactly:
+
+```text
+https://www.googleapis.com/auth/gmail.readonly
+```
+
+The private local setup and trial commands are:
+
+```text
+python -m chief_of_staff.gmail_live_cli import-client \
+  /path/to/dedicated-desktop-client.json \
+  --application-owner "Northridge Church"
+python -m chief_of_staff.gmail_live_cli authorize
+python -m chief_of_staff.gmail_live_cli status
+python -m chief_of_staff.gmail_live_cli trial
+```
+
+Client and token secrets remain in macOS Keychain. The imported client file is
+deleted after successful bounded import. SQLite receives only non-secret
+authorization metadata and minimized application facts.
+
+The trial lists the previous 14 calendar days through the briefing day,
+retrieves metadata before any content, and retrieves `format=full` only for
+bounded direct-human or outbound candidates. It never uses `format=raw`,
+retrieves attachments, renders active HTML, loads remote resources, or exposes
+a Gmail mutation method. Raw responses, MIME trees, and complete bodies remain
+transient.
+
+Every proposed deterministic email conclusion and a bounded rejected sample
+are written to a private mode-`0600` artifact under
+`.local/gmail/reviews/`. The combined briefing is written under
+`.local/briefings/`; both directories are ignored. Neither artifact may enter
+Git or a public report.
+
 ## Bounded live trial
 
 The completed trial was invoked on demand with:
@@ -304,6 +341,12 @@ cursor pagination, duplicate IDs, distinct authorization and retrieval
 failures, minimized issue persistence, transient raw pages and cursors,
 conservative cross-source association, daily relevance, and absence of
 mutation operations.
+Work Gmail tests additionally cover exact restricted scope, state and PKCE,
+account confirmation, Keychain isolation, refresh and revocation, bounded
+epoch queries, pagination, metadata-first filtering, candidate and content
+caps, MIME minimization, inert malicious content, reply state, explicit
+requests and promises, local correction recurrence, private review artifacts,
+briefing integration, and absence of attachment or mutation operations.
 ## Current limitations and stop condition
 
 - Google's approved scope can technically read events on other calendars the
@@ -314,11 +357,12 @@ mutation operations.
 - Todoist refresh credentials exist in Keychain, but their presence does not
   authorize scheduled, unattended, or repeated retrieval.
 - Jira uses a short-lived access token without refresh capability.
-- Calendar events remain evidence for deterministic output; inference-only
-  briefing sections are not implemented.
+- Work Gmail uses conservative deterministic rules only; uncertain requests
+  and commitments are intentionally omitted.
 - Daily Briefing v1 has not been accepted for operational use.
 
-The bounded trials and validation are complete. Do not repeat live Calendar,
-Todoist, Jira project retrieval, or Jira issue retrieval; refresh
-authorization; broaden any boundary; or begin another live connector without
-new explicit approval.
+Only the one explicitly authorized Work Gmail and combined input-complete MVP
+trial may now proceed. Do not otherwise repeat live Calendar, Todoist, or Jira
+retrieval; refresh authorization outside the accepted connector behavior;
+broaden any boundary; or begin another connector without new explicit
+approval.

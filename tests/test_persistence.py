@@ -19,6 +19,7 @@ from chief_of_staff.domain import (
     CoverageStatus,
     DispositionEvent,
     DispositionKind,
+    NormalizedGmailMessage,
     NormalizedJiraIssue,
     NormalizedJiraIssueLink,
     NormalizedSourceTask,
@@ -141,7 +142,7 @@ def test_fresh_database_applies_all_migrations_and_enforces_foreign_keys(
     with Database.open(tmp_path / "state.sqlite3") as database:
         inspection = StateStore(database).inspect_state()
 
-        assert inspection.schema_versions == (1, 2, 3, 4, 5, 6, 7)
+        assert inspection.schema_versions == (1, 2, 3, 4, 5, 6, 7, 8)
         assert database.connection.execute("PRAGMA foreign_keys").fetchone()[0] == 1
 
 
@@ -169,7 +170,7 @@ def test_database_upgrades_from_first_migration_and_is_idempotent(
             "SELECT version FROM schema_migrations ORDER BY version"
         )
     ]
-    assert upgraded_versions == [1, 2, 3, 4, 5, 6, 7]
+    assert upgraded_versions == [1, 2, 3, 4, 5, 6, 7, 8]
     connection.close()
 
 
@@ -264,6 +265,42 @@ def test_normalized_jira_issue_persists_only_approved_facts_and_cascades(
         assert store.inspect_state().normalized_jira_issues == 0
         assert store.inspect_state().normalized_jira_issue_labels == 0
         assert store.inspect_state().normalized_jira_issue_links == 0
+
+
+def test_normalized_gmail_message_persists_minimum_facts_and_cascades(
+    tmp_path: Path,
+) -> None:
+    with Database.open(tmp_path / "gmail-state.sqlite3") as database:
+        store = StateStore(database)
+        store.add_connector_run(_connector_run())
+        store.add_source_evidence(_evidence())
+        store.add_normalized_gmail_message(
+            NormalizedGmailMessage(
+                evidence_id="evidence-1",
+                thread_id="synthetic-thread",
+                direction="direct_inbound",
+                occurred_at=NOW,
+                participant_references=("participant-fingerprint",),
+                subject="Synthetic operational subject",
+                label_classification="direct_inbound",
+                detection_type="people_waiting",
+                processing_version="gmail-deterministic-v1",
+            )
+        )
+
+        inspection = store.inspect_state()
+        assert inspection.normalized_gmail_messages == 1
+        row = database.connection.execute(
+            "SELECT * FROM normalized_gmail_messages"
+        ).fetchone()
+        assert row is not None
+        assert row["thread_id"] == "synthetic-thread"
+        columns = set(row.keys())
+        assert "body" not in columns
+        assert "raw_html" not in columns
+        assert "headers" not in columns
+        assert store.delete_source_evidence("evidence-1")
+        assert store.inspect_state().normalized_gmail_messages == 0
 
 
 def test_task_cleanup_removes_stale_records_but_preserves_correction_evidence(
@@ -614,7 +651,7 @@ def test_reset_removes_product_state_but_preserves_migrations(tmp_path: Path) ->
 
         inspection = store.reset()
 
-        assert inspection.schema_versions == (1, 2, 3, 4, 5, 6, 7)
+        assert inspection.schema_versions == (1, 2, 3, 4, 5, 6, 7, 8)
         assert inspection.connector_runs == 0
         assert inspection.briefing_runs == 0
         assert inspection.source_evidence == 0

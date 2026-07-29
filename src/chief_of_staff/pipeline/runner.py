@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from chief_of_staff.connectors import (
     ConnectorInstance,
     ConnectorRequest,
+    GmailAuthenticationError,
     ReadOnlyConnector,
     SourceCoverage,
     connector_instance_key,
@@ -70,6 +71,25 @@ class DeterministicBriefingPipeline:
             )
             try:
                 result = connector.retrieve(request)
+            except GmailAuthenticationError as error:
+                coverage.append(
+                    SourceCoverage(
+                        source=connector.source_name,
+                        approved_scope=connector.approved_scope,
+                        status=CoverageStatus.UNAUTHORIZED,
+                        retrieved_at=datetime.now(UTC),
+                        record_count=0,
+                        error_category=type(error).__name__,
+                        connector_instance_id=(
+                            None if instance is None else instance.id
+                        ),
+                        account_alias=None if instance is None else instance.alias,
+                        domain_classification=(
+                            None if instance is None else instance.domain_classification
+                        ),
+                    )
+                )
+                continue
             except Exception as error:
                 coverage.append(
                     SourceCoverage(

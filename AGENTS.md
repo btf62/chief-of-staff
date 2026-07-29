@@ -14,9 +14,10 @@ Milestone 5 now covers only Todoist and Jira and is complete. No repeat JQL,
 Jira issue retrieval, Jira project discovery, authorization refresh, Todoist
 or Calendar retrieval, scope change, or broader live access is authorized
 except for the single combined MVP trial explicitly bounded by Milestone 6.
-Work Gmail is the final MVP input connector. Its synthetic implementation and
-one bounded live Work Gmail trial are authorized. Personal Gmail and Google
-Drive are deferred until after MVP validation and are not authorized.
+Work Gmail is the final MVP input connector. Its synthetic implementation gate
+is complete, and one bounded live Work Gmail trial remains authorized.
+Personal Gmail and Google Drive are deferred until after MVP validation and
+are not authorized.
 
 ## Working rules
 

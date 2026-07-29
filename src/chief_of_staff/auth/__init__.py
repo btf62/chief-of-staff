@@ -1,5 +1,18 @@
 """OAuth and macOS Keychain boundaries."""
 
+from chief_of_staff.auth.gmail_oauth import (
+    GMAIL_OAUTH_PROJECT,
+    GmailOAuthAuthorizationResult,
+    GmailOAuthError,
+    GmailOAuthImportResult,
+    GmailOAuthStateMismatch,
+    GmailOAuthTokenResponse,
+    GoogleGmailOAuthTokenClient,
+    GoogleGmailProfileClient,
+    WorkGmailInstalledAppOAuth,
+    WorkGmailOAuthClientImporter,
+    WorkGmailOAuthClientRegistrar,
+)
 from chief_of_staff.auth.google_oauth import (
     GoogleInstalledAppOAuth,
     GoogleOAuthClientImporter,
@@ -50,6 +63,7 @@ from chief_of_staff.auth.todoist_oauth import (
 )
 
 __all__ = (
+    "GMAIL_OAUTH_PROJECT",
     "JIRA_ACCESSIBLE_RESOURCES_ENDPOINT",
     "JIRA_AUTHORIZATION_ENDPOINT",
     "JIRA_CONNECTOR",
@@ -58,6 +72,13 @@ __all__ = (
     "JIRA_PROPOSED_READ_SCOPE",
     "JIRA_REDIRECT_URI",
     "JIRA_TOKEN_ENDPOINT",
+    "GmailOAuthAuthorizationResult",
+    "GmailOAuthError",
+    "GmailOAuthImportResult",
+    "GmailOAuthStateMismatch",
+    "GmailOAuthTokenResponse",
+    "GoogleGmailOAuthTokenClient",
+    "GoogleGmailProfileClient",
     "GoogleInstalledAppOAuth",
     "GoogleOAuthClientImporter",
     "GoogleOAuthClientRegistrar",
@@ -90,4 +111,7 @@ __all__ = (
     "TodoistOAuthClientRegistrar",
     "TodoistOAuthError",
     "TodoistOAuthTokenClient",
+    "WorkGmailInstalledAppOAuth",
+    "WorkGmailOAuthClientImporter",
+    "WorkGmailOAuthClientRegistrar",
 )

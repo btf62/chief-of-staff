@@ -383,18 +383,60 @@ def build_reduced_plan(
             )
         )
 
-    commitments_at_risk = tuple(
+    people_waiting = tuple(
+        sorted(
+            (
+                record
+                for record in records
+                if record.kind is RecordKind.WAITING_ITEM
+                and record.status == "explicit"
+            ),
+            key=_email_conclusion_sort_key,
+        )
+    )[:LIMITED_SECTION_ITEMS]
+    if people_waiting:
+        sections.append(
+            BriefingSection(
+                name=BriefingSectionName.PEOPLE_WAITING,
+                items=tuple(_email_waiting_item(record) for record in people_waiting),
+            )
+        )
+        used_record_ids.update(record.id for record in people_waiting)
+
+    jira_commitments_at_risk = tuple(
         record
         for record in prioritized_tasks
         if record.id not in used_record_ids
         and record.provenance.source == "jira"
         and record.source_owned_risk
+    )
+    email_commitments_at_risk = tuple(
+        record
+        for record in records
+        if record.kind is RecordKind.COMMITMENT
+        and record.explicit_commitment
+        and record.status == "explicit"
+    )
+    commitments_at_risk = tuple(
+        sorted(
+            (*email_commitments_at_risk, *jira_commitments_at_risk),
+            key=lambda record: (
+                record.due_at
+                or datetime.max.replace(tzinfo=record.provenance.retrieved_at.tzinfo),
+                record.title.casefold(),
+            ),
+        )
     )[:LIMITED_SECTION_ITEMS]
     if commitments_at_risk:
         sections.append(
             BriefingSection(
                 name=BriefingSectionName.COMMITMENTS_AT_RISK,
-                items=tuple(_jira_risk_item(record) for record in commitments_at_risk),
+                items=tuple(
+                    _email_commitment_risk_item(record, today)
+                    if record.kind is RecordKind.COMMITMENT
+                    else _jira_risk_item(record)
+                    for record in commitments_at_risk
+                ),
             )
         )
         used_record_ids.update(record.id for record in commitments_at_risk)
@@ -436,6 +478,12 @@ def build_reduced_plan(
                 record
                 for record in records
                 if record.id not in used_record_ids
+                and record.kind
+                in {
+                    RecordKind.CALENDAR_EVENT,
+                    RecordKind.TASK,
+                    RecordKind.CONTEXT,
+                }
                 and (
                     record.kind is not RecordKind.TASK
                     or (
@@ -1804,6 +1852,36 @@ def _jira_risk_item(record: NormalizedRecord) -> BriefingItem:
             f"{dependencies}Jira reports this work as blocked or endangered. "
             "This is Jira-owned work status, not a human-promise claim."
         ),
+    )
+
+
+def _email_waiting_item(record: NormalizedRecord) -> BriefingItem:
+    return _record_item(
+        record,
+        key_prefix="gmail-waiting",
+        detail=record.summary or "A direct request has no later bounded reply.",
+    )
+
+
+def _email_commitment_risk_item(
+    record: NormalizedRecord,
+    today: date,
+) -> BriefingItem:
+    explanation = record.summary or "An explicit sent commitment is at risk."
+    return _record_item(
+        record,
+        key_prefix="gmail-commitment-risk",
+        detail=f"{explanation} It is {_brief_due_phrase(record, today)}.",
+    )
+
+
+def _email_conclusion_sort_key(record: NormalizedRecord) -> tuple[object, ...]:
+    return (
+        -record.importance,
+        -record.provenance.freshness_at.timestamp()
+        if record.provenance.freshness_at is not None
+        else 0,
+        record.title.casefold(),
     )
 
 

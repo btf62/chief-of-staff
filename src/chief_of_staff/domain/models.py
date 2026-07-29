@@ -216,6 +216,7 @@ class StateInspection:
     normalized_jira_issues: int
     normalized_jira_issue_labels: int
     normalized_jira_issue_links: int
+    normalized_gmail_messages: int
     connector_instances: int
 
 
@@ -353,3 +354,18 @@ class NormalizedJiraIssue:
     parent_key: str | None = None
     labels: tuple[str, ...] = ()
     links: tuple[NormalizedJiraIssueLink, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class NormalizedGmailMessage:
+    """Minimum persisted Work Gmail facts linked to authoritative evidence."""
+
+    evidence_id: str
+    thread_id: str
+    direction: str
+    occurred_at: datetime
+    label_classification: str
+    processing_version: str
+    participant_references: tuple[str, ...] = ()
+    subject: str | None = None
+    detection_type: str | None = None

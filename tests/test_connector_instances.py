@@ -449,6 +449,6 @@ def test_failed_instance_migration_rolls_back_and_can_recover(
     apply_migrations(connection, migrations)
     assert (
         connection.execute("SELECT max(version) FROM schema_migrations").fetchone()[0]
-        == 7
+        == 8
     )
     connection.close()

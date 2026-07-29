@@ -16,6 +16,8 @@ class RecordKind(StrEnum):
 
     CALENDAR_EVENT = "calendar_event"
     TASK = "task"
+    WAITING_ITEM = "waiting_item"
+    COMMITMENT = "commitment"
     CONTEXT = "context"
 
 

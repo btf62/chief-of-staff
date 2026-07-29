@@ -12,6 +12,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from chief_of_staff.connectors import (
+    GMAIL_WORK_INSTANCE,
     GOOGLE_CALENDAR_PRIMARY_INSTANCE,
     JIRA_PRIMARY_INSTANCE,
     TODOIST_PRIMARY_INSTANCE,
@@ -328,6 +329,7 @@ def _default_connector_instance_id(source: str) -> str | None:
         "google_calendar": GOOGLE_CALENDAR_PRIMARY_INSTANCE,
         "todoist": TODOIST_PRIMARY_INSTANCE,
         "jira": JIRA_PRIMARY_INSTANCE,
+        "gmail": GMAIL_WORK_INSTANCE,
     }.get(source)
 
 

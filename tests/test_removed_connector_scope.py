@@ -85,26 +85,27 @@ def test_retired_provider_is_absent_from_active_scope_and_runtime() -> None:
         assert importlib.util.find_spec(f"chief_of_staff.{module_suffix}") is None
 
 
-def test_phase_one_sources_and_gmail_instances_remain_explicit() -> None:
+def test_mvp_sources_and_deferred_gmail_instances_remain_explicit() -> None:
     requirements = (REPOSITORY_ROOT / "docs" / "product" / "requirements.md").read_text(
         encoding="utf-8"
     )
     for expected_source in (
         "Google Calendar",
         "Work Gmail",
-        "Personal Gmail",
         "Todoist",
         "Jira",
-        "Approved Google Drive content",
         "Approved repository context",
     ):
         assert expected_source in requirements
+    assert "Personal Gmail" in requirements
+    assert "Google Drive" in requirements
+    assert "deferred" in requirements.casefold()
 
     gmail_specification = (
         REPOSITORY_ROOT / "docs" / "architecture" / "connectors" / "gmail.md"
     ).read_text(encoding="utf-8")
     assert "`Work Gmail`" in gmail_specification
-    assert "`Personal Gmail`" in gmail_specification
+    assert "Personal Gmail" in gmail_specification
     assert "independent" in gmail_specification.casefold()
 
 
