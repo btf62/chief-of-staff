@@ -1,7 +1,7 @@
 # Daily Briefing v1 Implementation Roadmap
 
 - **Status:** Accepted
-- **Version:** 2
+- **Version:** 3
 - **Owner:** Brad
 - **Last updated:** 2026-07-28
 
@@ -13,7 +13,8 @@ boundary, combined Calendar-and-Todoist trial, and one explicitly approved
 complete-retrieval and normal-workday quality validation. Jira has completed
 its mocked phase, project discovery, and one exact-project live issue trial.
 Milestone 5 now covers only the accepted Todoist and Jira task-system sources
-and is complete.
+and is complete. Milestone 6 makes Work Gmail the final MVP input connector;
+Personal Gmail and Google Drive are deferred until after MVP validation.
 Dates and estimates remain intentionally omitted until implementation
 evidence supports them.
 
@@ -29,7 +30,8 @@ boundaries.
 - Use synthetic data before approved live data.
 - Add one connector at a time.
 - Keep deterministic processing independently testable.
-- Do not begin with Gmail merely because it contains valuable information.
+- Treat Work Gmail as the final MVP input gate; do not expand into Personal
+  Gmail or Google Drive before MVP validation.
 - Do not implement dashboards, Rock RMS, Church Online Platform, analytics,
   external actions, or multi-user behavior.
 - Update documentation and ADRs when implementation reveals a material
@@ -231,29 +233,47 @@ Milestone 5 is complete. Repeat Jira retrieval, authorization refresh,
 Calendar access, or Todoist access remains unauthorized without a new explicit
 approval.
 
-## Milestone 6 — Gmail and Google Drive Connectors
+## Milestone 6 — Work Gmail and the Input-Complete MVP Gate
 
-- **Status:** Planned
-- **Intended user-visible outcome:** Brad can include narrowly approved
-  correspondence and document context in an on-demand briefing after the
-  connector, persistence, redaction, and authorization boundaries are proven.
+- **Status:** In progress — accepted specification; synthetic implementation
+  and one bounded live trial authorized
+- **Intended user-visible outcome:** Brad can review one input-complete,
+  on-demand MVP briefing that adds high-confidence work correspondence,
+  explicit requests, and explicit sent commitments to the existing Calendar,
+  Todoist, Jira, and repository context.
 - **Dependencies:** Milestone 5, proven lifecycle and redaction behavior, and
-  accepted Gmail and Google Drive connector specifications before live
-  authorization.
+  the accepted [Work Gmail connector](architecture/connectors/gmail.md)
+  specification.
 - **Principal deliverables:**
-  - Narrow approved scopes.
-  - Retrieval windows and labels.
-  - Sent-mail support.
-  - Minimal excerpts.
-  - No attachment processing unless separately specified.
-  - Authentication-failure disclosure.
-  - Connector-specific caching and retention decisions.
-- **Acceptance gate:** Contract, sensitivity, minimization, retention, and
-  revocation tests pass; approved live trials disclose coverage accurately and
-  persist no broader content than the connector specifications permit.
-- **Explicitly excluded work:** Attachments without a separate specification,
-  entire-mailbox or Drive-corpus retrieval, write scopes, sending or editing,
-  hosted inference, and silent cache expansion.
+  - One independently authorized `Work Gmail` connector instance.
+  - Exact `gmail.readonly` scope, installed-app OAuth, Keychain-only secrets,
+    account confirmation, refresh, revocation, and disconnection.
+  - Bounded 14-day listing with metadata-first candidate selection.
+  - Minimized MIME parsing without attachments, active content, remote
+    resources, or raw-message retrieval.
+  - Deterministic high-precision explicit-request, reply-state, explicit-
+    commitment, and at-risk detection.
+  - Minimal local persistence, provenance, coverage, and deletion.
+  - Private candidate-review artifact.
+  - One fresh combined repository, Calendar, Todoist, Jira, and Work Gmail
+    briefing without hosted inference.
+- **Acceptance gate:** All synthetic contract, security, minimization,
+  persistence, and regression tests pass; one approved live trial preserves
+  the exact account and scope, discloses coverage, persists only minimized
+  evidence, and produces a private review artifact and input-complete briefing
+  for Brad's human trust review.
+- **Explicitly excluded work:** Personal Gmail, Google Drive, attachments,
+  entire-mailbox retrieval, write scopes, sending or editing, hosted inference,
+  scheduling, user-interface work, and operational MVP acceptance.
+
+### Current checkpoint
+
+The Work Gmail specification is accepted and authorizes synthetic
+implementation followed by one bounded live Work Gmail trial. This milestone
+also authorizes one fresh retrieval from the already accepted primary Calendar,
+Todoist, and exact-project Jira boundaries solely for the combined
+input-complete briefing. It does not authorize Personal Gmail, Drive, hosted
+inference, another connector, or repeat live retrieval beyond that trial.
 
 ## Milestone 7 — Explicit Commitment and Preparation Detection
 
@@ -262,7 +282,8 @@ approval.
   source-backed notice of directly stated commitments, preparation needs, and
   people explicitly waiting.
 - **Dependencies:** Milestone 6 and representative synthetic scenarios for
-  deterministic classification.
+  deterministic classification beyond the high-precision Work Gmail rules
+  completed at the input gate.
 - **Principal deliverables:**
   - Deterministic and rules-based detection of direct requests.
   - Detection of explicit promises.

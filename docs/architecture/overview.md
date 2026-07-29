@@ -1,7 +1,7 @@
 # Architecture Overview
 
 - **Status:** Accepted
-- **Version:** 4
+- **Version:** 5
 - **Owner:** Brad
 - **Last updated:** 2026-07-28
 
@@ -83,8 +83,7 @@ replace those systems or become authoritative for their records.
 The system has two distinct data relationships:
 
 - **External authoritative records:** Read-only facts retrieved from Google
-  Calendar, Work Gmail, Personal Gmail, Todoist, Jira, approved Google Drive
-  content, and approved repository context.
+  Calendar, Work Gmail, Todoist, Jira, and approved repository context.
 - **Product-owned local state:** Inspectable corrections and dispositions that
   affect briefing interpretation without changing an external record.
 
@@ -92,7 +91,7 @@ The system has two distinct data relationships:
 flowchart LR
     Brad["Brad Files<br/>Primary user"]
     Chief["Chief of Staff<br/>Local interpretation and briefing system"]
-    Sources["Approved sources<br/>Calendar, Work Gmail, Personal Gmail, Todoist, Jira, Drive, repository"]
+    Sources["MVP sources<br/>Calendar, Work Gmail, Todoist, Jira, repository"]
     State["Product-owned local state<br/>Corrections and dispositions"]
 
     Sources -->|"Read-only facts, freshness, and links"| Chief
@@ -232,15 +231,18 @@ instance ID through normalization and provenance; user-facing output normally
 shows only its alias. Coverage distinguishes an unauthorized or failed
 instance from another instance that returned a legitimate empty result.
 
-Phase 1 requires connectors for:
+The active MVP requires connectors for:
 
 - Google Calendar
 - Work Gmail
-- Personal Gmail
 - Todoist
 - Jira
-- Approved Google Drive content
 - Approved repository context
+
+Personal Gmail and approved Google Drive content are deferred until after MVP
+validation. The connector-instance architecture continues to support a future
+Personal Gmail instance independently from Work Gmail, but deferred sources
+have no MVP authorization, coverage, or acceptance obligation.
 
 Connector-specific retrieval rules, permissions, freshness semantics, bounded
 cache exceptions, and failure behavior belong in the

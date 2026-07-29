@@ -15,7 +15,10 @@ normal-workday quality validation. Jira has completed its mocked phase,
 resource-restricted project discovery, and one explicitly approved
 exact-project issue-retrieval trial integrated with a deterministic briefing.
 Milestone 5 now covers only Todoist and Jira. No repeat Jira query, discovery,
-authorization refresh, or repeat Calendar or Todoist access is authorized.
+authorization refresh, or repeat Calendar or Todoist access is authorized
+except for the one fresh combined retrieval bounded by Milestone 6. Work Gmail
+is the final MVP input connector; Personal Gmail and Google Drive are deferred
+until after MVP validation.
 Design acceptance authorizes implementation within the accepted scope; it does
 not mean the complete Daily Briefing has passed operational acceptance.
 
@@ -56,8 +59,8 @@ not mean the complete Daily Briefing has passed operational acceptance.
 - [Jira connector](architecture/connectors/jira.md) — accepted
   resource-restricted project discovery, exact-project enhanced search, and
   completed bounded issue trial
-- [Gmail connector](architecture/connectors/gmail.md) — preliminary
-  multi-account boundary; not implemented or authorized
+- [Work Gmail connector](architecture/connectors/gmail.md) — accepted final
+  MVP input boundary; Personal Gmail deferred
 - [Decision records](decisions/README.md) — architecture and significant
   product decisions
 

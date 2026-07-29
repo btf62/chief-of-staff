@@ -1,7 +1,7 @@
 # Feature: Daily Briefing v1
 
 - **Status:** Accepted
-- **Version:** 8
+- **Version:** 9
 - **Owner:** Brad
 - **Last updated:** 2026-07-28
 
@@ -38,17 +38,19 @@ wait, and what is approaching without reviewing every source independently.
 
 ## Scope and Source Authority
 
-Daily Briefing v1 may read only approved content from these Phase 1 sources:
+The input-complete MVP may read only approved content from these sources:
 
 | Source | Authoritative responsibility |
 | --- | --- |
 | Google Calendar | Current calendar events, timing, participants, locations, and meeting links |
 | Work Gmail | Work messages, correspondence context, replies, acknowledgments, and communication commitments |
-| Personal Gmail | Personal messages, correspondence context, replies, acknowledgments, and communication commitments |
 | Todoist | Personal tasks, dates, priorities, and completion state |
 | Jira | Jira-managed work, status, ownership, dependencies, and deadlines |
-| Approved Google Drive content | Approved documents and planning context |
 | Approved repository context | Approved project goals, decisions, requirements, and working context |
+
+Personal Gmail and Google Drive are deferred until after MVP validation. Their
+future designs do not authorize retrieval, coverage claims, persistence, or
+acceptance dependencies in the MVP.
 
 Each source remains authoritative for its own records. The briefing may
 interpret and prioritize records across sources, but it must not replace,
@@ -469,7 +471,7 @@ The briefing must:
 Example Source Coverage disclosure:
 
 > Todoist was unavailable. Today's recommendations are based on Calendar,
-> Work Gmail, Personal Gmail, Jira, Drive, and repository context.
+> Work Gmail, Jira, and repository context.
 
 The briefing must not imply that absence from the approved source set proves
 that no relevant work or commitment exists.

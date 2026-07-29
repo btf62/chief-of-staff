@@ -58,13 +58,14 @@ decisions for each future connector specification.
 | Google Calendar | [Google Calendar](google-calendar.md) | Accepted; bounded live trial complete and stopped |
 | Todoist | [Todoist](todoist.md) | Accepted; bounded live trial and workday validation complete and stopped |
 | Jira | [Jira](jira.md) | Accepted; bounded project and issue trials complete and stopped |
-| Gmail | [Gmail](gmail.md) | Preliminary multi-account boundary; not implemented or authorized |
+| Work Gmail | [Gmail](gmail.md) | Accepted MVP boundary; implementation and bounded live trial authorized |
 
 ## Planned specifications
 
 | Source | Planned specification |
 | --- | --- |
-| Approved Google Drive content | `google-drive.md` |
+| Personal Gmail | Deferred until after MVP validation; future instance remains within `gmail.md` |
+| Approved Google Drive content | Deferred until after MVP validation; specification not yet created |
 
 Each future specification should implement the common read-only connector
 contract in the [Architecture Overview](../overview.md#4-connector-model)

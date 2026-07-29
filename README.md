@@ -7,7 +7,7 @@ identifying priorities, commitments, and useful signals.
 
 ## Status
 
-**Phase:** Milestones 1–4 complete; Milestone 5 task-system trials complete
+**Phase:** Milestones 1–5 complete; Milestone 6 Work Gmail in progress
 
 The Python, local-state, deterministic briefing, repository connector, and
 read-only Google Calendar foundations are complete. An explicitly approved,
@@ -20,7 +20,9 @@ authorization, project discovery, and one explicitly approved, exact-project
 issue-retrieval trial integrated with the deterministic briefing. Milestone 5
 now covers only Todoist and Jira. No repeat Jira query, discovery,
 authorization refresh, repeat Calendar or Todoist retrieval, task access, or
-broader access is authorized.
+broader access is authorized except for the one fresh combined retrieval
+explicitly bounded by Milestone 6. Work Gmail is the final MVP input connector;
+Personal Gmail and Google Drive are deferred until after MVP validation.
 
 ## Repository map
 

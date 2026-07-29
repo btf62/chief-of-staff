@@ -12,7 +12,11 @@ its mocked phase, one resource-restricted project-discovery trial, and one
 exact-project live issue trial integrated with the deterministic briefing.
 Milestone 5 now covers only Todoist and Jira and is complete. No repeat JQL,
 Jira issue retrieval, Jira project discovery, authorization refresh, Todoist
-or Calendar retrieval, scope change, or broader live access is authorized.
+or Calendar retrieval, scope change, or broader live access is authorized
+except for the single combined MVP trial explicitly bounded by Milestone 6.
+Work Gmail is the final MVP input connector. Its synthetic implementation and
+one bounded live Work Gmail trial are authorized. Personal Gmail and Google
+Drive are deferred until after MVP validation and are not authorized.
 
 ## Working rules
 
@@ -77,10 +81,11 @@ The Version 1 design-readiness requirements have been met:
 Implementation may proceed only when a task explicitly authorizes it. The
 Google Calendar, Todoist, Jira project-discovery, and Jira issue gates have
 been exercised; do not repeat live retrieval, broaden access, refresh
-authorization, repeat discovery, or begin another connector without new
-explicit approval. Satisfy a milestone's acceptance gate before beginning
-dependent work. Record material new product or architecture decisions before
-implementing them.
+authorization, repeat discovery, or begin another connector except for the
+single fresh Calendar, Todoist, Jira, and Work Gmail retrieval explicitly
+approved for the Milestone 6 input-complete trial. Satisfy a milestone's
+acceptance gate before beginning dependent work. Record material new product
+or architecture decisions before implementing them.
 
 ## Validation
 

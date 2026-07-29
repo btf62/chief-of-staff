@@ -101,6 +101,9 @@ No strict versioning scheme is promised before a distributable product exists.
   flow, bounded workspace/project discovery surface, private selection report,
   and no-mutation contract tests.
 - ADR-0007, recording the decision to remove Asana from product scope.
+- An accepted Work Gmail connector specification with exact scope, account,
+  metadata-first retrieval, minimization, deterministic detection, persistence,
+  review-artifact, and live-trial boundaries.
 
 ### Changed
 
@@ -137,6 +140,9 @@ No strict versioning scheme is promised before a distributable product exists.
   retrieval.
 - Clarified that the superseded Northridge boards are obsolete and the exact
   project exists only for 9 Embers collaboration on Rock RMS development.
+- Made Work Gmail the final MVP input connector and Milestone 6 input-complete
+  briefing gate; deferred Personal Gmail and Google Drive until after MVP
+  validation while preserving the multi-account design.
 
 ### Removed
 

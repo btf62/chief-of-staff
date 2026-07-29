@@ -1,7 +1,7 @@
 # Product Requirements
 
 - **Status:** Accepted
-- **Version:** 2
+- **Version:** 3
 - **Owner:** Brad
 - **Last updated:** 2026-07-28
 
@@ -30,18 +30,21 @@ rather than replacing or modifying them. It may maintain bounded, inspectable
 local state so Brad can correct or disposition inferred items and prevent
 repeated false recommendations.
 
-The approved Phase 1 source set is:
+The active MVP input set is:
 
 - Google Calendar
-- Work Gmail and Personal Gmail as independently authorized connector
-  instances
+- Work Gmail
 - Todoist
 - Jira
-- Approved Google Drive content
 - Approved repository context
 
-Adding another source requires an explicit product-scope decision and its
-connector-specific access, privacy, and retention boundaries.
+Personal Gmail and Google Drive are deferred until after MVP validation. This
+is a sequencing decision, not permanent removal. The multi-account connector
+architecture and preliminary Personal Gmail design remain available for later
+review, but neither source is authorized or required for MVP acceptance.
+
+Adding another active MVP source requires an explicit product-scope decision
+and its connector-specific access, privacy, and retention boundaries.
 
 ## Delivery phases
 
@@ -89,7 +92,8 @@ Detailed feature specifications belong in the
   [Daily Briefing v1 implementation roadmap](../roadmap.md).
 - Rock RMS, Church Online Platform, ministry analytics, dashboards, and
   autonomous actions in Daily Briefing v1.
-- Sources not included in the approved Phase 1 source set.
+- Personal Gmail and Google Drive before MVP validation.
+- Sources not included in the active MVP input set.
 - Ideas explicitly deferred in [future ideas](future-ideas.md).
 
 ## Acceptance
