@@ -23,7 +23,7 @@ from chief_of_staff.connectors.contracts import (
     SourceCoverage,
     SourceItem,
 )
-from chief_of_staff.domain import CoverageStatus
+from chief_of_staff.domain import CoverageStatus, EvidenceClassification
 
 GMAIL_CONNECTOR: Final = "gmail"
 GMAIL_WORK_INSTANCE: Final = "gmail:work"
@@ -58,7 +58,7 @@ GMAIL_MAX_MESSAGE_SIZE_ESTIMATE: Final = 2 * 1024 * 1024
 GMAIL_MAX_MESSAGE_TEXT_CHARS: Final = 16_000
 GMAIL_MAX_RUN_TEXT_CHARS: Final = 500_000
 GMAIL_REVIEW_REJECTION_LIMIT: Final = 20
-GMAIL_PROCESSING_VERSION: Final = "gmail-deterministic-v3"
+GMAIL_PROCESSING_VERSION: Final = "gmail-deterministic-v4"
 GMAIL_DEFAULT_INBOUND_DAYS: Final = 7
 GMAIL_MINIMUM_INBOUND_DAYS: Final = 3
 GMAIL_DEFAULT_SENT_DAYS: Final = 14
@@ -82,20 +82,42 @@ _AUTOMATED_LOCAL_PARTS = frozenset(
 _REQUEST_PATTERNS = (
     re.compile(
         r"\bplease\s+(?:send|review|confirm|reply|respond|decide|approve|"
-        r"share|provide|complete|call|schedule|let me know)\b",
+        r"share|provide|complete|call|schedule|acknowledge|let me know)\b",
         re.IGNORECASE,
     ),
     re.compile(
         r"\b(?:could|would|can)\s+you\s+(?:please\s+)?"
         r"(?:send|review|confirm|reply|respond|decide|approve|share|provide|"
-        r"complete|call|schedule|let me know)\b",
+        r"complete|call|schedule|acknowledge|let me know)\b",
         re.IGNORECASE,
     ),
     re.compile(
         r"\bI\s+need\s+(?:your\s+(?:decision|approval|response|input)|"
         r"you\s+to\s+(?:send|review|confirm|reply|respond|decide|approve|"
-        r"share|provide|complete|call|schedule))\b",
+        r"share|provide|complete|call|schedule|acknowledge))\b",
         re.IGNORECASE,
+    ),
+)
+_ACKNOWLEDGMENT_PATTERNS = (
+    re.compile(
+        r"\bplease\s+(?:acknowledge|confirm)\s+(?:receipt|that you received)\b", re.I
+    ),
+    re.compile(r"\bplease\s+reply\s+to\s+confirm\b", re.I),
+    re.compile(r"\blet me know (?:that |when )?you (?:received|saw)\b", re.I),
+)
+_PREPARATION_PATTERNS = (
+    re.compile(
+        r"\bplease\s+(?:review|read|prepare|bring|complete)\b"
+        r"[^.!?\n]{1,220}\b(?:before|for)\s+"
+        r"(?:the|our|your|a)?\s*[^.!?\n]{0,100}\b"
+        r"(?:meeting|call|appointment|session)\b",
+        re.I,
+    ),
+    re.compile(
+        r"\b(?:before|for)\s+(?:the|our|your|a)?\s*"
+        r"[^.!?\n]{0,100}\b(?:meeting|call|appointment|session)\b"
+        r"[^.!?\n]{0,120}\bplease\s+(?:review|read|prepare|bring|complete)\b",
+        re.I,
     ),
 )
 _COMMITMENT_PATTERN = re.compile(
@@ -426,6 +448,15 @@ class GmailDetectionType(StrEnum):
     PEOPLE_WAITING = "people_waiting"
     EXPLICIT_COMMITMENT = "explicit_commitment"
     COMMITMENT_AT_RISK = "commitment_at_risk"
+    PREPARATION = "preparation"
+
+
+class GmailObligationType(StrEnum):
+    """Explain the narrow obligation supported by an inbound message."""
+
+    DIRECT_REQUEST = "direct_request"
+    ACKNOWLEDGMENT = "acknowledgment"
+    MEETING_PREPARATION = "meeting_preparation"
 
 
 @dataclass(frozen=True, slots=True)
@@ -441,6 +472,10 @@ class GmailDetection:
     display_url: str
     detected_at: datetime
     due_at: datetime | None = None
+    obligation_type: GmailObligationType | None = None
+    evidence_classification: EvidenceClassification = (
+        EvidenceClassification.EXPLICIT_DETERMINISTIC_CONCLUSION
+    )
 
     @property
     def evidence_fingerprint(self) -> str:
@@ -460,6 +495,9 @@ class GmailRejectedCandidate:
     message_id: str
     reason: str
     display_url: str
+    evidence_classification: EvidenceClassification = (
+        EvidenceClassification.INSUFFICIENT_EVIDENCE
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -546,6 +584,8 @@ class GmailRetrievalAudit:
     unique_threads: int
     explicit_requests_detected: int
     people_waiting_proposed: int
+    acknowledgment_obligations_proposed: int
+    preparation_items_proposed: int
     explicit_commitments_detected: int
     commitments_at_risk_proposed: int
     duplicate_message_ids: int
@@ -1117,11 +1157,23 @@ class GmailConnector:
             opaque_or_unsupported_messages=len(unsupported_ids),
             unique_threads=len({message.thread_id for message in metadata}),
             explicit_requests_detected=sum(
-                detection.type is GmailDetectionType.PEOPLE_WAITING
+                detection.type
+                in {
+                    GmailDetectionType.PEOPLE_WAITING,
+                    GmailDetectionType.PREPARATION,
+                }
                 for detection in proposed_detections
             ),
             people_waiting_proposed=sum(
                 detection.type is GmailDetectionType.PEOPLE_WAITING
+                for detection in proposed_detections
+            ),
+            acknowledgment_obligations_proposed=sum(
+                detection.obligation_type is GmailObligationType.ACKNOWLEDGMENT
+                for detection in proposed_detections
+            ),
+            preparation_items_proposed=sum(
+                detection.type is GmailDetectionType.PREPARATION
                 for detection in proposed_detections
             ),
             explicit_commitments_detected=sum(
@@ -1428,7 +1480,9 @@ class GmailConnector:
             ContextResourceCoverage("unique threads", audit.unique_threads),
             ContextResourceCoverage(
                 "explicit detections",
-                audit.people_waiting_proposed + audit.explicit_commitments_detected,
+                audit.people_waiting_proposed
+                + audit.preparation_items_proposed
+                + audit.explicit_commitments_detected,
             ),
         )
 
@@ -1755,6 +1809,14 @@ def detect_gmail_conclusions(
             continue
 
         if classification is GmailMessageClassification.DIRECT_INBOUND:
+            preparation_match = next(
+                (
+                    pattern.search(body)
+                    for pattern in _PREPARATION_PATTERNS
+                    if pattern.search(body)
+                ),
+                None,
+            )
             request_match = next(
                 (
                     pattern.search(body)
@@ -1763,7 +1825,7 @@ def detect_gmail_conclusions(
                 ),
                 None,
             )
-            if request_match is None:
+            if request_match is None and preparation_match is None:
                 rejections.append(
                     GmailRejectedCandidate(
                         message.id,
@@ -1794,7 +1856,41 @@ def detect_gmail_conclusions(
                     )
                 )
                 continue
-            excerpt = _sentence_around(body, request_match.start())
+            supported_match = preparation_match or request_match
+            if supported_match is None:
+                raise AssertionError("an explicit inbound match is required")
+            excerpt = _sentence_around(body, supported_match.start())
+            due_at = _parse_supported_due_date(excerpt, message.internal_date)
+            acknowledgment = any(
+                pattern.search(excerpt) for pattern in _ACKNOWLEDGMENT_PATTERNS
+            )
+            if preparation_match is not None:
+                preparation_excerpt = _sentence_around(
+                    body,
+                    preparation_match.start(),
+                )
+                detections.append(
+                    GmailDetection(
+                        type=GmailDetectionType.PREPARATION,
+                        message_id=message.id,
+                        thread_id=message.thread_id,
+                        statement=_preparation_statement(message),
+                        explanation=(
+                            "A direct inbound human message explicitly requires "
+                            "preparation for a named meeting, call, appointment, "
+                            "or session."
+                        ),
+                        evidence_excerpt=preparation_excerpt,
+                        display_url=display_url,
+                        detected_at=message.internal_date,
+                        due_at=_parse_supported_due_date(
+                            preparation_excerpt,
+                            message.internal_date,
+                        ),
+                        obligation_type=GmailObligationType.MEETING_PREPARATION,
+                    )
+                )
+                continue
             detections.append(
                 GmailDetection(
                     type=GmailDetectionType.PEOPLE_WAITING,
@@ -1802,12 +1898,23 @@ def detect_gmail_conclusions(
                     thread_id=message.thread_id,
                     statement=_waiting_statement(message),
                     explanation=(
-                        "A direct inbound human message contains an explicit "
-                        "request and no later bounded outbound response."
+                        "A direct inbound human message explicitly requests "
+                        + (
+                            "acknowledgment"
+                            if acknowledgment
+                            else "a response or action"
+                        )
+                        + " and no later bounded outbound response is present."
                     ),
                     evidence_excerpt=excerpt,
                     display_url=display_url,
                     detected_at=message.internal_date,
+                    due_at=due_at,
+                    obligation_type=(
+                        GmailObligationType.ACKNOWLEDGMENT
+                        if acknowledgment
+                        else GmailObligationType.DIRECT_REQUEST
+                    ),
                 )
             )
             continue
@@ -1879,11 +1986,12 @@ def _source_item_from_detection(
     detection: GmailDetection,
     retrieved_at: datetime,
 ) -> SourceItem:
-    item_type = (
-        "waiting_item"
-        if detection.type is GmailDetectionType.PEOPLE_WAITING
-        else "commitment"
-    )
+    if detection.type is GmailDetectionType.PEOPLE_WAITING:
+        item_type = "waiting_item"
+    elif detection.type is GmailDetectionType.PREPARATION:
+        item_type = "preparation_item"
+    else:
+        item_type = "commitment"
     facts: dict[str, str | int | bool | tuple[str, ...] | None] = {
         "title": detection.statement,
         "summary": detection.explanation,
@@ -1894,6 +2002,11 @@ def _source_item_from_detection(
         "status": "explicit",
         "all_day": detection.due_at is not None,
         "due_at": (None if detection.due_at is None else detection.due_at.isoformat()),
+        "preparation": (
+            detection.explanation
+            if detection.type is GmailDetectionType.PREPARATION
+            else None
+        ),
     }
     return SourceItem(
         id=f"{detection.type}:{detection.message_id}",
@@ -2048,6 +2161,11 @@ def _waiting_statement(message: GmailMessageMetadata) -> str:
 def _commitment_statement(message: GmailMessageMetadata) -> str:
     subject = _clean_subject(message.header("Subject"))
     return f"Honor the explicit Work Gmail commitment: {subject}"
+
+
+def _preparation_statement(message: GmailMessageMetadata) -> str:
+    subject = _clean_subject(message.header("Subject"))
+    return f"Complete the explicit Work Gmail preparation: {subject}"
 
 
 def _clean_subject(value: str | None) -> str:

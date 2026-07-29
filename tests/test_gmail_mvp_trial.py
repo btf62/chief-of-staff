@@ -218,12 +218,18 @@ def test_private_review_and_minimized_facts_are_local_inspectable_and_deletable(
             run_id="synthetic-run",
             created_at=NOW,
         )
-        review = runner._write_review("synthetic-run")
+        review = runner._write_review(
+            "synthetic-run",
+            displayed_source_record_ids=frozenset({metadata.id}),
+        )
 
         assert persisted == 1
         assert stat.S_IMODE(review.stat().st_mode) == 0o600
         review_text = review.read_text(encoding="utf-8")
+        assert "# Private Milestone 7 deterministic review" in review_text
         assert "## Bounded body-candidate coverage" in review_text
+        assert "## Displayed conclusions" in review_text
+        assert "explicit_deterministic_conclusion" in review_text
         assert "- Eligible: 1" in review_text
         assert "- Selected under the hard cap: 1" in review_text
         assert "- Omitted without body retrieval: 0" in review_text

@@ -10,7 +10,7 @@ from itertools import pairwise
 from zoneinfo import ZoneInfo
 
 from chief_of_staff.connectors import SourceCoverage
-from chief_of_staff.domain import ConnectorDomain
+from chief_of_staff.domain import ConnectorDomain, CoverageStatus
 from chief_of_staff.pipeline.context import InvocationContext, WorkdayType
 from chief_of_staff.pipeline.normalization import NormalizedRecord, RecordKind
 
@@ -374,7 +374,14 @@ def build_reduced_plan(
         for record in prioritized_tasks
         if record.preparation is not None and record.calendar_dependency
     )
-    preparation = (*calendar_preparation, *task_preparation)
+    explicit_preparation = tuple(
+        record
+        for record in records
+        if record.kind is RecordKind.PREPARATION_ITEM
+        and record.preparation is not None
+        and record.status == "explicit"
+    )
+    preparation = (*calendar_preparation, *task_preparation, *explicit_preparation)
     if preparation:
         sections.append(
             BriefingSection(
@@ -717,54 +724,52 @@ def _coverage_summary(
             if report.selected_count is None
             else report.selected_count
         )
-        persisted = (
-            "persistence not reported"
-            if report.persisted_count is None
-            else f"{report.persisted_count} persisted"
-        )
-        candidates = (
-            "daily candidates not reported"
-            if report.candidate_count is None
-            else f"{report.candidate_count} daily candidates"
-        )
-        displayed = (
-            "display not reported"
-            if report.displayed_count is None
-            else f"{report.displayed_count} displayed"
-        )
-        pagination = (
-            None
-            if report.page_count is None
-            else (
-                f"{report.page_count} pages (pagination occurred)"
-                if report.page_count > 1
-                else ("1 page (no pagination)" if report.page_count == 1 else "0 pages")
-            )
-        )
-        detail = (
-            f"`{_coverage_label(report)}`: {report.status.value}; "
-            f"{retrieved} retrieved; {selected} selected; "
-            f"{persisted}; {candidates}; {displayed}"
-        )
-        if pagination is not None:
-            detail += f"; {pagination}"
+        detail_parts = [
+            f"`{_coverage_label(report)}`: {report.status.value}",
+            f"{retrieved} retrieved",
+            f"{selected} selected",
+        ]
+        if report.persisted_count is not None:
+            detail_parts.append(f"{report.persisted_count} persisted")
+        if report.candidate_count is not None:
+            detail_parts.append(f"{report.candidate_count} candidates")
+        if report.displayed_count is not None:
+            detail_parts.append(f"{report.displayed_count} displayed")
+        if report.page_count is not None:
+            page_noun = "page" if report.page_count == 1 else "pages"
+            detail_parts.append(f"{report.page_count} {page_noun}")
         if report.context_resources:
+            context_resources = report.context_resources
+            if len(context_resources) > 8:
+                context_resources = tuple(
+                    resource
+                    for resource in context_resources
+                    if resource.resource
+                    in {
+                        "eligible body candidates",
+                        "selected body candidates",
+                        "omitted body candidates",
+                        "usable candidate bodies",
+                        "bodies unavailable or unsupported",
+                        "explicit detections",
+                    }
+                )
             resources = ", ".join(
                 (
-                    f"{resource.resource}: {resource.retrieved_count} retrieved, "
+                    f"{resource.resource} {resource.retrieved_count}"
                     + (
-                        "persistence not reported"
+                        ""
                         if resource.persisted_count is None
-                        else f"{resource.persisted_count} persisted"
+                        else f"/{resource.persisted_count}"
                     )
                 )
-                for resource in report.context_resources
+                for resource in context_resources
             )
-            detail += f"; context ({resources})"
-        if report.warnings:
-            detail += f"; {'; '.join(report.warnings)}"
-        if report.error_category:
-            detail += f"; {report.error_category}"
+            if resources:
+                detail_parts.append(f"context retrieved/persisted: {resources}")
+        boundary = _coverage_boundary_disclosure(report)
+        if boundary is not None:
+            detail_parts.append(boundary)
         planning_confidence = confidence_by_source.get(report.source)
         if planning_confidence is not None:
             status = (
@@ -772,22 +777,37 @@ def _coverage_summary(
                 if planning_confidence.relative_ranking_degraded
                 else "not degraded"
             )
-            detail += (
-                f"; relative-ranking confidence {status} "
-                f"({planning_confidence.active_count} active, "
-                f"{planning_confidence.overdue_count} overdue "
-                f"[{planning_confidence.overdue_ratio:.1%}], "
-                f"{planning_confidence.high_priority_count} P1/P2 "
-                f"[{planning_confidence.high_priority_ratio:.1%}], "
-                f"{planning_confidence.overdue_high_priority_overlap_count} "
-                "both overdue and P1/P2)"
+            detail_parts.append(
+                f"ranking {status}: "
+                f"{planning_confidence.overdue_count}/"
+                f"{planning_confidence.active_count} overdue, "
+                f"{planning_confidence.high_priority_count}/"
+                f"{planning_confidence.active_count} P1/P2"
             )
-        coverage_parts.append(detail)
+        coverage_parts.append("; ".join(detail_parts))
     if context.workday_diagnostics:
         coverage_parts.append(
             "Workday context: " + " ".join(context.workday_diagnostics)
         )
     return ". ".join(coverage_parts) + "."
+
+
+def _coverage_boundary_disclosure(report: SourceCoverage) -> str | None:
+    """Keep partial/failure disclosure plain without reproducing audit detail."""
+
+    if report.status is CoverageStatus.COMPLETE:
+        return None
+    if report.error_category == "bounded_body_candidate_selection":
+        return "partial at the bounded Gmail body-selection cap"
+    if report.error_category == "extracted_content_boundary":
+        return "partial at the Gmail extracted-content limit"
+    if report.error_category == "partial_message_retrieval":
+        return "partial because some Gmail content was unavailable or unsupported"
+    if report.error_category:
+        return f"boundary: {report.error_category}"
+    if report.warnings:
+        return report.warnings[0]
+    return None
 
 
 def _normal_workday_note(

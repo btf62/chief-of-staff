@@ -379,6 +379,54 @@ class _DetailedCoverageConnector:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class _MvpCoverageConnector:
+    source_name: str
+    status: CoverageStatus = CoverageStatus.COMPLETE
+    error_category: str | None = None
+    approved_scope: str = SCOPE
+
+    def retrieve(self, request: ConnectorRequest) -> ConnectorResult:
+        del request
+        return ConnectorResult(
+            items=(),
+            coverage=SourceCoverage(
+                source=self.source_name,
+                approved_scope=self.approved_scope,
+                status=self.status,
+                retrieved_at=NOW,
+                record_count=0,
+                retrieved_count=356 if self.source_name == "gmail" else 12,
+                selected_count=120 if self.source_name == "gmail" else 12,
+                page_count=4,
+                warnings=(
+                    "provider pagination is not a transactional snapshot",
+                    "a deliberately verbose synthetic retrieval-window warning",
+                ),
+                error_category=self.error_category,
+                context_resources=(
+                    (
+                        ContextResourceCoverage("eligible body candidates", 144, 0),
+                        ContextResourceCoverage("selected body candidates", 120, 0),
+                        ContextResourceCoverage("omitted body candidates", 24, 0),
+                        ContextResourceCoverage("usable candidate bodies", 106, 0),
+                        ContextResourceCoverage(
+                            "bodies unavailable or unsupported",
+                            14,
+                            0,
+                        ),
+                        ContextResourceCoverage("explicit detections", 3, 0),
+                        ContextResourceCoverage("inbound stream messages", 250, 0),
+                        ContextResourceCoverage("inbound stream metadata", 250, 0),
+                        ContextResourceCoverage("sent stream messages", 106, 0),
+                    )
+                    if self.source_name == "gmail"
+                    else ()
+                ),
+            ),
+        )
+
+
 def test_connector_failure_is_disclosed_without_aborting_the_briefing() -> None:
     context = resolve_context(
         run_id="failure-run",
@@ -426,11 +474,40 @@ def test_source_coverage_distinguishes_funnel_and_context_resource_counts() -> N
     coverage = result.plan.sections[-1].summary or ""
     assert (
         "`todoist`: complete; 12 retrieved; 1 selected; 1 persisted; "
-        "1 daily candidates; 1 displayed" in coverage
+        "1 candidates; 1 displayed" in coverage
     )
-    assert "projects: 5 retrieved, 1 persisted" in coverage
-    assert "sections: 2 retrieved, 1 persisted" in coverage
-    assert "labels: 7 retrieved, 3 persisted" in coverage
+    assert "projects 5/1" in coverage
+    assert "sections 2/1" in coverage
+    assert "labels 7/3" in coverage
+
+
+def test_full_mvp_coverage_is_concise_and_partial_boundary_remains_plain() -> None:
+    context = resolve_context(
+        run_id="full-mvp-coverage",
+        briefing_date=BRIEFING_DATE,
+        timezone="America/New_York",
+    )
+    connectors = (
+        _MvpCoverageConnector("repository_context"),
+        _MvpCoverageConnector("google_calendar"),
+        _MvpCoverageConnector("todoist"),
+        _MvpCoverageConnector("jira"),
+        _MvpCoverageConnector(
+            "gmail",
+            status=CoverageStatus.PARTIAL,
+            error_category="bounded_body_candidate_selection",
+        ),
+    )
+
+    result = DeterministicBriefingPipeline().run(context, connectors)
+
+    coverage = result.plan.sections[-1].summary or ""
+    assert "partial at the bounded Gmail body-selection cap" in coverage
+    assert "eligible body candidates 144/0" in coverage
+    assert "inbound stream messages" not in coverage
+    assert "transactional snapshot" not in coverage
+    assert "retrieval-window warning" not in coverage
+    assert result.rendered.word_count <= 500
 
 
 def test_governing_context_informs_the_run_without_becoming_display_content() -> None:
@@ -944,11 +1021,11 @@ def test_july_25_non_workday_suppresses_routine_status_signals() -> None:
     assert "Calendar status signal" not in result.rendered.text
     assert (
         "`synthetic_repository`: complete; 1 retrieved; 1 selected; "
-        "persistence not reported; 0 daily candidates; 0 displayed"
+        "0 candidates; 0 displayed"
     ) in result.rendered.text
     assert (
         "`synthetic_calendar`: complete; 5 retrieved; 5 selected; "
-        "persistence not reported; 0 daily candidates; 3 displayed"
+        "0 candidates; 3 displayed"
     ) in result.rendered.text
     assert result.rendered.word_count <= 800
     visible_items = tuple(
@@ -1256,9 +1333,9 @@ def test_todoist_planning_confidence_uses_transparent_saturation_facts() -> None
     assert confidence.high_priority_ratio == pytest.approx(0.375)
     assert confidence.relative_ranking_degraded
     assert result.plan.task_candidate_audits[0].candidate_count == 1
-    assert "relative-ranking confidence degraded" in result.rendered.text
-    assert "3 overdue [37.5%]" in result.rendered.text
-    assert "3 P1/P2 [37.5%]" in result.rendered.text
+    assert "ranking degraded" in result.rendered.text
+    assert "3/8 overdue" in result.rendered.text
+    assert "3/8 P1/P2" in result.rendered.text
     assert "relative ordering is being treated cautiously" in result.rendered.text
 
 
@@ -1646,8 +1723,7 @@ def test_non_workday_suppresses_todoist_tasks_but_keeps_coverage() -> None:
 
     assert "Synthetic ordinary work" not in result.rendered.text
     assert (
-        "`todoist`: complete; 1 retrieved; 1 selected; "
-        "persistence not reported; 0 daily candidates; 0 displayed"
+        "`todoist`: complete; 1 retrieved; 1 selected; 0 candidates; 0 displayed"
     ) in result.rendered.text
     assert tuple(section.name for section in result.plan.sections) == (
         BriefingSectionName.CHIEF_OF_STAFF_NOTE,

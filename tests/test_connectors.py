@@ -86,6 +86,60 @@ def _fixture_pages() -> tuple[GoogleCalendarPage, ...]:
     return tuple(pages)
 
 
+def test_calendar_preparation_requires_an_explicit_source_field() -> None:
+    connector = GoogleCalendarConnector(
+        account_reference="primary-user",
+        authorization_provider=_MockAuthorizationProvider(),
+        transport=_PagedTransport(
+            (
+                GoogleCalendarPage(
+                    (
+                        GoogleCalendarEvent(
+                            id="important-title-only",
+                            title="Critical planning meeting",
+                            start="2026-07-27T09:00:00-04:00",
+                            end="2026-07-27T10:00:00-04:00",
+                            updated_at=NOW,
+                            html_link="https://calendar.invalid/title-only",
+                        ),
+                        GoogleCalendarEvent(
+                            id="explicit-preparation",
+                            title="Synthetic planning meeting",
+                            start="2026-07-27T10:30:00-04:00",
+                            end="2026-07-27T11:30:00-04:00",
+                            updated_at=NOW,
+                            html_link="https://calendar.invalid/explicit",
+                            preparation="Review the approved synthetic agenda.",
+                        ),
+                    )
+                ),
+            )
+        ),
+    )
+
+    result = DeterministicBriefingPipeline().run(
+        resolve_context(
+            run_id="explicit-calendar-preparation",
+            briefing_date=BRIEFING_DATE,
+            timezone="America/New_York",
+        ),
+        (connector,),
+    )
+
+    preparation = next(
+        section
+        for section in result.plan.sections
+        if section.name is BriefingSectionName.PREPARATION_NEEDED
+    )
+    assert tuple(item.headline for item in preparation.items) == (
+        "Synthetic planning meeting",
+    )
+    assert "Review the approved synthetic agenda." in result.rendered.text
+    assert "Critical planning meeting" not in tuple(
+        item.headline for item in preparation.items
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class _MockAuthorizationProvider:
     scopes: frozenset[str] = frozenset({GOOGLE_CALENDAR_EVENTS_OWNED_READONLY_SCOPE})

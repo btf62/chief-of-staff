@@ -105,6 +105,8 @@ class GmailMvpTrialReport:
     unique_threads: int
     explicit_requests_detected: int
     proposed_people_waiting: int
+    proposed_acknowledgment_obligations: int
+    proposed_preparation_items: int
     explicit_sent_commitments_detected: int
     proposed_commitments_at_risk: int
     records_persisted: int
@@ -387,7 +389,17 @@ class GmailMvpTrialRunner:
                 }
             },
         )
-        review_path = self._write_review(run_id)
+        displayed_gmail_source_ids = {
+            source.source_record_id
+            for section in result.plan.sections
+            for item in section.items
+            for source in item.sources
+            if source.source == "gmail"
+        }
+        review_path = self._write_review(
+            run_id,
+            displayed_source_record_ids=frozenset(displayed_gmail_source_ids),
+        )
         briefing_path = persistence_helper._write_briefing(
             briefing_date=briefing_date.isoformat(),
             run_id=run_id,
@@ -446,6 +458,10 @@ class GmailMvpTrialRunner:
             unique_threads=audit.unique_threads,
             explicit_requests_detected=audit.explicit_requests_detected,
             proposed_people_waiting=audit.people_waiting_proposed,
+            proposed_acknowledgment_obligations=(
+                audit.acknowledgment_obligations_proposed
+            ),
+            proposed_preparation_items=audit.preparation_items_proposed,
             explicit_sent_commitments_detected=audit.explicit_commitments_detected,
             proposed_commitments_at_risk=audit.commitments_at_risk_proposed,
             records_persisted=gmail_persisted,
@@ -495,7 +511,11 @@ class GmailMvpTrialRunner:
                     thread_id=detection.thread_id,
                     direction=(
                         "direct_inbound"
-                        if detection.type is GmailDetectionType.PEOPLE_WAITING
+                        if detection.type
+                        in {
+                            GmailDetectionType.PEOPLE_WAITING,
+                            GmailDetectionType.PREPARATION,
+                        }
                         else "outbound"
                     ),
                     occurred_at=detection.detected_at,
@@ -503,7 +523,11 @@ class GmailMvpTrialRunner:
                     subject=None,
                     label_classification=(
                         "direct_inbound"
-                        if detection.type is GmailDetectionType.PEOPLE_WAITING
+                        if detection.type
+                        in {
+                            GmailDetectionType.PEOPLE_WAITING,
+                            GmailDetectionType.PREPARATION,
+                        }
                         else "outbound"
                     ),
                     detection_type=detection.type.value,
@@ -523,7 +547,11 @@ class GmailMvpTrialRunner:
                         kind=(
                             ConclusionKind.WAITING_ITEM
                             if detection.type is GmailDetectionType.PEOPLE_WAITING
-                            else ConclusionKind.COMMITMENT
+                            else (
+                                ConclusionKind.PREPARATION_ITEM
+                                if detection.type is GmailDetectionType.PREPARATION
+                                else ConclusionKind.COMMITMENT
+                            )
                         ),
                         classification=Classification.EXPLICIT,
                         statement=detection.statement,
@@ -538,12 +566,17 @@ class GmailMvpTrialRunner:
             persisted += 1
         return persisted
 
-    def _write_review(self, run_id: str) -> Path:
+    def _write_review(
+        self,
+        run_id: str,
+        *,
+        displayed_source_record_ids: frozenset[str],
+    ) -> Path:
         audit = self.gmail_connector.last_audit
         if audit is None:
             raise LiveTrialError("Work Gmail lifecycle audit is unavailable")
         lines = [
-            "# Private Work Gmail candidate review",
+            "# Private Milestone 7 deterministic review",
             "",
             "This local artifact contains authorized private email evidence. "
             "Do not commit or share it.",
@@ -590,22 +623,98 @@ class GmailMvpTrialRunner:
                 f"{audit.sent.body_candidates_selected} / "
                 f"{audit.sent.body_candidates_omitted}"
             ),
+            "",
+            "## Source-coverage limitations",
+            "",
+            (
+                "- Work Gmail coverage: "
+                + (
+                    "partial because the body-candidate cap omitted eligible "
+                    "messages without retrieval."
+                    if audit.body_candidate_cap_caused_partial_coverage
+                    else "complete within the accepted bounded windows."
+                )
+            ),
+            (
+                "- Unsupported or unavailable selected bodies: "
+                f"{audit.body_records_unavailable_or_unsupported}"
+            ),
         ]
-        for detection in self.gmail_connector.last_proposed_detections:
+        displayed = tuple(
+            detection
+            for detection in self.gmail_connector.last_proposed_detections
+            if detection.message_id in displayed_source_record_ids
+        )
+        nondisplayed = tuple(
+            detection
+            for detection in self.gmail_connector.last_proposed_detections
+            if detection.message_id not in displayed_source_record_ids
+        )
+        lines.extend(("", "## Displayed conclusions"))
+        if not displayed:
+            lines.extend(("", "- None."))
+        for detection in displayed:
             lines.extend(
                 (
                     "",
-                    f"## {detection.type.value}",
-                    "",
+                    f"### {detection.type.value}",
+                    f"- Classification: {detection.evidence_classification.value}",
                     f"- Proposed conclusion: {detection.statement}",
                     f"- Reason: {detection.explanation}",
                     f"- Source: {detection.display_url}",
                     f"- Minimal evidence: {detection.evidence_excerpt}",
                 )
             )
-        if self.gmail_connector.last_rejections:
-            lines.extend(("", "## Bounded rejected sample"))
-            for rejection in self.gmail_connector.last_rejections:
+        lines.extend(("", "## Supported but nondisplayed conclusions"))
+        if not nondisplayed:
+            lines.extend(("", "- None."))
+        for detection in nondisplayed:
+            lines.extend(
+                (
+                    "",
+                    f"### {detection.type.value}",
+                    f"- Classification: {detection.evidence_classification.value}",
+                    f"- Proposed conclusion: {detection.statement}",
+                    f"- Reason: {detection.explanation}",
+                    f"- Source: {detection.display_url}",
+                    f"- Minimal evidence: {detection.evidence_excerpt}",
+                )
+            )
+
+        recurrence_results = tuple(
+            rejection
+            for rejection in self.gmail_connector.last_rejections
+            if rejection.reason.startswith("local disposition ")
+        )
+        insufficient = tuple(
+            rejection
+            for rejection in self.gmail_connector.last_rejections
+            if rejection not in recurrence_results
+        )
+        lines.extend(("", "## Insufficient-evidence cases"))
+        if not insufficient:
+            lines.extend(("", "- None."))
+        for rejection in insufficient:
+            lines.extend(
+                (
+                    "",
+                    f"- Classification: {rejection.evidence_classification.value}",
+                    f"  Reason: {rejection.reason}",
+                    f"  Source: {rejection.display_url}",
+                )
+            )
+
+        lines.extend(("", "## Correction recurrence results"))
+        if not recurrence_results:
+            lines.extend(
+                (
+                    "",
+                    "- No materially unchanged conclusion was suppressed or "
+                    "reworded by local correction state in this run.",
+                )
+            )
+        else:
+            for rejection in recurrence_results:
                 lines.extend(
                     (
                         "",

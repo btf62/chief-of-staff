@@ -68,6 +68,8 @@ def _report(tmp_path: Path) -> GmailMvpTrialReport:
         unique_threads=2,
         explicit_requests_detected=1,
         proposed_people_waiting=1,
+        proposed_acknowledgment_obligations=0,
+        proposed_preparation_items=0,
         explicit_sent_commitments_detected=1,
         proposed_commitments_at_risk=0,
         records_persisted=2,

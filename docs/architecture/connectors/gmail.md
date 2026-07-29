@@ -1,17 +1,17 @@
 # Work Gmail Connector
 
 - **Status:** Accepted
-- **Version:** 4
+- **Version:** 5
 - **Owner:** Brad
-- **Last updated:** 2026-07-28
+- **Last updated:** 2026-07-29
 
 This specification defines Work Gmail as the final input connector for the
 Daily Briefing v1 MVP. A bounded combined trial has successfully produced the
-private review and briefing with partial Gmail coverage. The repeatable
-validation authorization ended at that success; this specification is not
-authorization for another live retrieval. Healthy credentials do not
-authorize access. This specification does not authorize Personal Gmail,
-Google Drive, hosted inference, scheduling, or external writes.
+private review and briefing with partial Gmail coverage. Brad reviewed that
+evidence and explicitly judged the logic sound, completing Milestone 6.
+Healthy credentials do not independently authorize access. This specification
+does not authorize Personal Gmail, Google Drive, hosted inference, scheduling,
+or external writes.
 
 ## Source responsibility
 
@@ -254,6 +254,10 @@ images, tracking links, and embedded forms and prove that they remain inert.
 
 This milestone uses no hosted inference.
 
+Each evaluated item is labeled as a direct source fact, explicit deterministic
+conclusion, future contextual inference, or insufficient evidence. Milestone 7
+does not emit contextual inference.
+
 ### People Waiting on Brad
 
 A Work Gmail item may appear only when deterministic evidence establishes:
@@ -269,6 +273,26 @@ Email age alone, a question mark alone, automated mail, bulk mail, and
 unsupported or incomplete thread context are insufficient. If older
 out-of-window history may materially change the conclusion, mark coverage
 incomplete or omit the item.
+
+An explicit request may carry a deadline only when the current-message excerpt
+uses one of the tightly supported forms: `by today`, `by tomorrow`, an ISO
+date, a full month and day with optional year, or a named weekday. Ambiguous
+relative expressions remain undated.
+
+### Acknowledgment obligations
+
+An acknowledgment obligation is a People Waiting conclusion with an explicit
+request to acknowledge or confirm receipt, reply to confirm, or state that the
+message was received. A generic question, `confirm` used for another purpose,
+or inferred etiquette is not an acknowledgment obligation.
+
+### Meeting preparation
+
+Work Gmail may create a Preparation Needed item only when a direct human
+message explicitly asks Brad to review, read, prepare, bring, or complete
+something before or for a named meeting, call, appointment, or session. The
+message itself is the stable linked source. Important-sounding Calendar titles
+alone remain insufficient.
 
 ### Explicit commitments
 
@@ -414,12 +438,12 @@ failure, or invariant failure still stops the trial.
 ## Private human-review artifact
 
 Each bounded trial writes one ignored mode-`0600` artifact under
-`.local/gmail/`. It contains every proposed People Waiting item, explicit
-commitment, and Commitment at Risk item with inclusion reason, authoritative
-link, and minimal evidence excerpt. It also includes explicit exclusion
-reasons for a bounded sample of rejected candidates and safe aggregate
-eligible, selected, omitted, fetched, usable, and unavailable body counts by
-stream. Candidate-cap and extracted-content partial coverage are explicit.
+`.local/gmail/`. It groups displayed conclusions, supported but nondisplayed
+conclusions, insufficient-evidence cases, correction recurrence, and
+source-coverage limitations. Every supported conclusion includes its type,
+evidence classification, reason, authoritative link, and minimal excerpt. Safe
+aggregate eligible, selected, omitted, fetched, usable, and unavailable body
+counts remain explicit.
 
 The artifact may contain authorized private work-email content. It never
 enters Git, logs, or chat output.
@@ -461,14 +485,21 @@ and a 929-word combined briefing.
 The review structure contained two People Waiting proposals and one explicit
 sent commitment proposal. Both displayed items retained authoritative Gmail
 links, quoted-history markers were absent from the minimal evidence, and the
-briefing disclosed partial Gmail coverage and the bounded subset. Brad's
-private evidence review remains required before Milestone 6 acceptance.
+briefing disclosed partial Gmail coverage and the bounded subset. Brad
+reviewed the private evidence and combined briefing and explicitly judged the
+results and logic sound. Milestone 6 is accepted.
 
-The repeatable validation authorization ended when the combined briefing was
-successfully produced. Another Gmail or supporting-source retrieval,
-authorization refresh, reauthorization, or boundary change requires new
-explicit approval. Personal Gmail and Google Drive remain deferred and
-unauthorized.
+Milestone 7 then completed a five-source live validation on 2026-07-29. Work
+Gmail selected all 118 eligible bounded body candidates, produced 105 usable
+bodies, and disclosed partial coverage for 13 unavailable or unsupported
+bodies. The other approved sources completed, and the run produced a private
+deterministic-review artifact plus a 635-word briefing without hosted inference
+or external writes. Milestone 7 implementation is complete; Brad's review of
+that private evidence remains the acceptance gate.
+
+Another Gmail or supporting-source retrieval requires explicit current-task
+authorization within the accepted boundary. Personal Gmail and Google Drive
+remain deferred and unauthorized.
 
 ## Related documents
 

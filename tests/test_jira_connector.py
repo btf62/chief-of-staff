@@ -768,7 +768,7 @@ def test_synthetic_jira_records_support_bounded_briefing_sections_and_funnel() -
     assert jira_coverage.displayed_count == 7
     assert jira_audit.available_count == 7
     assert jira_audit.candidate_count == 7
-    assert "1 page (no pagination)" in result.rendered.text
+    assert "1 page" in result.rendered.text
     assert result.deduplication.associations[0].member_ids == (
         "jira:jira:primary:next-1",
         "synthetic_calendar:meeting",

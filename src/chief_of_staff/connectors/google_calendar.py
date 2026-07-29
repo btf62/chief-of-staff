@@ -71,6 +71,7 @@ class GoogleCalendarEvent:
     event_type: str = "default"
     location: str | None = None
     all_day: bool = False
+    preparation: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -336,6 +337,7 @@ def _event_to_source_item(
             "summary": summary,
             "status": event.status,
             "event_type": event.event_type,
+            "preparation": event.preparation,
             "all_day": event.all_day,
             "start_at": start_at.isoformat(),
             "end_at": end_at.isoformat(),

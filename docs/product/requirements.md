@@ -73,6 +73,7 @@ All product capabilities must:
 | Feature | Specification | Status |
 | --- | --- | --- |
 | Daily Briefing v1 | [Specification](features/daily-briefing-v1.md) | Accepted |
+| Deterministic Explicit Detection v1 | [Specification](features/deterministic-explicit-detection-v1.md) | Accepted |
 
 Detailed feature specifications belong in the
 [feature specifications directory](features/README.md).

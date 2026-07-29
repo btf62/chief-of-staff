@@ -50,6 +50,15 @@ class Classification(StrEnum):
     INFERRED = "inferred"
 
 
+class EvidenceClassification(StrEnum):
+    """Milestone 7 evidence judgment without introducing model inference."""
+
+    DIRECT_SOURCE_FACT = "direct_source_fact"
+    EXPLICIT_DETERMINISTIC_CONCLUSION = "explicit_deterministic_conclusion"
+    CONTEXTUAL_INFERENCE = "contextual_inference"
+    INSUFFICIENT_EVIDENCE = "insufficient_evidence"
+
+
 class DispositionKind(StrEnum):
     """Supported append-oriented local disposition events."""
 

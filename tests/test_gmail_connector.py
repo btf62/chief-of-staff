@@ -32,6 +32,7 @@ from chief_of_staff.connectors import (
     GmailMessageMetadata,
     GmailMessageReference,
     GmailMimePart,
+    GmailObligationType,
     GmailProfile,
     GmailRetrievalError,
     GmailStream,
@@ -42,6 +43,7 @@ from chief_of_staff.connectors import (
     gmail_bounded_streams,
     select_gmail_body_candidates,
 )
+from chief_of_staff.domain import EvidenceClassification
 
 NOW = datetime(2026, 7, 28, 13, 0, tzinfo=UTC)
 ACCOUNT_REFERENCE = "primary-user"
@@ -1244,6 +1246,98 @@ def test_only_attributable_promises_with_supported_dates_become_at_risk() -> Non
     assert detections[0].display_url.startswith("https://mail.google.com/")
 
 
+def test_direct_request_preserves_supported_deadline_and_evidence_classification() -> (
+    None
+):
+    request = _metadata(
+        "deadline-request",
+        "deadline-thread",
+        sender="person@example.invalid",
+        recipient=GMAIL_WORK_ACCOUNT,
+        occurred_at=datetime(2026, 7, 27, 13, 0, tzinfo=UTC),
+    )
+
+    detections, rejections = detect_gmail_conclusions(
+        (request,),
+        {request.id: GmailMessageClassification.DIRECT_INBOUND},
+        {request.id: "Please review the synthetic packet by 2026-07-29."},
+        briefing_date=date(2026, 7, 28),
+    )
+
+    assert rejections == ()
+    assert len(detections) == 1
+    assert detections[0].type is GmailDetectionType.PEOPLE_WAITING
+    assert detections[0].due_at == datetime(2026, 7, 29, tzinfo=UTC)
+    assert (
+        detections[0].evidence_classification
+        is EvidenceClassification.EXPLICIT_DETERMINISTIC_CONCLUSION
+    )
+
+
+def test_explicit_acknowledgment_is_distinguished_from_generic_request() -> None:
+    request = _metadata(
+        "acknowledgment",
+        "acknowledgment-thread",
+        sender="person@example.invalid",
+        recipient=GMAIL_WORK_ACCOUNT,
+    )
+
+    detections, rejections = detect_gmail_conclusions(
+        (request,),
+        {request.id: GmailMessageClassification.DIRECT_INBOUND},
+        {request.id: "Please reply to confirm you received the synthetic packet."},
+        briefing_date=date(2026, 7, 28),
+    )
+
+    assert rejections == ()
+    assert detections[0].type is GmailDetectionType.PEOPLE_WAITING
+    assert detections[0].obligation_type is GmailObligationType.ACKNOWLEDGMENT
+    assert "acknowledgment" in detections[0].explanation
+
+
+def test_explicit_email_meeting_preparation_is_a_distinct_conclusion() -> None:
+    request = _metadata(
+        "preparation",
+        "preparation-thread",
+        sender="person@example.invalid",
+        recipient=GMAIL_WORK_ACCOUNT,
+    )
+
+    detections, rejections = detect_gmail_conclusions(
+        (request,),
+        {request.id: GmailMessageClassification.DIRECT_INBOUND},
+        {
+            request.id: (
+                "Please review the synthetic outline before the planning meeting."
+            )
+        },
+        briefing_date=date(2026, 7, 28),
+    )
+
+    assert rejections == ()
+    assert detections[0].type is GmailDetectionType.PREPARATION
+    assert detections[0].obligation_type is GmailObligationType.MEETING_PREPARATION
+
+
+def test_ambiguous_relative_deadline_remains_an_explicit_nonrisk_commitment() -> None:
+    message = _metadata(
+        "ambiguous-date",
+        "ambiguous-date-thread",
+        sender=GMAIL_WORK_ACCOUNT,
+        recipient="person@example.invalid",
+    )
+
+    detections, _rejections = detect_gmail_conclusions(
+        (message,),
+        {message.id: GmailMessageClassification.OUTBOUND},
+        {message.id: "I'll send the synthetic outline by sometime next week."},
+        briefing_date=date(2026, 7, 28),
+    )
+
+    assert detections[0].type is GmailDetectionType.EXPLICIT_COMMITMENT
+    assert detections[0].due_at is None
+
+
 def test_local_recurrence_decisions_suppress_or_correct_unchanged_detections() -> None:
     first = _metadata(
         "first",
@@ -1291,3 +1385,42 @@ def test_local_recurrence_decisions_suppress_or_correct_unchanged_detections() -
         "local disposition suppresses" in rejection.reason
         for rejection in connector.last_rejections
     )
+
+
+def test_preparation_conclusion_uses_the_same_correction_recurrence_boundary() -> None:
+    preparation = _metadata(
+        "preparation-recurrence",
+        "preparation-recurrence-thread",
+        sender="person@example.invalid",
+        recipient=GMAIL_WORK_ACCOUNT,
+    )
+    connector = GmailConnector(
+        account_reference=ACCOUNT_REFERENCE,
+        authorization_provider=_AuthorizationProvider(),
+        transport=_Transport(
+            pages=(
+                GmailMessageListPage(
+                    (GmailMessageReference(preparation.id, preparation.thread_id),)
+                ),
+                GmailMessageListPage(()),
+            ),
+            metadata={preparation.id: preparation},
+            bodies={
+                preparation.id: _full(
+                    preparation,
+                    "Please review the synthetic outline before the planning meeting.",
+                )
+            },
+        ),
+        recurrence_resolver=lambda _fingerprint: (
+            "replace",
+            "Use the corrected preparation wording",
+        ),
+        clock=lambda: NOW,
+    )
+
+    result = connector.retrieve(_request())
+
+    assert len(result.items) == 1
+    assert result.items[0].item_type == "preparation_item"
+    assert result.items[0].facts["title"] == "Use the corrected preparation wording"

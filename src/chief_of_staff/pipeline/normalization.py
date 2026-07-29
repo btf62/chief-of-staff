@@ -18,6 +18,7 @@ class RecordKind(StrEnum):
     TASK = "task"
     WAITING_ITEM = "waiting_item"
     COMMITMENT = "commitment"
+    PREPARATION_ITEM = "preparation_item"
     CONTEXT = "context"
 
 

@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Owner:** Brad
-- **Last updated:** 2026-07-28
+- **Last updated:** 2026-07-29
 
 This runbook describes the supported local, on-demand Daily Briefing command.
 It reads only the existing approved connector instances and never modifies an
@@ -41,12 +41,15 @@ without starting another retrieval.
 On success, the command prints:
 
 - The private Daily Briefing path under `.local/briefings/`
-- The private Gmail evidence-review path under `.local/gmail/reviews/`
+- The private Milestone 7 deterministic-review path under
+  `.local/gmail/reviews/`
 - A concise Work Gmail coverage and omission summary
 - Confirmation that the external sources remained read-only
 
-Both artifacts are ignored by Git and created with mode `0600`. Do not copy
-the Gmail review into the repository or a public report.
+Both artifacts are ignored by Git and created with mode `0600`. The review
+separates displayed, supported-but-nondisplayed, insufficient-evidence, and
+correction-recurrence results. Do not copy it into the repository or a public
+report.
 
 ## Understand partial coverage
 
