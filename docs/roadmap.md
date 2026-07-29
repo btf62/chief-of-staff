@@ -235,8 +235,8 @@ approval.
 
 ## Milestone 6 — Work Gmail and the Input-Complete MVP Gate
 
-- **Status:** In progress — deterministic bounded Gmail subset implemented;
-  same-window combined validation pending
+- **Status:** In progress — combined live trial complete; Brad's human trust
+  review pending
 - **Intended user-visible outcome:** Brad can review one input-complete,
   on-demand MVP briefing that adds high-confidence work correspondence,
   explicit requests, and explicit sent commitments to the existing Calendar,
@@ -274,30 +274,24 @@ The Work Gmail specification and synthetic implementation gate are complete.
 Exact-scope OAuth, metadata-first retrieval, MIME minimization, high-precision
 deterministic detection, minimized persistence, correction recurrence, private
 review artifacts, and briefing integration passed the synthetic quality gate.
-The latest combined trial on 2026-07-28 listed 356 messages across four pages,
-inspected 356 metadata records, and found 143 eligible body candidates. The
-then-current all-or-nothing rule stopped before body retrieval because the
-hard cap was 120. It produced no Gmail records, briefing run, review artifact,
-or combined briefing, so the acceptance gate was not satisfied.
+The successful same-window combined trial on 2026-07-28 listed and inspected
+357 messages across four pages. It found 144 eligible body candidates,
+selected 120, omitted 24 without body retrieval, attempted 117 body reads, and
+produced 106 usable bodies. Gmail coverage was partial as required; repository,
+primary Calendar, Todoist, and Jira coverage was complete. Three minimized
+Gmail conclusions were persisted, two People Waiting items were displayed, and
+the trial produced the private review plus a 929-word combined briefing.
 
-The connector now keeps the 120-body privacy boundary and deterministically
-selects a proportional, newest-first inbound/sent subset when eligible
-candidates exceed it. Omitted candidates receive no body request or
-conclusion; coverage and private review report safe aggregate selection and
-omission counts. Extracted-content exhaustion similarly preserves completed
-evidence and produces explicit partial coverage without truncated conclusions.
-The same-window combined trial remains the current acceptance step.
+The connector kept the 120-body privacy boundary. Coverage and the private
+review disclosed aggregate selection and omission counts, no extracted-content
+exhaustion occurred, and no truncated conclusion was used. Structural review
+confirmed authoritative links and no quoted-history markers in minimal
+evidence. Brad's review of the private evidence remains the Milestone 6 trust
+acceptance step.
 
-Offline diagnostic remediation now preserves privacy-safe current-run failure
-categories, boundary counts, and lifecycle progress through pipeline isolation
-and private aggregate failure reporting without failed-run application-data
-persistence. Brad has authorized repeatable, on-demand, read-only Work Gmail
-validation attempts within the accepted account, scope, privacy, and source
-boundaries until an MVP briefing succeeds or a genuine external blocker is
-reached. These attempts may include the existing read-only Calendar, Todoist,
-Jira, and repository inputs required by the combined MVP. Another identical
-bounded attempt does not require separate approval. Healthy credentials do not
-authorize broader access. Personal Gmail, Google Drive, hosted inference, and
+The repeatable validation authorization ended at success. Another live
+retrieval, authorization refresh, reauthorization, or boundary change requires
+new explicit approval. Personal Gmail, Google Drive, hosted inference, and
 another connector remain unauthorized.
 
 ## Milestone 7 — Explicit Commitment and Preparation Detection

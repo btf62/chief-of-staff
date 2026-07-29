@@ -12,20 +12,17 @@ its mocked phase, one resource-restricted project-discovery trial, and one
 exact-project live issue trial integrated with the deterministic briefing.
 Milestone 5 now covers only Todoist and Jira and is complete. Work Gmail is the
 final MVP input connector, and its synthetic implementation gate is complete.
-The latest combined Work Gmail trial on 2026-07-28 listed 356 messages,
-inspected 356 metadata records, and found 143 eligible body candidates. The
-then-current all-or-nothing behavior stopped at the 120-body cap without
-persistence or briefing artifacts. The connector now keeps that hard cap while
-selecting a deterministic bounded subset and reporting partial coverage.
-Milestone 6 remains in progress pending the same-window combined rerun. Brad
-has authorized repeatable, on-demand, read-only Work Gmail validation attempts
-within the accepted account, scope, privacy, and source boundaries until one
-MVP briefing is successfully produced or a genuine external blocker is
-reached. Those attempts may refresh or reauthorize the exact Work Gmail grant
-and retrieve the existing read-only Calendar, Todoist, Jira, and repository
-inputs required for the combined briefing. Healthy credentials do not
-authorize broader access. Personal Gmail and Google Drive remain deferred and
-unauthorized.
+The successful combined Work Gmail trial on 2026-07-28 listed and inspected 357
+messages, found 144 eligible body candidates, selected 120, omitted 24 without
+body retrieval, attempted 117 body reads, and produced 106 usable bodies. Gmail
+coverage was partial as required; repository, Calendar, Todoist, and Jira
+coverage was complete. The trial persisted three minimized Gmail conclusions
+and produced a private candidate review plus a 929-word combined briefing.
+Milestone 6's live trial is complete; Brad's human trust review remains before
+acceptance. The repeatable validation authorization ended when the briefing
+was successfully produced. No repeat source retrieval, authorization refresh,
+scope change, or broader live access is now authorized. Personal Gmail and
+Google Drive remain deferred and unauthorized.
 
 ## Working rules
 
@@ -88,14 +85,12 @@ The Version 1 design-readiness requirements have been met:
    acceptance gates, and exclusions.
 
 Implementation may proceed only when a task explicitly authorizes it. The
-Google Calendar, Todoist, Jira project-discovery, Jira issue, and first Work
-Gmail trial gates have been exercised. Repeatable combined-MVP attempts are
-authorized only within the exact Work Gmail boundary described above; another
-identical bounded attempt does not require separate approval. Do not broaden
-access, repeat Jira discovery, run an unrelated live retrieval, or begin
-another connector without new explicit approval from Brad. Satisfy a
-milestone's acceptance gate before beginning dependent work. Record material
-new product or architecture decisions before implementing them.
+Google Calendar, Todoist, Jira project-discovery, Jira issue, and combined Work
+Gmail trial gates have been exercised. Do not repeat live retrieval, refresh
+authorization, broaden access, repeat Jira discovery, run an unrelated live
+retrieval, or begin another connector without new explicit approval from Brad.
+Satisfy a milestone's acceptance gate before beginning dependent work. Record
+material new product or architecture decisions before implementing them.
 
 ## Validation
 

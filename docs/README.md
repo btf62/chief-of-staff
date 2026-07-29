@@ -15,17 +15,14 @@ normal-workday quality validation. Jira has completed its mocked phase,
 resource-restricted project discovery, and one explicitly approved
 exact-project issue-retrieval trial integrated with a deterministic briefing.
 Milestone 5 now covers only Todoist and Jira. Work Gmail is the final MVP input
-connector. Its latest combined trial listed 356 messages, inspected 356
-metadata records, and found 143 eligible body candidates. The then-current
-all-or-nothing behavior stopped at the 120-body cap without persistence or
-briefing artifacts. The connector now keeps that hard cap while selecting a
-deterministic bounded subset and reporting partial coverage. Milestone 6
-remains in progress pending the same-window combined rerun. Brad has authorized
-repeatable, on-demand, read-only Work Gmail validation attempts within the
-accepted account, scope, privacy, and source boundaries until an MVP briefing
-succeeds or a genuine external blocker is reached. An identical bounded
-attempt does not require separate approval; healthy credentials do not
-authorize broader access. Personal Gmail and Google Drive remain deferred and
+connector. Its successful combined trial listed and inspected 357 messages,
+found 144 eligible body candidates, selected 120, omitted 24 without body
+retrieval, and produced 106 usable bodies. Gmail coverage was partial as
+required while the other four inputs were complete. The trial created the
+private review and a 929-word combined briefing. Milestone 6's live trial is
+complete; Brad's human trust review remains before acceptance. The repeatable
+validation authorization ended at success, so another live retrieval requires
+new explicit approval. Personal Gmail and Google Drive remain deferred and
 unauthorized.
 Design acceptance authorizes implementation within the accepted scope; it does
 not mean the complete Daily Briefing has passed operational acceptance.

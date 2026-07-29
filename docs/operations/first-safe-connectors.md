@@ -8,11 +8,11 @@ This document describes the implemented repository, Calendar, Todoist, Jira,
 and Work Gmail boundaries. The synthetic demonstrations, bounded Calendar and
 Todoist trials, Todoist workday-quality validation, Jira project discovery,
 and one exact-project Jira issue trial are complete. The Work Gmail synthetic
-gate is complete. Its first combined trial stopped
-without satisfying the Milestone 6 acceptance gate. It stopped before Gmail
-metadata or body analysis and produced no Gmail records, briefing run, review
-artifact, or combined briefing. Offline diagnostic remediation is complete,
-and repeatable bounded validation is authorized within the accepted boundary.
+gate and same-window combined live trial are complete. Gmail processed a
+deterministic subset of 120 from 144 eligible body candidates, reported 24
+omissions and partial coverage, and produced the private review and combined
+briefing. Brad's private evidence review remains before Milestone 6 acceptance.
+The trial is stopped; no repeat live retrieval is authorized.
 
 ## Run the safe connector demonstration
 
@@ -276,7 +276,7 @@ subjects, query strings, content, labels, page tokens, provider responses, or
 credentials. Failed trials do not write briefing state, Gmail evidence, review
 artifacts, or combined briefings.
 
-Brad has authorized repeatable, on-demand attempts using only `gmail:work`,
+Brad authorized repeatable, on-demand attempts using only `gmail:work`,
 the exact `gmail.readonly` scope, and the existing Northridge-controlled OAuth
 application until an MVP briefing succeeds or a genuine external blocker is
 reached. An attempt may perform the normal exact-scope refresh or
@@ -284,6 +284,10 @@ reauthorization and retrieve the existing read-only Calendar, Todoist, Jira,
 and repository inputs required for that combined briefing. Another identical
 bounded attempt needs no separate approval. Healthy credentials do not permit
 broader access, background operation, or an unrelated retrieval.
+
+That authorization ended when the combined briefing was successfully produced
+on 2026-07-28. The paragraph above records the boundary of the completed trial;
+it is not continuing authorization for another retrieval.
 
 Timeout, network, rate-limit, and provider-5xx failures use a safe
 `Retry-After` delay when available or bounded exponential backoff otherwise.
@@ -418,8 +422,8 @@ operations.
   and commitments are intentionally omitted.
 - Daily Briefing v1 has not been accepted for operational use.
 
-Only the repeatable combined-MVP Work Gmail validation described above may
-proceed without separate approval. Do not broaden any account, scope, source,
-endpoint, retrieval cap, or operating mode; run an unrelated live retrieval;
-or begin another connector without new explicit approval from Brad. Personal
-Gmail and Google Drive remain deferred and unauthorized.
+No live connector retrieval may now proceed. Do not refresh or reauthorize a
+grant; repeat Work Gmail, Calendar, Todoist, or Jira access; broaden any
+account, scope, source, endpoint, retrieval cap, or operating mode; or begin
+another connector without new explicit approval from Brad. Personal Gmail and
+Google Drive remain deferred and unauthorized.

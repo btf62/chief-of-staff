@@ -127,6 +127,10 @@ No strict versioning scheme is promised before a distributable product exists.
   proportional inbound/sent selection of at most 120 recent candidates,
   transparent partial coverage, aggregate omission accounting, and graceful
   extracted-content exhaustion without truncated conclusions.
+- Completed the same-window combined Work Gmail MVP trial with partial Gmail
+  coverage, minimized persistence, a private candidate review, and a
+  budget-compliant deterministic briefing; stopped live access pending Brad's
+  private trust review.
 - Recorded that the first combined Work Gmail trial stopped without producing
   Gmail records, persisted briefing state, a review artifact, or a combined
   briefing; Milestone 6 remains in progress.

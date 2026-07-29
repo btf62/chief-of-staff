@@ -6,14 +6,12 @@
 - **Last updated:** 2026-07-28
 
 This specification defines Work Gmail as the final input connector for the
-Daily Briefing v1 MVP. The first bounded trial stopped without satisfying the
-acceptance gate. Brad has authorized repeatable, on-demand, read-only
-validation attempts within the exact account, scope, retrieval, privacy, and
-source boundaries below until an MVP briefing succeeds or a genuine external
-blocker is reached. Another identical bounded attempt does not require
-separate approval. Healthy credentials do not authorize broader access. This
-specification does not authorize Personal Gmail, Google Drive, hosted
-inference, scheduling, or external writes.
+Daily Briefing v1 MVP. A bounded combined trial has successfully produced the
+private review and briefing with partial Gmail coverage. The repeatable
+validation authorization ended at that success; this specification is not
+authorization for another live retrieval. Healthy credentials do not
+authorize access. This specification does not authorize Personal Gmail,
+Google Drive, hosted inference, scheduling, or external writes.
 
 ## Source responsibility
 
@@ -451,22 +449,26 @@ MVP acceptance.
 
 ### Validation status
 
-The latest combined trial on 2026-07-28 listed 356 messages across four pages,
-inspected 356 metadata records, and found 143 eligible body candidates. The
-then-current all-or-nothing rule stopped before body retrieval because the
-hard cap was 120. It produced no Gmail records, briefing run, review artifact,
-or combined briefing and did not satisfy the Milestone 6 acceptance gate.
+The successful same-window combined trial on 2026-07-28 listed and inspected
+357 messages across four pages. It found 144 eligible body candidates,
+selected 120 proportionally across inbound and sent streams, omitted 24
+without body retrieval, attempted 117 body reads, and produced 106 usable
+bodies. Gmail coverage was partial as required; repository, primary Calendar,
+Todoist, and Jira coverage was complete. The trial persisted three minimized
+Gmail conclusions, displayed two, and produced the private candidate review
+and a 929-word combined briefing.
 
-Version 4 keeps the 120-body hard limit but replaces the all-or-nothing stop
-with deterministic bounded subset processing and transparent partial
-coverage. A same-window combined validation remains required.
+The review structure contained two People Waiting proposals and one explicit
+sent commitment proposal. Both displayed items retained authoritative Gmail
+links, quoted-history markers were absent from the minimal evidence, and the
+briefing disclosed partial Gmail coverage and the bounded subset. Brad's
+private evidence review remains required before Milestone 6 acceptance.
 
-Offline diagnostic remediation is complete. Repeatable on-demand attempts may
-refresh or reauthorize only the exact Work Gmail grant and may retrieve the
-existing read-only Calendar, Todoist, Jira, and repository inputs required for
-the combined MVP. Failed attempts write separate private aggregate diagnostic
-reports and persist no combined run or Gmail application data. Personal Gmail
-and Google Drive remain deferred and unauthorized.
+The repeatable validation authorization ended when the combined briefing was
+successfully produced. Another Gmail or supporting-source retrieval,
+authorization refresh, reauthorization, or boundary change requires new
+explicit approval. Personal Gmail and Google Drive remain deferred and
+unauthorized.
 
 ## Related documents
 
