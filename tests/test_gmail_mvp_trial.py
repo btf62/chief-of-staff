@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import base64
+import json
 import stat
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import cast
 
+import pytest
+
 from chief_of_staff.connectors import (
+    GMAIL_INBOUND_MESSAGE_LIMIT,
     GMAIL_READONLY_SCOPE,
     GMAIL_WORK_ACCOUNT,
     GMAIL_WORK_ALIAS,
@@ -17,6 +21,8 @@ from chief_of_staff.connectors import (
     ConnectorRequest,
     GmailAuthorization,
     GmailConnector,
+    GmailFailureCategory,
+    GmailFailureStage,
     GmailFullMessage,
     GmailMessageListPage,
     GmailMessageListRequest,
@@ -27,14 +33,16 @@ from chief_of_staff.connectors import (
     GoogleCalendarConnector,
     JiraConnector,
     RetrievalWindow,
+    StaticConnector,
     TodoistConnector,
 )
 from chief_of_staff.domain import (
     ConnectorDomain,
     ConnectorInstanceMetadata,
+    CoverageStatus,
     SourceEvidence,
 )
-from chief_of_staff.gmail_mvp_trial import GmailMvpTrialRunner
+from chief_of_staff.gmail_mvp_trial import GmailMvpTrialFailure, GmailMvpTrialRunner
 from chief_of_staff.persistence import Database, StateStore
 
 NOW = datetime(2026, 7, 28, 13, 0, tzinfo=UTC)
@@ -93,6 +101,43 @@ class _Transport:
             self.metadata,
             GmailMimePart(mime_type="text/plain", body_data=body),
         )
+
+
+@dataclass(frozen=True, slots=True)
+class _BoundaryTransport:
+    def get_profile(self, authorization: GmailAuthorization) -> GmailProfile:
+        del authorization
+        return GmailProfile(GMAIL_WORK_ACCOUNT)
+
+    def list_messages(
+        self,
+        authorization: GmailAuthorization,
+        request: GmailMessageListRequest,
+    ) -> GmailMessageListPage:
+        del authorization, request
+        return GmailMessageListPage(
+            tuple(
+                GmailMessageReference(
+                    f"private-message-{index}",
+                    f"private-thread-{index}",
+                )
+                for index in range(GMAIL_INBOUND_MESSAGE_LIMIT + 1)
+            )
+        )
+
+    def get_message_metadata(
+        self,
+        authorization: GmailAuthorization,
+        message_id: str,
+    ) -> GmailMessageMetadata:
+        raise AssertionError((authorization, message_id))
+
+    def get_message_full(
+        self,
+        authorization: GmailAuthorization,
+        message_id: str,
+    ) -> GmailFullMessage:
+        raise AssertionError((authorization, message_id))
 
 
 def test_private_review_and_minimized_facts_are_local_inspectable_and_deletable(
@@ -197,3 +242,106 @@ def test_private_trial_paths_are_ignored_by_repository() -> None:
     gitignore = (repository_root / ".gitignore").read_text(encoding="utf-8")
 
     assert ".local/" in gitignore
+
+
+def test_failed_trial_writes_safe_private_attempt_reports_without_persistence(
+    tmp_path: Path,
+) -> None:
+    gmail = GmailConnector(
+        account_reference="primary-user",
+        authorization_provider=_AuthorizationProvider(),
+        transport=_BoundaryTransport(),
+        clock=lambda: NOW,
+    )
+    context_path = tmp_path / "context.md"
+    context_path.write_text("# Synthetic context\n", encoding="utf-8")
+    briefing_directory = tmp_path / ".local" / "briefings"
+    review_directory = tmp_path / ".local" / "gmail" / "reviews"
+
+    with Database.open(tmp_path / "state.sqlite3") as database:
+        store = StateStore(database)
+        runner = GmailMvpTrialRunner(
+            state_store=store,
+            repository_root=tmp_path,
+            repository_paths=(Path("context.md"),),
+            calendar_connector=cast(
+                GoogleCalendarConnector,
+                StaticConnector(
+                    source_name="google_calendar",
+                    approved_scope="synthetic calendar read only",
+                    items=(),
+                    status=CoverageStatus.COMPLETE,
+                ),
+            ),
+            todoist_connector=cast(
+                TodoistConnector,
+                StaticConnector(
+                    source_name="todoist",
+                    approved_scope="synthetic todoist read only",
+                    items=(),
+                    status=CoverageStatus.COMPLETE,
+                ),
+            ),
+            jira_connector=cast(
+                JiraConnector,
+                StaticConnector(
+                    source_name="jira",
+                    approved_scope="synthetic jira read only",
+                    items=(),
+                    status=CoverageStatus.COMPLETE,
+                ),
+            ),
+            gmail_connector=gmail,
+            briefing_directory=briefing_directory,
+            review_directory=review_directory,
+            briefing_date_override=date(2026, 7, 28),
+            clock=lambda: NOW,
+        )
+
+        with pytest.raises(GmailMvpTrialFailure) as raised:
+            runner.run()
+
+        report = raised.value.report
+        failure = report.failure
+        assert failure.failure_category is (
+            GmailFailureCategory.CONFIGURED_BOUNDARY_EXCEEDED
+        )
+        assert failure.failure_stage is GmailFailureStage.LISTING
+        assert failure.configured_boundary_name == "inbound_messages"
+        assert failure.configured_limit == GMAIL_INBOUND_MESSAGE_LIMIT
+        assert failure.observed_aggregate_count == GMAIL_INBOUND_MESSAGE_LIMIT + 1
+        assert failure.pages_completed == 1
+        assert failure.message_references_listed == GMAIL_INBOUND_MESSAGE_LIMIT + 1
+        assert not failure.metadata_retrieval_began
+        assert not failure.body_retrieval_began
+        assert not failure.persistence_began
+        assert not failure.raw_payloads_retained
+        assert report.records_persisted == 0
+        assert report.retrieval_attempts == 5
+        assert len(report.failure_report_paths) == 5
+        assert all(path.exists() for path in report.failure_report_paths)
+        assert all(
+            stat.S_IMODE(path.stat().st_mode) == 0o600
+            for path in report.failure_report_paths
+        )
+        assert not report.briefing_run_persisted
+        assert not report.review_artifact_created
+        assert not report.combined_briefing_created
+        inspection = store.inspect_state()
+        assert inspection.connector_runs == 0
+        assert inspection.briefing_runs == 0
+        assert inspection.source_evidence == 0
+        assert inspection.normalized_gmail_messages == 0
+
+    assert not briefing_directory.exists()
+    assert not review_directory.exists()
+    assert (tmp_path / ".local" / "gmail").is_dir()
+    serialized = json.dumps(asdict(report), default=str)
+    assert "private-message" not in serialized
+    assert "private-thread" not in serialized
+    assert "synthetic read only" not in serialized
+    for failure_path in report.failure_report_paths:
+        failure_text = failure_path.read_text(encoding="utf-8")
+        assert "private-message" not in failure_text
+        assert "private-thread" not in failure_text
+        assert "synthetic read only" not in failure_text

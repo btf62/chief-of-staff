@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import uuid
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -23,6 +24,7 @@ from chief_of_staff.connectors import (
     ConnectorInstanceIdentity,
     GmailConnector,
     GmailDetectionType,
+    GmailFailureAudit,
     GmailStreamAudit,
     GoogleCalendarConnector,
     JiraConnector,
@@ -102,6 +104,8 @@ class GmailMvpTrialReport:
     briefing_path: Path
     briefing_word_count: int
     displayed_sections: tuple[str, ...]
+    retrieval_attempts: int
+    failure_report_paths: tuple[Path, ...]
     raw_payload_persisted: bool = False
     complete_body_persisted: bool = False
     attachment_retrieval_used: bool = False
@@ -109,6 +113,37 @@ class GmailMvpTrialReport:
     external_mutation_used: bool = False
     personal_gmail_authorized: bool = False
     google_drive_invoked: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class GmailMvpTrialFailureReport:
+    """Private-content-free aggregate report for a failed bounded trial."""
+
+    failure: GmailFailureAudit
+    retrieval_attempts: int
+    failure_report_paths: tuple[Path, ...]
+    gmail_coverage: str
+    source_coverage: tuple[tuple[str, str, int], ...]
+    records_persisted: int = 0
+    briefing_run_persisted: bool = False
+    review_artifact_created: bool = False
+    combined_briefing_created: bool = False
+    raw_payload_persisted: bool = False
+    complete_body_persisted: bool = False
+    hosted_inference_used: bool = False
+    external_mutation_used: bool = False
+    personal_gmail_authorized: bool = False
+    google_drive_invoked: bool = False
+
+
+class GmailMvpTrialFailure(LiveTrialError):
+    """Expose a safe aggregate report without persisting failed trial data."""
+
+    def __init__(self, report: GmailMvpTrialFailureReport) -> None:
+        super().__init__(
+            f"Work Gmail trial stopped: {report.failure.failure_category.value}"
+        )
+        self.report = report
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,7 +168,7 @@ class GmailMvpTrialRunner:
     )
 
     def run(self) -> GmailMvpTrialReport:
-        """Perform exactly one bounded Gmail and input-complete briefing trial."""
+        """Perform one bounded Gmail and input-complete briefing invocation."""
 
         started_at = self.clock()
         briefing_date = (
@@ -148,44 +183,110 @@ class GmailMvpTrialRunner:
             invocation_mode="bounded_work_gmail_mvp_trial",
             lookahead_days=7,
         )
-        result = DeterministicBriefingPipeline().run(
-            context,
-            (
-                RepositoryContextConnector(
-                    root=self.repository_root,
-                    approved_paths=self.repository_paths,
-                    clock=self.clock,
+        failure_report_paths: list[Path] = []
+
+        def write_failure_report(failure: GmailFailureAudit) -> None:
+            failure_report_paths.append(
+                _write_private(
+                    self.review_directory.parent,
+                    (
+                        f"{run_id}-failure-attempt-"
+                        f"{len(failure_report_paths) + 1:02}.json"
+                    ),
+                    json.dumps(
+                        asdict(failure),
+                        default=_json_default,
+                        indent=2,
+                        sort_keys=True,
+                    )
+                    + "\n",
+                )
+            )
+
+        prior_window_fallback = self.gmail_connector.allow_window_fallback
+        prior_authorization_refresh = self.gmail_connector.allow_authorization_refresh
+        prior_transient_attempts = self.gmail_connector.max_transient_attempts
+        prior_failure_reporter = self.gmail_connector.failure_reporter
+        self.gmail_connector.allow_window_fallback = True
+        self.gmail_connector.allow_authorization_refresh = True
+        self.gmail_connector.max_transient_attempts = 3
+        self.gmail_connector.failure_reporter = write_failure_report
+        try:
+            result = DeterministicBriefingPipeline().run(
+                context,
+                (
+                    RepositoryContextConnector(
+                        root=self.repository_root,
+                        approved_paths=self.repository_paths,
+                        clock=self.clock,
+                    ),
+                    _instance(
+                        GOOGLE_CALENDAR_PRIMARY_INSTANCE,
+                        "Primary Calendar",
+                        "google_calendar",
+                        self.calendar_connector,
+                    ),
+                    _instance(
+                        TODOIST_PRIMARY_INSTANCE,
+                        "Todoist",
+                        "todoist",
+                        self.todoist_connector,
+                    ),
+                    _instance(
+                        JIRA_PRIMARY_INSTANCE,
+                        "NRC Jira",
+                        "jira",
+                        self.jira_connector,
+                    ),
+                    _instance(
+                        GMAIL_WORK_INSTANCE,
+                        GMAIL_WORK_ALIAS,
+                        "gmail",
+                        self.gmail_connector,
+                    ),
                 ),
-                _instance(
-                    GOOGLE_CALENDAR_PRIMARY_INSTANCE,
-                    "Primary Calendar",
-                    "google_calendar",
-                    self.calendar_connector,
-                ),
-                _instance(
-                    TODOIST_PRIMARY_INSTANCE,
-                    "Todoist",
-                    "todoist",
-                    self.todoist_connector,
-                ),
-                _instance(
-                    JIRA_PRIMARY_INSTANCE,
-                    "NRC Jira",
-                    "jira",
-                    self.jira_connector,
-                ),
-                _instance(
-                    GMAIL_WORK_INSTANCE,
-                    GMAIL_WORK_ALIAS,
-                    "gmail",
-                    self.gmail_connector,
-                ),
-            ),
-        )
+            )
+        finally:
+            self.gmail_connector.allow_window_fallback = prior_window_fallback
+            self.gmail_connector.allow_authorization_refresh = (
+                prior_authorization_refresh
+            )
+            self.gmail_connector.max_transient_attempts = prior_transient_attempts
+            self.gmail_connector.failure_reporter = prior_failure_reporter
         completed_at = self.clock()
         coverage_by_source = {
             coverage.source: coverage for coverage in result.plan.coverage
         }
+        gmail_coverage = coverage_by_source["gmail"]
+        if gmail_coverage.status in {
+            CoverageStatus.UNAUTHORIZED,
+            CoverageStatus.UNAVAILABLE,
+        }:
+            failure = self.gmail_connector.last_failure_audit
+            if failure is None:
+                raise LiveTrialError(
+                    "Work Gmail failed without a current diagnostic audit"
+                )
+            raise GmailMvpTrialFailure(
+                GmailMvpTrialFailureReport(
+                    failure=failure,
+                    retrieval_attempts=self.gmail_connector.last_attempt_count,
+                    failure_report_paths=tuple(failure_report_paths),
+                    gmail_coverage=gmail_coverage.status.value,
+                    source_coverage=tuple(
+                        (
+                            coverage.account_alias or coverage.source,
+                            coverage.status.value,
+                            coverage.record_count,
+                        )
+                        for coverage in result.plan.coverage
+                    ),
+                    personal_gmail_authorized=(
+                        self.state_store.get_connector_authorization("gmail:personal")
+                        is not None
+                    ),
+                )
+            )
         for source in ("google_calendar", "todoist", "jira", "gmail"):
             coverage = coverage_by_source[source]
             if coverage.status is CoverageStatus.UNAUTHORIZED:
@@ -292,7 +393,6 @@ class GmailMvpTrialRunner:
                 used_at=completed_at,
             )
 
-        gmail_coverage = coverage_by_source["gmail"]
         displayed_sections = tuple(
             section.name.value
             for section in result.plan.sections
@@ -339,6 +439,8 @@ class GmailMvpTrialRunner:
             briefing_path=briefing_path,
             briefing_word_count=result.rendered.word_count,
             displayed_sections=displayed_sections,
+            retrieval_attempts=self.gmail_connector.last_attempt_count,
+            failure_report_paths=tuple(failure_report_paths),
             personal_gmail_authorized=(
                 self.state_store.get_connector_authorization("gmail:personal")
                 is not None
@@ -413,11 +515,25 @@ class GmailMvpTrialRunner:
         return persisted
 
     def _write_review(self, run_id: str) -> Path:
+        audit = self.gmail_connector.last_audit
+        if audit is None:
+            raise LiveTrialError("Work Gmail lifecycle audit is unavailable")
         lines = [
             "# Private Work Gmail candidate review",
             "",
             "This local artifact contains authorized private email evidence. "
             "Do not commit or share it.",
+            "",
+            "## Effective retrieval coverage",
+            "",
+            (
+                f"- Inbound: {audit.inbound.window_start.isoformat()} through "
+                f"{audit.inbound.window_end.isoformat()}"
+            ),
+            (
+                f"- Sent: {audit.sent.window_start.isoformat()} through "
+                f"{audit.sent.window_end.isoformat()}"
+            ),
         ]
         for detection in self.gmail_connector.last_proposed_detections:
             lines.extend(
@@ -493,3 +609,11 @@ def _write_private(directory: Path, name: str, content: str) -> Path:
     with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
         stream.write(content)
     return path
+
+
+def _json_default(value: object) -> str:
+    if isinstance(value, date | datetime):
+        return value.isoformat()
+    if isinstance(value, Path):
+        return str(value)
+    raise TypeError(f"unsupported JSON value: {type(value).__name__}")

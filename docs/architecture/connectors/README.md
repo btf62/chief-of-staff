@@ -58,7 +58,7 @@ decisions for each future connector specification.
 | Google Calendar | [Google Calendar](google-calendar.md) | Accepted; bounded live trial complete and stopped |
 | Todoist | [Todoist](todoist.md) | Accepted; bounded live trial and workday validation complete and stopped |
 | Jira | [Jira](jira.md) | Accepted; bounded project and issue trials complete and stopped |
-| Work Gmail | [Gmail](gmail.md) | Accepted MVP boundary; trial consumed without satisfying acceptance gate; live validation paused |
+| Work Gmail | [Gmail](gmail.md) | Accepted MVP boundary; repeatable bounded validation authorized until success or external blocker |
 
 ## Planned specifications
 

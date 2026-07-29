@@ -13,6 +13,9 @@ from chief_of_staff.connectors import (
     ConnectorRequest,
     ConnectorResult,
     GmailAuthenticationError,
+    GmailFailureCategory,
+    GmailFailureStage,
+    GmailRetrievalError,
     SourceItem,
     StaticConnector,
 )
@@ -128,6 +131,19 @@ class _UnauthorizedGmail:
         raise GmailAuthenticationError("synthetic authorization failure")
 
 
+class _UnavailableGmail:
+    source_name = "gmail"
+    approved_scope = GMAIL_READONLY_SCOPE
+
+    def retrieve(self, request: ConnectorRequest) -> ConnectorResult:
+        del request
+        raise GmailRetrievalError(
+            "synthetic rate limit",
+            category=GmailFailureCategory.RATE_LIMITING,
+            stage=GmailFailureStage.LISTING,
+        )
+
+
 def test_authorization_failure_is_distinct_from_an_empty_work_mailbox() -> None:
     context = resolve_context(
         run_id="gmail-auth-status",
@@ -149,3 +165,26 @@ def test_authorization_failure_is_distinct_from_an_empty_work_mailbox() -> None:
 
     assert "`Work Gmail`: unauthorized" in failed.rendered.text
     assert "`Work Gmail`: complete" in empty.rendered.text
+    assert failed.plan.coverage[0].error_category == "authorization_unavailable"
+
+
+def test_pipeline_isolates_gmail_failure_and_preserves_typed_category() -> None:
+    context = resolve_context(
+        run_id="gmail-rate-limit",
+        briefing_date=date(2026, 7, 28),
+        timezone="America/New_York",
+    )
+    unavailable = ConnectorInstance(
+        identity=ConnectorInstanceIdentity(
+            id=GMAIL_WORK_INSTANCE,
+            provider="gmail",
+            alias=GMAIL_WORK_ALIAS,
+            domain_classification=ConnectorDomain.WORK,
+        ),
+        connector=_UnavailableGmail(),
+    )
+
+    result = DeterministicBriefingPipeline().run(context, (unavailable,))
+
+    assert "`Work Gmail`: unavailable" in result.rendered.text
+    assert result.plan.coverage[0].error_category == "rate_limiting"

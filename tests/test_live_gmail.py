@@ -9,6 +9,7 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from email.message import Message
 from pathlib import Path
 
 import pytest
@@ -34,10 +35,15 @@ from chief_of_staff.connectors import (
     GMAIL_READONLY_SCOPE,
     GMAIL_WORK_ACCOUNT,
     GMAIL_WORK_INSTANCE,
+    GmailAuthenticationError,
     GmailAuthorization,
+    GmailFailureCategory,
+    GmailFailureStage,
     GmailMessageListRequest,
+    GmailRetrievalError,
     WorkGmailHttpTransport,
 )
+from chief_of_staff.connectors.gmail_live import MAX_GMAIL_RESPONSE_BYTES
 from chief_of_staff.persistence import Database, StateStore
 
 NOW = datetime(2026, 7, 28, 13, 0, tzinfo=UTC)
@@ -385,6 +391,46 @@ class _Opener:
         return _Response(json.dumps(payload).encode())
 
 
+@dataclass(slots=True)
+class _FailingOpener:
+    failure: BaseException | None = None
+    payload: bytes = b"{}"
+
+    def __call__(
+        self,
+        request: urllib.request.Request,
+        *,
+        timeout: int,
+    ) -> _Response:
+        del request, timeout
+        if self.failure is not None:
+            raise self.failure
+        return _Response(self.payload)
+
+
+def _transport_and_authorization(
+    opener: _Opener | _FailingOpener,
+) -> tuple[WorkGmailHttpTransport, GmailAuthorization]:
+    keychain, _runner = _keychain()
+    reference = KeychainSecretReference(
+        GMAIL_KEYCHAIN_SERVICE,
+        f"{GMAIL_WORK_INSTANCE}:access-token:{ACCOUNT_REFERENCE}",
+    )
+    keychain.store(reference, "synthetic-access-token")
+    return (
+        WorkGmailHttpTransport(
+            keychain=keychain,
+            access_token_reference=reference,
+            url_opener=opener,
+        ),
+        GmailAuthorization(
+            account_reference=ACCOUNT_REFERENCE,
+            granted_scopes=frozenset({GMAIL_READONLY_SCOPE}),
+            credential_reference=reference.identifier,
+        ),
+    )
+
+
 def _message_payload() -> dict[str, object]:
     return {
         "id": "message-1",
@@ -452,3 +498,123 @@ def test_live_transport_exposes_only_fixed_read_methods_and_never_raw_or_attachm
         "watch",
     }
     assert not forbidden.intersection(dir(transport))
+
+
+@pytest.mark.parametrize(
+    ("status_code", "expected_category", "expected_exception"),
+    (
+        (
+            401,
+            GmailFailureCategory.AUTHORIZATION_UNAVAILABLE,
+            GmailAuthenticationError,
+        ),
+        (403, GmailFailureCategory.PROVIDER_FORBIDDEN, GmailRetrievalError),
+        (429, GmailFailureCategory.RATE_LIMITING, GmailRetrievalError),
+        (503, GmailFailureCategory.PROVIDER_SERVER_FAILURE, GmailRetrievalError),
+    ),
+)
+def test_live_transport_preserves_safe_http_failure_categories(
+    status_code: int,
+    expected_category: GmailFailureCategory,
+    expected_exception: type[Exception],
+) -> None:
+    error = urllib.error.HTTPError(
+        "https://gmail.googleapis.com/",
+        status_code,
+        "synthetic",
+        hdrs=Message(),
+        fp=None,
+    )
+    transport, authorization = _transport_and_authorization(_FailingOpener(error))
+
+    with pytest.raises(expected_exception) as raised:
+        transport.get_profile(authorization)
+
+    assert isinstance(raised.value, GmailAuthenticationError | GmailRetrievalError)
+    assert raised.value.category is expected_category
+    assert raised.value.stage in {
+        GmailFailureStage.AUTHORIZATION,
+        GmailFailureStage.PROFILE,
+    }
+
+
+def test_live_transport_preserves_only_safe_retry_after_delay() -> None:
+    headers = Message()
+    headers["Retry-After"] = "12"
+    error = urllib.error.HTTPError(
+        "https://gmail.googleapis.com/",
+        429,
+        "synthetic",
+        hdrs=headers,
+        fp=None,
+    )
+    transport, authorization = _transport_and_authorization(_FailingOpener(error))
+
+    with pytest.raises(GmailRetrievalError) as raised:
+        transport.get_profile(authorization)
+
+    assert raised.value.category is GmailFailureCategory.RATE_LIMITING
+    assert raised.value.retry_after_seconds == 12
+    assert "Retry-After" not in str(raised.value)
+
+
+@pytest.mark.parametrize(
+    ("failure", "expected_category"),
+    (
+        (TimeoutError(), GmailFailureCategory.TIMEOUT),
+        (
+            urllib.error.URLError("synthetic network failure"),
+            GmailFailureCategory.NETWORK_OR_TRANSPORT_FAILURE,
+        ),
+    ),
+)
+def test_live_transport_distinguishes_timeout_from_network_failure(
+    failure: BaseException,
+    expected_category: GmailFailureCategory,
+) -> None:
+    transport, authorization = _transport_and_authorization(_FailingOpener(failure))
+
+    with pytest.raises(GmailRetrievalError) as raised:
+        transport.get_profile(authorization)
+
+    assert raised.value.category is expected_category
+    assert raised.value.stage is GmailFailureStage.PROFILE
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected_category"),
+    (
+        (b"not-json", GmailFailureCategory.INVALID_PROVIDER_RESPONSE),
+        (
+            b"x" * (MAX_GMAIL_RESPONSE_BYTES + 1),
+            GmailFailureCategory.RESPONSE_SIZE_BOUNDARY,
+        ),
+    ),
+)
+def test_live_transport_categorizes_invalid_and_oversized_responses(
+    payload: bytes,
+    expected_category: GmailFailureCategory,
+) -> None:
+    transport, authorization = _transport_and_authorization(
+        _FailingOpener(payload=payload)
+    )
+
+    with pytest.raises(GmailRetrievalError) as raised:
+        transport.get_profile(authorization)
+
+    assert raised.value.category is expected_category
+    assert raised.value.stage is GmailFailureStage.PROFILE
+
+
+def test_live_transport_categorizes_fixed_endpoint_violation() -> None:
+    transport, authorization = _transport_and_authorization(_FailingOpener())
+
+    with pytest.raises(GmailRetrievalError) as raised:
+        transport._get_json(
+            authorization,
+            "https://example.invalid/private",
+            expected_operation="messages.list",
+        )
+
+    assert raised.value.category is GmailFailureCategory.FIXED_ENDPOINT_VIOLATION
+    assert raised.value.stage is GmailFailureStage.LISTING

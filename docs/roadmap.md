@@ -235,8 +235,8 @@ approval.
 
 ## Milestone 6 — Work Gmail and the Input-Complete MVP Gate
 
-- **Status:** In progress — live trial consumed without satisfying the
-  acceptance gate; offline diagnostic remediation in progress
+- **Status:** In progress — first live attempt stopped without satisfying the
+  acceptance gate; bounded validation authorized after diagnostic remediation
 - **Intended user-visible outcome:** Brad can review one input-complete,
   on-demand MVP briefing that adds high-confidence work correspondence,
   explicit requests, and explicit sent commitments to the existing Calendar,
@@ -274,16 +274,22 @@ The Work Gmail specification and synthetic implementation gate are complete.
 Exact-scope OAuth, metadata-first retrieval, MIME minimization, high-precision
 deterministic detection, minimized persistence, correction recurrence, private
 review artifacts, and briefing integration passed the synthetic quality gate.
-The authorized combined trial was attempted and consumed on 2026-07-28. It
+The first combined trial was attempted on 2026-07-28. It
 stopped before Gmail metadata or body analysis and produced no Gmail records,
 briefing run, review artifact, or combined briefing, so the acceptance gate
 was not satisfied.
 
-Live validation is paused pending offline diagnostic remediation. Existing
-OAuth configuration and healthy credentials do not authorize another
-retrieval. A future live attempt requires new explicit approval from Brad.
-Personal Gmail, Google Drive, hosted inference, another connector, and all
-repeat live retrieval remain unauthorized.
+Offline diagnostic remediation now preserves privacy-safe current-run failure
+categories, boundary counts, and lifecycle progress through pipeline isolation
+and private aggregate failure reporting without failed-run application-data
+persistence. Brad has authorized repeatable, on-demand, read-only Work Gmail
+validation attempts within the accepted account, scope, privacy, and source
+boundaries until an MVP briefing succeeds or a genuine external blocker is
+reached. These attempts may include the existing read-only Calendar, Todoist,
+Jira, and repository inputs required by the combined MVP. Another identical
+bounded attempt does not require separate approval. Healthy credentials do not
+authorize broader access. Personal Gmail, Google Drive, hosted inference, and
+another connector remain unauthorized.
 
 ## Milestone 7 — Explicit Commitment and Preparation Detection
 

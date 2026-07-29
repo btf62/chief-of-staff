@@ -1,17 +1,19 @@
 # Work Gmail Connector
 
 - **Status:** Accepted
-- **Version:** 2
+- **Version:** 3
 - **Owner:** Brad
 - **Last updated:** 2026-07-28
 
 This specification defines Work Gmail as the final input connector for the
-Daily Briefing v1 MVP. The one authorized bounded trial was attempted and
-consumed without satisfying the acceptance gate. No additional live retrieval
-is authorized. The exact account, scope, retrieval, privacy, and read-only
-boundaries below remain accepted for a future trial only after new explicit
-approval from Brad. This specification does not authorize Personal Gmail,
-Google Drive, hosted inference, scheduling, or external writes.
+Daily Briefing v1 MVP. The first bounded trial stopped without satisfying the
+acceptance gate. Brad has authorized repeatable, on-demand, read-only
+validation attempts within the exact account, scope, retrieval, privacy, and
+source boundaries below until an MVP briefing succeeds or a genuine external
+blocker is reached. Another identical bounded attempt does not require
+separate approval. Healthy credentials do not authorize broader access. This
+specification does not authorize Personal Gmail, Google Drive, hosted
+inference, scheduling, or external writes.
 
 ## Source responsibility
 
@@ -336,6 +338,58 @@ pagination, metadata failure, body failure, unsupported MIME, and candidate-
 or run-cap stops. Retain successfully minimized evidence during a later
 partial failure only when coverage is disclosed accurately.
 
+### Structured failure diagnostics
+
+Each connector call clears prior success and failure audits before retrieval.
+If the call fails, the connector retains one current-run, privacy-safe failure
+audit containing only:
+
+- Safe connector alias, failure stage and category, and affected stream when
+  known
+- Applicable retrieval-window boundaries
+- Applicable configured boundary name, limit, and observed aggregate count
+- Pages completed and message references listed
+- Whether metadata or body retrieval began and their completed record counts
+- Whether persistence began
+- Whether raw payloads were retained
+- Failure timestamp
+
+The audit never contains message or thread IDs, subjects, addresses, query
+strings, snippets, bodies, labels, continuation tokens, provider response
+bodies, credentials, or private source content. Raw responses and continuation
+tokens are released on failure.
+
+Failure categories preserve configured-boundary stops, unavailable
+authorization, account or scope mismatch, provider forbidden, rate limiting,
+timeout, network or transport failure, provider server failure, invalid
+provider response, pagination failure, response-size boundary, fixed-endpoint
+violation, and unexpected internal failure. The connector reports only the
+specificity supported by safe evidence.
+
+The general deterministic pipeline continues to isolate a failed connector and
+mark its coverage unavailable or unauthorized. The bounded Gmail trial runner
+may inspect the current failure audit and emit it as aggregate JSON. Before
+stopping or retrying, it writes a separate private mode-`0600` aggregate report
+under `.local/gmail/` for each failed attempt. A failed trial does not persist
+source evidence, connector or briefing runs, Gmail records, a candidate-review
+artifact, or a combined briefing.
+
+Timeouts, network failures, rate limits, and provider 5xx responses permit a
+transient sequence of at most three attempts. The connector honors a safe
+bounded `Retry-After` delay when present and otherwise uses bounded exponential
+backoff, never waiting more than 30 seconds. A 401 permits one exact-scope
+refresh. Account or scope mismatch, a second 401, 403, invalid response,
+fixed-endpoint violation, and internal invariant failures stop without an
+automatic retry.
+
+The initial inbound and sent windows remain seven and fourteen days. If one
+stream exceeds its independent message cap, the runner moves only that
+stream's start forward one calendar day and retains the original end. It may
+repeat this until the stream fits or reaches three inbound days or seven sent
+days. Caps never increase. The effective windows remain explicit in source
+coverage and the private candidate review. A cap failure at the minimum window,
+a body-candidate cap, or a total-content cap stops the trial.
+
 ## Private human-review artifact
 
 Each bounded trial writes one ignored mode-`0600` artifact under
@@ -369,18 +423,19 @@ Commitment at Risk item plus the private review artifact and combined briefing.
 A false positive in a high-confidence relationship or commitment claim blocks
 MVP acceptance.
 
-### Consumed trial status
+### Validation status
 
-The authorized combined trial was attempted and consumed on 2026-07-28. It
+The first combined trial was attempted on 2026-07-28. It
 stopped before Gmail metadata or body analysis and produced no Gmail records,
 briefing run, review artifact, or combined briefing. It therefore did not
 satisfy the Milestone 6 acceptance gate.
 
-Live validation is paused pending offline diagnostic remediation. Existing
-OAuth configuration and healthy Keychain credentials are configuration state,
-not authorization for another retrieval. A future live attempt requires new
-explicit approval from Brad. Personal Gmail and Google Drive remain deferred
-and unauthorized.
+Offline diagnostic remediation is complete. Repeatable on-demand attempts may
+refresh or reauthorize only the exact Work Gmail grant and may retrieve the
+existing read-only Calendar, Todoist, Jira, and repository inputs required for
+the combined MVP. Failed attempts write separate private aggregate diagnostic
+reports and persist no combined run or Gmail application data. Personal Gmail
+and Google Drive remain deferred and unauthorized.
 
 ## Related documents
 

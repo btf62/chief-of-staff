@@ -21,7 +21,7 @@ from chief_of_staff.connectors import (
     StoredWorkGmailAuthorizationProvider,
     WorkGmailHttpTransport,
 )
-from chief_of_staff.gmail_mvp_trial import GmailMvpTrialRunner
+from chief_of_staff.gmail_mvp_trial import GmailMvpTrialFailure, GmailMvpTrialRunner
 from chief_of_staff.jira_issue_live_cli import (
     _calendar_connector,
     _jira_connector,
@@ -136,18 +136,22 @@ def main(arguments: list[str] | None = None) -> int:
 
         if parsed.command == "trial":
             gmail = _gmail_connector(state_store, keychain, oauth)
-            report = GmailMvpTrialRunner(
-                state_store=state_store,
-                repository_root=REPOSITORY_ROOT,
-                repository_paths=APPROVED_REPOSITORY_PATHS,
-                calendar_connector=_calendar_connector(state_store, keychain),
-                todoist_connector=_todoist_connector(state_store, keychain),
-                jira_connector=_jira_connector(state_store, keychain),
-                gmail_connector=gmail,
-                briefing_directory=BRIEFING_DIRECTORY,
-                review_directory=REVIEW_DIRECTORY,
-                briefing_date_override=parsed.briefing_date,
-            ).run()
+            try:
+                report = GmailMvpTrialRunner(
+                    state_store=state_store,
+                    repository_root=REPOSITORY_ROOT,
+                    repository_paths=APPROVED_REPOSITORY_PATHS,
+                    calendar_connector=_calendar_connector(state_store, keychain),
+                    todoist_connector=_todoist_connector(state_store, keychain),
+                    jira_connector=_jira_connector(state_store, keychain),
+                    gmail_connector=gmail,
+                    briefing_directory=BRIEFING_DIRECTORY,
+                    review_directory=REVIEW_DIRECTORY,
+                    briefing_date_override=parsed.briefing_date,
+                ).run()
+            except GmailMvpTrialFailure as error:
+                _print_json(asdict(error.report))
+                return 2
             _print_json(asdict(report))
             return 0
     raise RuntimeError("unsupported Work Gmail command")

@@ -113,16 +113,23 @@ No strict versioning scheme is promised before a distributable product exists.
   canonical briefing integration.
 - Minimized normalized Gmail persistence and private mode-`0600` review and
   input-complete briefing trial artifacts under ignored local state.
+- Privacy-safe current-run Gmail failure audits with typed category, stage,
+  stream, window, configured boundary, observed count, and lifecycle progress,
+  plus private mode-`0600` per-attempt aggregate reporting without failed-run
+  application-data persistence or briefing artifacts.
 
 ### Changed
 
 - Replaced the mixed Work Gmail trial query with separate seven-day inbound and
   fourteen-day sent streams, independent 300/200 message caps, combined
   immutable-ID deduplication, a 120-body-candidate cap, and per-stream coverage.
-- Recorded that the authorized combined Work Gmail trial was attempted and
-  consumed without producing Gmail records, persisted briefing state, a review
-  artifact, or a combined briefing; Milestone 6 remains in progress and live
-  validation is paused pending offline diagnostic remediation.
+- Recorded that the first combined Work Gmail trial stopped without producing
+  Gmail records, persisted briefing state, a review artifact, or a combined
+  briefing; Milestone 6 remains in progress.
+- Recorded Brad's authorization for repeatable, on-demand, read-only Work
+  Gmail validation within the accepted account, scope, privacy, and source
+  boundaries until an MVP briefing succeeds or a genuine external blocker is
+  reached; identical bounded attempts need no separate approval.
 - Marked the Version 1 design baseline ready for implementation beginning with
   Milestone 1 — Python Project Foundation.
 - Clarified that design acceptance authorizes the defined implementation scope

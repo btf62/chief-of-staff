@@ -10,6 +10,7 @@ from chief_of_staff.connectors import (
     ConnectorInstance,
     ConnectorRequest,
     GmailAuthenticationError,
+    GmailError,
     ReadOnlyConnector,
     SourceCoverage,
     connector_instance_key,
@@ -79,7 +80,26 @@ class DeterministicBriefingPipeline:
                         status=CoverageStatus.UNAUTHORIZED,
                         retrieved_at=datetime.now(UTC),
                         record_count=0,
-                        error_category=type(error).__name__,
+                        error_category=error.category.value,
+                        connector_instance_id=(
+                            None if instance is None else instance.id
+                        ),
+                        account_alias=None if instance is None else instance.alias,
+                        domain_classification=(
+                            None if instance is None else instance.domain_classification
+                        ),
+                    )
+                )
+                continue
+            except GmailError as error:
+                coverage.append(
+                    SourceCoverage(
+                        source=connector.source_name,
+                        approved_scope=connector.approved_scope,
+                        status=CoverageStatus.UNAVAILABLE,
+                        retrieved_at=datetime.now(UTC),
+                        record_count=0,
+                        error_category=error.category.value,
                         connector_instance_id=(
                             None if instance is None else instance.id
                         ),

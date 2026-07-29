@@ -9,6 +9,7 @@ import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from typing import Final, Protocol, cast
 
 from chief_of_staff.auth.keychain import (
@@ -24,6 +25,8 @@ from chief_of_staff.connectors.gmail import (
     GmailAuthenticationError,
     GmailAuthorization,
     GmailAuthorizationUnavailable,
+    GmailFailureCategory,
+    GmailFailureStage,
     GmailFullMessage,
     GmailMessageListPage,
     GmailMessageListRequest,
@@ -150,6 +153,20 @@ class StoredWorkGmailAuthorizationProvider:
             credential_reference=reference.identifier,
         )
 
+    def refresh_gmail_authorization(
+        self,
+        account_reference: str,
+    ) -> GmailAuthorization:
+        """Refresh once and revalidate the exact Work Gmail grant."""
+
+        if self.refresher is None:
+            raise GmailAuthorizationUnavailable
+        try:
+            self.refresher.refresh(account_reference=account_reference)
+        except Exception:
+            raise GmailAuthorizationUnavailable from None
+        return self.get_gmail_authorization(account_reference)
+
 
 @dataclass(frozen=True, slots=True)
 class WorkGmailHttpTransport:
@@ -174,7 +191,11 @@ class WorkGmailHttpTransport:
         email_address = payload.get("emailAddress")
         payload.clear()
         if not isinstance(email_address, str) or "@" not in email_address:
-            raise GmailRetrievalError("Gmail profile response was invalid")
+            raise GmailRetrievalError(
+                "Gmail profile response was invalid",
+                category=GmailFailureCategory.INVALID_PROVIDER_RESPONSE,
+                stage=GmailFailureStage.PROFILE,
+            )
         return GmailProfile(email_address=email_address)
 
     def list_messages(
@@ -189,7 +210,11 @@ class WorkGmailHttpTransport:
             or not 1 <= request.page_size <= 100
             or (request.page_token is not None and not request.page_token)
         ):
-            raise GmailRetrievalError("Gmail list request was invalid")
+            raise GmailRetrievalError(
+                "Gmail list request was invalid",
+                category=GmailFailureCategory.UNEXPECTED_INTERNAL_FAILURE,
+                stage=GmailFailureStage.LISTING,
+            )
         query = {
             "maxResults": str(request.page_size),
             "q": request.query,
@@ -201,19 +226,24 @@ class WorkGmailHttpTransport:
             f"{GMAIL_MESSAGES_URL}?{urllib.parse.urlencode(query)}",
             expected_operation="messages.list",
         )
-        raw_messages = payload.get("messages", [])
-        next_page_token = payload.get("nextPageToken")
-        if not isinstance(raw_messages, list) or not (
-            next_page_token is None or isinstance(next_page_token, str)
-        ):
+        try:
+            raw_messages = payload.get("messages", [])
+            next_page_token = payload.get("nextPageToken")
+            if not isinstance(raw_messages, list) or not (
+                next_page_token is None or isinstance(next_page_token, str)
+            ):
+                raise GmailRetrievalError(
+                    "Gmail list response was invalid",
+                    category=GmailFailureCategory.INVALID_PROVIDER_RESPONSE,
+                    stage=GmailFailureStage.LISTING,
+                )
+            messages = tuple(_message_reference(item) for item in raw_messages)
+            return GmailMessageListPage(
+                messages=messages,
+                next_page_token=next_page_token,
+            )
+        finally:
             payload.clear()
-            raise GmailRetrievalError("Gmail list response was invalid")
-        messages = tuple(_message_reference(item) for item in raw_messages)
-        payload.clear()
-        return GmailMessageListPage(
-            messages=messages,
-            next_page_token=next_page_token,
-        )
 
     def get_message_metadata(
         self,
@@ -222,7 +252,7 @@ class WorkGmailHttpTransport:
     ) -> GmailMessageMetadata:
         """Retrieve approved headers with `format=metadata`."""
 
-        safe_id = _message_id(message_id)
+        safe_id = _message_id(message_id, stage=GmailFailureStage.METADATA)
         query: list[tuple[str, str]] = [("format", "metadata")]
         query.extend(("metadataHeaders", header) for header in GMAIL_METADATA_HEADERS)
         payload = self._get_json(
@@ -231,7 +261,7 @@ class WorkGmailHttpTransport:
             expected_operation="messages.get.metadata",
         )
         try:
-            return _metadata_from_payload(payload)
+            return _metadata_from_payload(payload, stage=GmailFailureStage.METADATA)
         finally:
             payload.clear()
 
@@ -242,14 +272,14 @@ class WorkGmailHttpTransport:
     ) -> GmailFullMessage:
         """Retrieve one approved candidate with `format=full` only."""
 
-        safe_id = _message_id(message_id)
+        safe_id = _message_id(message_id, stage=GmailFailureStage.BODY)
         payload = self._get_json(
             authorization,
             f"{GMAIL_MESSAGES_URL}/{safe_id}?format=full",
             expected_operation="messages.get.full",
         )
         try:
-            metadata = _metadata_from_payload(payload)
+            metadata = _metadata_from_payload(payload, stage=GmailFailureStage.BODY)
             mime_payload = payload.get("payload")
             return GmailFullMessage(
                 metadata=metadata,
@@ -275,7 +305,11 @@ class WorkGmailHttpTransport:
             or url.startswith(f"{GMAIL_MESSAGES_URL}?")
             or url.startswith(f"{GMAIL_MESSAGES_URL}/")
         ):
-            raise GmailRetrievalError("Gmail request exceeded fixed endpoints")
+            raise GmailRetrievalError(
+                "Gmail request exceeded fixed endpoints",
+                category=GmailFailureCategory.FIXED_ENDPOINT_VIOLATION,
+                stage=_operation_stage(expected_operation),
+            )
         try:
             access_token = self.keychain.read(self.access_token_reference)
         except KeychainSecretNotFound:
@@ -295,47 +329,132 @@ class WorkGmailHttpTransport:
             with self.url_opener(http_request, timeout=30) as response:
                 raw_response = response.read(MAX_GMAIL_RESPONSE_BYTES + 1)
         except urllib.error.HTTPError as error:
-            if error.code in {401, 403}:
+            if error.code == 401:
                 raise GmailAuthenticationError(
-                    "Work Gmail authorization failed"
+                    "Work Gmail authorization failed",
+                    stage=GmailFailureStage.AUTHORIZATION,
                 ) from None
-            raise GmailRetrievalError("Work Gmail provider request failed") from None
-        except urllib.error.URLError, TimeoutError:
-            raise GmailRetrievalError("Work Gmail provider request failed") from None
+            if error.code == 403:
+                category = GmailFailureCategory.PROVIDER_FORBIDDEN
+            elif error.code == 429:
+                category = GmailFailureCategory.RATE_LIMITING
+            elif 500 <= error.code <= 599:
+                category = GmailFailureCategory.PROVIDER_SERVER_FAILURE
+            else:
+                category = GmailFailureCategory.NETWORK_OR_TRANSPORT_FAILURE
+            raise GmailRetrievalError(
+                "Work Gmail provider request failed",
+                category=category,
+                stage=_operation_stage(expected_operation),
+                retry_after_seconds=_safe_retry_after(error),
+            ) from None
+        except TimeoutError:
+            raise GmailRetrievalError(
+                "Work Gmail provider request timed out",
+                category=GmailFailureCategory.TIMEOUT,
+                stage=_operation_stage(expected_operation),
+            ) from None
+        except urllib.error.URLError:
+            raise GmailRetrievalError(
+                "Work Gmail provider request failed",
+                category=GmailFailureCategory.NETWORK_OR_TRANSPORT_FAILURE,
+                stage=_operation_stage(expected_operation),
+            ) from None
         finally:
             access_token = ""
         if len(raw_response) > MAX_GMAIL_RESPONSE_BYTES:
-            raise GmailRetrievalError("Work Gmail response exceeded its limit")
+            raise GmailRetrievalError(
+                "Work Gmail response exceeded its limit",
+                category=GmailFailureCategory.RESPONSE_SIZE_BOUNDARY,
+                stage=_operation_stage(expected_operation),
+            )
         try:
             payload = json.loads(raw_response)
         except json.JSONDecodeError, UnicodeDecodeError:
-            raise GmailRetrievalError("Work Gmail response was invalid") from None
+            raise GmailRetrievalError(
+                "Work Gmail response was invalid",
+                category=GmailFailureCategory.INVALID_PROVIDER_RESPONSE,
+                stage=_operation_stage(expected_operation),
+            ) from None
         finally:
             raw_response = b""
         if not isinstance(payload, dict):
-            raise GmailRetrievalError("Work Gmail response was invalid")
+            raise GmailRetrievalError(
+                "Work Gmail response was invalid",
+                category=GmailFailureCategory.INVALID_PROVIDER_RESPONSE,
+                stage=_operation_stage(expected_operation),
+            )
         return payload
 
 
-def _message_id(value: str) -> str:
+def _safe_retry_after(error: urllib.error.HTTPError) -> int | None:
+    """Parse only a bounded Retry-After delay without retaining header content."""
+
+    if error.headers is None:
+        return None
+    value = error.headers.get("Retry-After")
+    if value is None:
+        return None
+    try:
+        delay = int(value)
+    except ValueError:
+        try:
+            retry_at = parsedate_to_datetime(value)
+        except TypeError, ValueError:
+            return None
+        if retry_at.tzinfo is None:
+            retry_at = retry_at.replace(tzinfo=UTC)
+        delay = int((retry_at.astimezone(UTC) - datetime.now(UTC)).total_seconds())
+    return max(delay, 0)
+
+
+def _operation_stage(operation: str) -> GmailFailureStage:
+    if operation == "profile":
+        return GmailFailureStage.PROFILE
+    if operation == "messages.list":
+        return GmailFailureStage.LISTING
+    if operation == "messages.get.metadata":
+        return GmailFailureStage.METADATA
+    if operation == "messages.get.full":
+        return GmailFailureStage.BODY
+    return GmailFailureStage.INITIALIZATION
+
+
+def _message_id(value: str, *, stage: GmailFailureStage) -> str:
     if not value or not all(
         character.isalnum() or character in "-_" for character in value
     ):
-        raise GmailRetrievalError("Gmail message identity was invalid")
+        raise GmailRetrievalError(
+            "Gmail message identity was invalid",
+            category=GmailFailureCategory.INVALID_PROVIDER_RESPONSE,
+            stage=stage,
+        )
     return urllib.parse.quote(value, safe="")
 
 
 def _message_reference(payload: object) -> GmailMessageReference:
     if not isinstance(payload, dict):
-        raise GmailRetrievalError("Gmail message reference was invalid")
+        raise GmailRetrievalError(
+            "Gmail message reference was invalid",
+            category=GmailFailureCategory.INVALID_PROVIDER_RESPONSE,
+            stage=GmailFailureStage.LISTING,
+        )
     message_id = payload.get("id")
     thread_id = payload.get("threadId")
     if not isinstance(message_id, str) or not isinstance(thread_id, str):
-        raise GmailRetrievalError("Gmail message reference was invalid")
+        raise GmailRetrievalError(
+            "Gmail message reference was invalid",
+            category=GmailFailureCategory.INVALID_PROVIDER_RESPONSE,
+            stage=GmailFailureStage.LISTING,
+        )
     return GmailMessageReference(id=message_id, thread_id=thread_id)
 
 
-def _metadata_from_payload(payload: dict[str, object]) -> GmailMessageMetadata:
+def _metadata_from_payload(
+    payload: dict[str, object],
+    *,
+    stage: GmailFailureStage,
+) -> GmailMessageMetadata:
     message_id = payload.get("id")
     thread_id = payload.get("threadId")
     internal_date = payload.get("internalDate")
@@ -354,10 +473,18 @@ def _metadata_from_payload(payload: dict[str, object]) -> GmailMessageMetadata:
         and size_estimate >= 0
         and isinstance(raw_mime, dict)
     ):
-        raise GmailRetrievalError("Gmail metadata response was invalid")
+        raise GmailRetrievalError(
+            "Gmail metadata response was invalid",
+            category=GmailFailureCategory.INVALID_PROVIDER_RESPONSE,
+            stage=stage,
+        )
     raw_headers = raw_mime.get("headers", [])
     if not isinstance(raw_headers, list):
-        raise GmailRetrievalError("Gmail metadata headers were invalid")
+        raise GmailRetrievalError(
+            "Gmail metadata headers were invalid",
+            category=GmailFailureCategory.INVALID_PROVIDER_RESPONSE,
+            stage=stage,
+        )
     allowed = {name.casefold() for name in GMAIL_METADATA_HEADERS}
     headers: list[tuple[str, str]] = []
     for raw_header in raw_headers:
@@ -383,9 +510,17 @@ def _metadata_from_payload(payload: dict[str, object]) -> GmailMessageMetadata:
 
 def _mime_part(payload: object, *, depth: int = 0) -> GmailMimePart:
     if depth > 20:
-        raise GmailRetrievalError("Gmail MIME nesting exceeded its limit")
+        raise GmailRetrievalError(
+            "Gmail MIME nesting exceeded its limit",
+            category=GmailFailureCategory.RESPONSE_SIZE_BOUNDARY,
+            stage=GmailFailureStage.BODY,
+        )
     if not isinstance(payload, dict):
-        raise GmailRetrievalError("Gmail MIME payload was invalid")
+        raise GmailRetrievalError(
+            "Gmail MIME payload was invalid",
+            category=GmailFailureCategory.INVALID_PROVIDER_RESPONSE,
+            stage=GmailFailureStage.BODY,
+        )
     mime_type = payload.get("mimeType", "")
     filename = payload.get("filename", "")
     body = payload.get("body", {})
@@ -396,15 +531,27 @@ def _mime_part(payload: object, *, depth: int = 0) -> GmailMimePart:
         and isinstance(body, dict)
         and isinstance(parts, list)
     ):
-        raise GmailRetrievalError("Gmail MIME payload was invalid")
+        raise GmailRetrievalError(
+            "Gmail MIME payload was invalid",
+            category=GmailFailureCategory.INVALID_PROVIDER_RESPONSE,
+            stage=GmailFailureStage.BODY,
+        )
     body_data = body.get("data")
     attachment_id = body.get("attachmentId")
     if not (body_data is None or isinstance(body_data, str)) or not (
         attachment_id is None or isinstance(attachment_id, str)
     ):
-        raise GmailRetrievalError("Gmail MIME body was invalid")
+        raise GmailRetrievalError(
+            "Gmail MIME body was invalid",
+            category=GmailFailureCategory.INVALID_PROVIDER_RESPONSE,
+            stage=GmailFailureStage.BODY,
+        )
     if len(parts) > 100:
-        raise GmailRetrievalError("Gmail MIME part count exceeded its limit")
+        raise GmailRetrievalError(
+            "Gmail MIME part count exceeded its limit",
+            category=GmailFailureCategory.RESPONSE_SIZE_BOUNDARY,
+            stage=GmailFailureStage.BODY,
+        )
     return GmailMimePart(
         mime_type=mime_type,
         filename=filename,

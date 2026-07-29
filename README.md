@@ -19,13 +19,15 @@ Todoist portion of Milestone 5. Jira has completed its resource-restricted
 authorization, project discovery, and one explicitly approved, exact-project
 issue-retrieval trial integrated with the deterministic briefing. Milestone 5
 now covers only Todoist and Jira. Work Gmail is the final MVP input connector.
-Its one authorized combined trial was attempted and consumed, stopped before
+Its first combined trial stopped before
 Gmail metadata or body analysis, and produced no Gmail records, briefing run,
-review artifact, or combined briefing. Milestone 6 remains in progress, with
-live validation paused for offline diagnostic remediation. Existing OAuth
-configuration and healthy credentials do not authorize another retrieval; new
-explicit approval from Brad is required. Personal Gmail and Google Drive
-remain deferred and unauthorized.
+review artifact, or combined briefing. Milestone 6 remains in progress.
+Offline diagnostic remediation is complete. Brad has authorized repeatable,
+on-demand, read-only Work Gmail validation attempts within the accepted
+account, scope, privacy, and source boundaries until an MVP briefing succeeds
+or a genuine external blocker is reached. An identical bounded attempt does
+not require separate approval; healthy credentials do not authorize broader
+access. Personal Gmail and Google Drive remain deferred and unauthorized.
 
 ## Repository map
 
@@ -91,7 +93,8 @@ lookup, hosted inference, persistence, or external writes. Use
 
 The bounded live-trial procedure is documented separately in
 [First Safe Connector Operations](docs/operations/first-safe-connectors.md).
-It must not be repeated or broadened without explicit approval.
+Only the repeatable combined-MVP Work Gmail validation described there may be
+repeated without separate approval. It must not be broadened.
 
 ## Documentation principles
 

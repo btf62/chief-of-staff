@@ -8,11 +8,11 @@ This document describes the implemented repository, Calendar, Todoist, Jira,
 and Work Gmail boundaries. The synthetic demonstrations, bounded Calendar and
 Todoist trials, Todoist workday-quality validation, Jira project discovery,
 and one exact-project Jira issue trial are complete. The Work Gmail synthetic
-gate is complete. Its one authorized combined trial was attempted and consumed
+gate is complete. Its first combined trial stopped
 without satisfying the Milestone 6 acceptance gate. It stopped before Gmail
 metadata or body analysis and produced no Gmail records, briefing run, review
-artifact, or combined briefing. Live validation is paused for offline
-diagnostic remediation.
+artifact, or combined briefing. Offline diagnostic remediation is complete,
+and repeatable bounded validation is authorized within the accepted boundary.
 
 ## Run the safe connector demonstration
 
@@ -230,15 +230,19 @@ Client and token secrets remain in macOS Keychain. The imported client file is
 deleted after successful bounded import. SQLite receives only non-secret
 authorization metadata and minimized application facts.
 
-The trial lists two separate streams through the exclusive end of the briefing
-day: seven calendar days of inbound mail and fourteen calendar days of sent
-mail. It enforces independent 300-message and 200-message caps, deduplicates
-before metadata, and stops if combined unique messages exceed 500. It retrieves
-metadata before any content and retrieves `format=full` only for at most 120
-bounded direct-human or outbound candidates. It never uses `format=raw`,
-retrieves attachments, renders active HTML, loads remote resources, or exposes
-a Gmail mutation method. Raw responses, MIME trees, and complete bodies remain
-transient.
+The trial initially lists two separate streams through the exclusive end of
+the briefing day: seven calendar days of inbound mail and fourteen calendar
+days of sent mail. It enforces independent 300-message and 200-message caps,
+deduplicates before metadata, and stops if combined unique messages exceed
+500. If one stream exceeds its cap, the authorized runner moves only that
+stream's start forward by one calendar day, preserving the end, until it fits
+or reaches three inbound days or seven sent days. It never raises a cap and
+discloses any reduced effective window in coverage and the private review.
+It retrieves metadata before any content and retrieves `format=full` only for
+at most 120 bounded direct-human or outbound candidates. It never uses
+`format=raw`, retrieves attachments, renders active HTML, loads remote
+resources, or exposes a Gmail mutation method. Raw responses, MIME trees, and
+complete bodies remain transient.
 
 Before routine use, a second Northridge-controlled owner or editor must be
 added to the Google Cloud project to reduce single-person administrative risk.
@@ -250,6 +254,32 @@ are written to a private mode-`0600` artifact under
 `.local/gmail/reviews/`. The combined briefing is written under
 `.local/briefings/`; both directories are ignored. Neither artifact may enter
 Git or a public report.
+
+If an authorized bounded attempt fails, the command exits nonzero after
+printing a privacy-safe aggregate JSON report and writes a separate private
+mode-`0600` aggregate report under `.local/gmail/` for each attempt. The report
+identifies the failure category and stage, affected stream and window when
+known, applicable boundary/limit/observed count, and completed listing,
+metadata, and body progress. It contains no message identities, addresses,
+subjects, query strings, content, labels, page tokens, provider responses, or
+credentials. Failed trials do not write briefing state, Gmail evidence, review
+artifacts, or combined briefings.
+
+Brad has authorized repeatable, on-demand attempts using only `gmail:work`,
+the exact `gmail.readonly` scope, and the existing Northridge-controlled OAuth
+application until an MVP briefing succeeds or a genuine external blocker is
+reached. An attempt may perform the normal exact-scope refresh or
+reauthorization and retrieve the existing read-only Calendar, Todoist, Jira,
+and repository inputs required for that combined briefing. Another identical
+bounded attempt needs no separate approval. Healthy credentials do not permit
+broader access, background operation, or an unrelated retrieval.
+
+Timeout, network, rate-limit, and provider-5xx failures use a safe
+`Retry-After` delay when available or bounded exponential backoff otherwise.
+One transient sequence makes no more than three attempts and waits no more
+than 30 seconds between them. A 401 permits one exact-scope refresh attempt.
+Account or scope mismatch, a second 401, 403, invalid response, fixed-endpoint
+violation, and internal invariant failures stop without automatic retry.
 
 ## Bounded live trial
 
@@ -358,7 +388,9 @@ bounded epoch queries, stable pagination, stream and combined deduplication,
 metadata-first filtering, candidate and content caps, MIME minimization, inert
 malicious content, reply state, explicit
 requests and promises, local correction recurrence, private review artifacts,
-briefing integration, and absence of attachment or mutation operations.
+briefing integration, structured failure categories, current-run aggregate
+failure audits, failed-trial non-persistence, and absence of attachment or
+mutation operations.
 ## Current limitations and stop condition
 
 - Google's approved scope can technically read events on other calendars the
@@ -373,8 +405,8 @@ briefing integration, and absence of attachment or mutation operations.
   and commitments are intentionally omitted.
 - Daily Briefing v1 has not been accepted for operational use.
 
-No live connector retrieval may now proceed. Existing OAuth configuration and
-healthy credentials do not authorize retrieval. Do not repeat Work Gmail,
-Calendar, Todoist, or Jira access; refresh authorization; broaden any boundary;
+Only the repeatable combined-MVP Work Gmail validation described above may
+proceed without separate approval. Do not broaden any account, scope, source,
+endpoint, retrieval cap, or operating mode; run an unrelated live retrieval;
 or begin another connector without new explicit approval from Brad. Personal
 Gmail and Google Drive remain deferred and unauthorized.

@@ -6,6 +6,7 @@ import base64
 import binascii
 import hashlib
 import re
+import time as time_module
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, time, timedelta
@@ -58,6 +59,12 @@ GMAIL_MAX_MESSAGE_TEXT_CHARS: Final = 16_000
 GMAIL_MAX_RUN_TEXT_CHARS: Final = 500_000
 GMAIL_REVIEW_REJECTION_LIMIT: Final = 20
 GMAIL_PROCESSING_VERSION: Final = "gmail-deterministic-v2"
+GMAIL_DEFAULT_INBOUND_DAYS: Final = 7
+GMAIL_MINIMUM_INBOUND_DAYS: Final = 3
+GMAIL_DEFAULT_SENT_DAYS: Final = 14
+GMAIL_MINIMUM_SENT_DAYS: Final = 7
+GMAIL_MAX_TRANSIENT_ATTEMPTS: Final = 3
+GMAIL_MAX_RETRY_DELAY_SECONDS: Final = 30
 
 _EXCLUDED_LABELS = frozenset(
     {
@@ -121,12 +128,70 @@ _QUOTE_MARKERS = (
 )
 
 
+class GmailStream(StrEnum):
+    """The two independently bounded Work Gmail retrieval streams."""
+
+    INBOUND = "inbound"
+    SENT = "sent"
+
+
+class GmailFailureStage(StrEnum):
+    """Privacy-safe lifecycle stage at which Gmail retrieval stopped."""
+
+    INITIALIZATION = "initialization"
+    AUTHORIZATION = "authorization"
+    PROFILE = "profile"
+    LISTING = "listing"
+    METADATA = "metadata"
+    BODY = "body"
+    PROCESSING = "processing"
+
+
+class GmailFailureCategory(StrEnum):
+    """Provider-neutral, privacy-safe Gmail failure categories."""
+
+    CONFIGURED_BOUNDARY_EXCEEDED = "configured_boundary_exceeded"
+    AUTHORIZATION_UNAVAILABLE = "authorization_unavailable"
+    ACCOUNT_OR_SCOPE_MISMATCH = "account_or_scope_mismatch"
+    PROVIDER_FORBIDDEN = "provider_forbidden"
+    RATE_LIMITING = "rate_limiting"
+    TIMEOUT = "timeout"
+    NETWORK_OR_TRANSPORT_FAILURE = "network_or_transport_failure"
+    PROVIDER_SERVER_FAILURE = "provider_server_failure"
+    INVALID_PROVIDER_RESPONSE = "invalid_provider_response"
+    PAGINATION_FAILURE = "pagination_failure"
+    RESPONSE_SIZE_BOUNDARY = "response_size_boundary"
+    FIXED_ENDPOINT_VIOLATION = "fixed_endpoint_violation"
+    UNEXPECTED_INTERNAL_FAILURE = "unexpected_internal_failure"
+
+
 class GmailError(RuntimeError):
     """Base error for the bounded Work Gmail connector."""
+
+    default_category = GmailFailureCategory.UNEXPECTED_INTERNAL_FAILURE
+    default_stage = GmailFailureStage.INITIALIZATION
+
+    def __init__(
+        self,
+        message: str = "",
+        *,
+        category: GmailFailureCategory | None = None,
+        stage: GmailFailureStage | None = None,
+        affected_stream: GmailStream | None = None,
+        retry_after_seconds: int | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.category = category or self.default_category
+        self.stage = stage or self.default_stage
+        self.affected_stream = affected_stream
+        self.retry_after_seconds = retry_after_seconds
 
 
 class GmailAuthenticationError(GmailError):
     """Raised when the exact Work Gmail authorization is unavailable."""
+
+    default_category = GmailFailureCategory.AUTHORIZATION_UNAVAILABLE
+    default_stage = GmailFailureStage.AUTHORIZATION
 
 
 class GmailRetrievalError(GmailError):
@@ -143,8 +208,15 @@ class GmailBoundaryExceeded(GmailError):
         boundary: str,
         observed_count: int,
         limit: int,
+        stage: GmailFailureStage,
+        affected_stream: GmailStream | None = None,
     ) -> None:
-        super().__init__(message)
+        super().__init__(
+            message,
+            category=GmailFailureCategory.CONFIGURED_BOUNDARY_EXCEEDED,
+            stage=stage,
+            affected_stream=affected_stream,
+        )
         self.boundary = boundary
         self.observed_count = observed_count
         self.limit = limit
@@ -285,13 +357,6 @@ class GmailMessageClassification(StrEnum):
     UNSUPPORTED = "unsupported_or_ambiguous"
 
 
-class GmailStream(StrEnum):
-    """The two independently bounded Work Gmail retrieval streams."""
-
-    INBOUND = "inbound"
-    SENT = "sent"
-
-
 @dataclass(frozen=True, slots=True)
 class GmailBoundedStream:
     """One exact query, time window, and pre-expansion message cap."""
@@ -364,6 +429,46 @@ class GmailStreamAudit:
 
 
 @dataclass(frozen=True, slots=True)
+class GmailFailureAudit:
+    """Privacy-safe aggregate state captured for the current failed run only."""
+
+    connector_alias: str
+    failure_stage: GmailFailureStage
+    failure_category: GmailFailureCategory
+    affected_stream: GmailStream | None
+    retrieval_window_start: datetime
+    retrieval_window_end: datetime
+    configured_boundary_name: str | None
+    configured_limit: int | None
+    observed_aggregate_count: int | None
+    pages_completed: int
+    message_references_listed: int
+    metadata_retrieval_began: bool
+    metadata_records_inspected: int
+    body_retrieval_began: bool
+    bodies_retrieved: int
+    persistence_began: bool
+    raw_payloads_retained: bool
+    occurred_at: datetime
+
+
+@dataclass(slots=True)
+class _GmailRetrievalProgress:
+    """Mutable aggregate counters retained only for one connector call."""
+
+    window_start: datetime
+    window_end: datetime
+    stage: GmailFailureStage = GmailFailureStage.INITIALIZATION
+    affected_stream: GmailStream | None = None
+    pages_completed: int = 0
+    message_references_listed: int = 0
+    metadata_retrieval_began: bool = False
+    metadata_records_inspected: int = 0
+    body_retrieval_began: bool = False
+    bodies_retrieved: int = 0
+
+
+@dataclass(frozen=True, slots=True)
 class GmailRetrievalAudit:
     """Privacy-safe aggregate retrieval and detection facts."""
 
@@ -402,7 +507,24 @@ class GmailConnector:
         default=lambda _fingerprint: ("show", None),
         repr=False,
     )
+    allow_window_fallback: bool = False
+    allow_authorization_refresh: bool = False
+    max_transient_attempts: int = 1
+    failure_reporter: Callable[[GmailFailureAudit], None] | None = field(
+        default=None,
+        repr=False,
+    )
+    sleeper: Callable[[float], None] = field(
+        default=time_module.sleep,
+        repr=False,
+    )
     last_audit: GmailRetrievalAudit | None = field(default=None, init=False)
+    last_failure_audit: GmailFailureAudit | None = field(default=None, init=False)
+    attempt_failure_audits: tuple[GmailFailureAudit, ...] = field(
+        default=(),
+        init=False,
+    )
+    last_attempt_count: int = field(default=0, init=False)
     last_proposed_detections: tuple[GmailDetection, ...] = field(
         default=(),
         init=False,
@@ -411,6 +533,11 @@ class GmailConnector:
     last_rejections: tuple[GmailRejectedCandidate, ...] = field(
         default=(),
         init=False,
+    )
+    _active_progress: _GmailRetrievalProgress | None = field(
+        default=None,
+        init=False,
+        repr=False,
     )
 
     @property
@@ -426,23 +553,166 @@ class GmailConnector:
         return GMAIL_READONLY_SCOPE
 
     def retrieve(self, request: ConnectorRequest) -> ConnectorResult:
+        """Run one bounded retrieval with explicitly enabled safe recovery."""
+
+        self.last_audit = None
+        self.last_failure_audit = None
+        self.attempt_failure_audits = ()
+        self.last_attempt_count = 0
+        self.last_proposed_detections = ()
+        self.last_detections = ()
+        self.last_rejections = ()
+        inbound_days = GMAIL_DEFAULT_INBOUND_DAYS
+        sent_days = GMAIL_DEFAULT_SENT_DAYS
+        consecutive_transient_attempts = 0
+        authorization_refreshed = False
+
+        while True:
+            progress = _GmailRetrievalProgress(
+                window_start=request.window.starts_at,
+                window_end=request.window.ends_at,
+            )
+            self._active_progress = progress
+            self.last_attempt_count += 1
+            try:
+                streams = gmail_bounded_streams(
+                    request.briefing_date,
+                    request.timezone,
+                    inbound_days=inbound_days,
+                    sent_days=sent_days,
+                )
+                progress.window_start = min(stream.window_start for stream in streams)
+                progress.window_end = max(stream.window_end for stream in streams)
+                result = self._retrieve(request, streams)
+            except GmailError as error:
+                failure = self._failure_audit(error)
+                self._record_failure(failure)
+                reduced_window = self._reduce_window(
+                    error,
+                    inbound_days=inbound_days,
+                    sent_days=sent_days,
+                )
+                if reduced_window is not None:
+                    inbound_days, sent_days = reduced_window
+                    consecutive_transient_attempts = 0
+                    continue
+                if (
+                    error.category is GmailFailureCategory.AUTHORIZATION_UNAVAILABLE
+                    and self.allow_authorization_refresh
+                    and not authorization_refreshed
+                    and self._refresh_authorization()
+                ):
+                    authorization_refreshed = True
+                    consecutive_transient_attempts = 0
+                    continue
+                if _is_transient_gmail_failure(error):
+                    consecutive_transient_attempts += 1
+                    transient_attempt_limit = min(
+                        max(self.max_transient_attempts, 1),
+                        GMAIL_MAX_TRANSIENT_ATTEMPTS,
+                    )
+                    if consecutive_transient_attempts < transient_attempt_limit:
+                        self.sleeper(
+                            _gmail_retry_delay(
+                                error,
+                                consecutive_transient_attempts,
+                            )
+                        )
+                        continue
+                raise
+            except Exception as error:
+                diagnostic_error = GmailRetrievalError(
+                    "unexpected internal Gmail failure",
+                    category=GmailFailureCategory.UNEXPECTED_INTERNAL_FAILURE,
+                    stage=self._progress().stage,
+                    affected_stream=self._progress().affected_stream,
+                )
+                self._record_failure(self._failure_audit(diagnostic_error))
+                raise diagnostic_error from error
+            finally:
+                self._active_progress = None
+            self.last_failure_audit = None
+            return result
+
+    def _record_failure(self, failure: GmailFailureAudit) -> None:
+        """Retain and report only safe aggregate facts for one failed attempt."""
+
+        self.last_failure_audit = failure
+        self.attempt_failure_audits = (*self.attempt_failure_audits, failure)
+        if self.failure_reporter is not None:
+            self.failure_reporter(failure)
+
+    def _reduce_window(
+        self,
+        error: GmailError,
+        *,
+        inbound_days: int,
+        sent_days: int,
+    ) -> tuple[int, int] | None:
+        """Narrow only a stream whose list cap was exceeded."""
+
+        if not self.allow_window_fallback or not isinstance(
+            error,
+            GmailBoundaryExceeded,
+        ):
+            return None
+        if (
+            error.boundary == "inbound_messages"
+            and inbound_days > GMAIL_MINIMUM_INBOUND_DAYS
+        ):
+            return inbound_days - 1, sent_days
+        if error.boundary == "sent_messages" and sent_days > GMAIL_MINIMUM_SENT_DAYS:
+            return inbound_days, sent_days - 1
+        return None
+
+    def _refresh_authorization(self) -> bool:
+        """Perform at most one exact-scope refresh when the provider supports it."""
+
+        refresh = getattr(
+            self.authorization_provider,
+            "refresh_gmail_authorization",
+            None,
+        )
+        if not callable(refresh):
+            return False
+        try:
+            refreshed = refresh(self.account_reference)
+        except GmailError:
+            return False
+        return isinstance(
+            refreshed, GmailAuthorization
+        ) and refreshed.granted_scopes == frozenset({GMAIL_READONLY_SCOPE})
+
+    def _retrieve(
+        self,
+        request: ConnectorRequest,
+        streams: tuple[GmailBoundedStream, GmailBoundedStream],
+    ) -> ConnectorResult:
         """Run listing, metadata-first filtering, bounded content, and detection."""
 
+        progress = self._progress()
         if request.approved_scope != GMAIL_READONLY_SCOPE:
-            raise GmailRetrievalError("Gmail request exceeded the approved scope")
+            raise GmailAuthenticationError(
+                "Gmail request exceeded the approved scope",
+                category=GmailFailureCategory.ACCOUNT_OR_SCOPE_MISMATCH,
+            )
+        progress.stage = GmailFailureStage.AUTHORIZATION
         authorization = self.authorization_provider.get_gmail_authorization(
             self.account_reference
         )
         if authorization.granted_scopes != frozenset({GMAIL_READONLY_SCOPE}):
-            raise GmailAuthenticationError("Gmail grant scope is not exact")
+            raise GmailAuthenticationError(
+                "Gmail grant scope is not exact",
+                category=GmailFailureCategory.ACCOUNT_OR_SCOPE_MISMATCH,
+            )
+        progress.stage = GmailFailureStage.PROFILE
         profile = self.transport.get_profile(authorization)
         if profile.email_address.casefold() != self.work_account.casefold():
-            raise GmailAuthenticationError("Gmail profile did not match Work Gmail")
-
-        streams = gmail_bounded_streams(
-            request.briefing_date,
-            request.timezone,
-        )
+            raise GmailAuthenticationError(
+                "Gmail profile did not match Work Gmail",
+                category=GmailFailureCategory.ACCOUNT_OR_SCOPE_MISMATCH,
+                stage=GmailFailureStage.PROFILE,
+            )
         stream_references: dict[GmailStream, tuple[GmailMessageReference, ...]] = {}
         stream_pages: dict[GmailStream, int] = {}
         stream_duplicates: dict[GmailStream, int] = {}
@@ -450,6 +720,10 @@ class GmailConnector:
         memberships: dict[str, set[GmailStream]] = {}
         cross_stream_duplicates = 0
         for stream in streams:
+            progress.stage = GmailFailureStage.LISTING
+            progress.affected_stream = stream.stream
+            progress.window_start = stream.window_start
+            progress.window_end = stream.window_end
             references, page_count, duplicate_count = self._list_stream(
                 authorization,
                 stream,
@@ -463,17 +737,23 @@ class GmailConnector:
                     cross_stream_duplicates += 1
                     if existing.thread_id != reference.thread_id:
                         raise GmailRetrievalError(
-                            "cross-stream Gmail message ID changed thread identity"
+                            "cross-stream Gmail message ID changed thread identity",
+                            category=GmailFailureCategory.INVALID_PROVIDER_RESPONSE,
+                            stage=GmailFailureStage.LISTING,
                         )
                 else:
                     references_by_id[reference.id] = reference
                 memberships.setdefault(reference.id, set()).add(stream.stream)
+        progress.affected_stream = None
+        progress.window_start = min(stream.window_start for stream in streams)
+        progress.window_end = max(stream.window_end for stream in streams)
         if len(references_by_id) > GMAIL_MESSAGE_LIMIT:
             raise GmailBoundaryExceeded(
                 "more than 500 unique Gmail messages matched the two bounded streams",
                 boundary="combined_unique_messages",
                 observed_count=len(references_by_id),
                 limit=GMAIL_MESSAGE_LIMIT,
+                stage=GmailFailureStage.LISTING,
             )
 
         references = tuple(references_by_id.values())
@@ -481,7 +761,13 @@ class GmailConnector:
         classifications: dict[str, GmailMessageClassification] = {}
         partial_warnings: list[str] = []
         partial_streams: set[GmailStream] = set()
+        progress.stage = GmailFailureStage.METADATA
+        progress.metadata_retrieval_began = bool(references)
         for reference in references:
+            membership = memberships[reference.id]
+            progress.affected_stream = (
+                next(iter(membership)) if len(membership) == 1 else None
+            )
             try:
                 message = self.transport.get_message_metadata(
                     authorization,
@@ -489,7 +775,9 @@ class GmailConnector:
                 )
             except GmailAuthenticationError:
                 raise
-            except GmailRetrievalError:
+            except GmailRetrievalError as error:
+                if _gmail_failure_requires_stop(error):
+                    raise
                 partial_warnings.append("one or more metadata records were unavailable")
                 partial_streams.update(memberships[reference.id])
                 continue
@@ -498,10 +786,12 @@ class GmailConnector:
                 partial_streams.update(memberships[reference.id])
                 continue
             metadata.append(message)
+            progress.metadata_records_inspected += 1
             classifications[message.id] = classify_gmail_metadata(
                 message,
                 self.work_account,
             )
+        progress.affected_stream = None
 
         candidate_messages = tuple(
             message
@@ -521,6 +811,7 @@ class GmailConnector:
                 boundary="body_candidates",
                 observed_count=len(candidate_messages),
                 limit=GMAIL_BODY_CANDIDATE_LIMIT,
+                stage=GmailFailureStage.METADATA,
             )
 
         bodies: dict[str, str] = {}
@@ -531,6 +822,11 @@ class GmailConnector:
         }
         run_chars = 0
         for message in candidate_messages:
+            membership = memberships[message.id]
+            progress.stage = GmailFailureStage.BODY
+            progress.affected_stream = (
+                next(iter(membership)) if len(membership) == 1 else None
+            )
             if message.size_estimate > GMAIL_MAX_MESSAGE_SIZE_ESTIMATE:
                 unsupported_ids.add(message.id)
                 partial_warnings.append(
@@ -538,6 +834,7 @@ class GmailConnector:
                 )
                 partial_streams.update(memberships[message.id])
                 continue
+            progress.body_retrieval_began = True
             try:
                 full_message = self.transport.get_message_full(
                     authorization,
@@ -545,7 +842,9 @@ class GmailConnector:
                 )
             except GmailAuthenticationError:
                 raise
-            except GmailRetrievalError:
+            except GmailRetrievalError as error:
+                if _gmail_failure_requires_stop(error):
+                    raise
                 partial_warnings.append("one or more candidate bodies were unavailable")
                 partial_streams.update(memberships[message.id])
                 continue
@@ -569,9 +868,14 @@ class GmailConnector:
                     boundary="content_characters",
                     observed_count=run_chars,
                     limit=GMAIL_MAX_RUN_TEXT_CHARS,
+                    stage=GmailFailureStage.BODY,
+                    affected_stream=progress.affected_stream,
                 )
             bodies[message.id] = body
+            progress.bodies_retrieved += 1
 
+        progress.stage = GmailFailureStage.PROCESSING
+        progress.affected_stream = None
         proposed_detections, rejections = detect_gmail_conclusions(
             tuple(metadata),
             classifications,
@@ -596,11 +900,17 @@ class GmailConnector:
             if action == "replace":
                 if replacement_text is None or not replacement_text.strip():
                     raise GmailRetrievalError(
-                        "corrected Gmail conclusion omitted replacement text"
+                        "corrected Gmail conclusion omitted replacement text",
+                        category=GmailFailureCategory.UNEXPECTED_INTERNAL_FAILURE,
+                        stage=GmailFailureStage.PROCESSING,
                     )
                 detection = replace(detection, statement=replacement_text.strip())
             elif action != "show":
-                raise GmailRetrievalError("Gmail recurrence action was invalid")
+                raise GmailRetrievalError(
+                    "Gmail recurrence action was invalid",
+                    category=GmailFailureCategory.UNEXPECTED_INTERNAL_FAILURE,
+                    stage=GmailFailureStage.PROCESSING,
+                )
             effective_detections.append(detection)
         detections = tuple(effective_detections)
         self.last_proposed_detections = proposed_detections
@@ -743,49 +1053,106 @@ class GmailConnector:
         page_count = 0
         page_token: str | None = None
         seen_tokens: set[str] = set()
-        while True:
-            page = self.transport.list_messages(
-                authorization,
-                GmailMessageListRequest(
-                    query=stream.query,
-                    page_token=page_token,
-                ),
-            )
-            page_count += 1
-            if page_count > GMAIL_PAGE_LIMIT:
-                raise GmailBoundaryExceeded(
-                    "Gmail pagination exceeded its page limit",
-                    boundary=f"{stream.stream.value}_pages",
-                    observed_count=page_count,
-                    limit=GMAIL_PAGE_LIMIT,
+        progress = self._progress()
+        try:
+            while True:
+                page = self.transport.list_messages(
+                    authorization,
+                    GmailMessageListRequest(
+                        query=stream.query,
+                        page_token=page_token,
+                    ),
                 )
-            for reference in page.messages:
-                if not reference.id or not reference.thread_id:
-                    continue
-                existing = references.get(reference.id)
-                if existing is not None:
-                    duplicate_count += 1
-                    if existing.thread_id != reference.thread_id:
-                        raise GmailRetrievalError(
-                            "duplicate Gmail message ID changed thread identity"
-                        )
-                    continue
-                references[reference.id] = reference
-                if len(references) > stream.message_limit:
+                page_count += 1
+                progress.pages_completed += 1
+                if page_count > GMAIL_PAGE_LIMIT:
                     raise GmailBoundaryExceeded(
-                        f"more than {stream.message_limit} Gmail messages matched "
-                        f"the {stream.stream.value} stream",
-                        boundary=f"{stream.stream.value}_messages",
-                        observed_count=len(references),
-                        limit=stream.message_limit,
+                        "Gmail pagination exceeded its page limit",
+                        boundary=f"{stream.stream.value}_pages",
+                        observed_count=page_count,
+                        limit=GMAIL_PAGE_LIMIT,
+                        stage=GmailFailureStage.LISTING,
+                        affected_stream=stream.stream,
                     )
-            page_token = page.next_page_token
-            if page_token is None:
-                break
-            if not page_token or page_token in seen_tokens:
-                raise GmailRetrievalError("Gmail returned an invalid page token")
-            seen_tokens.add(page_token)
+                for reference in page.messages:
+                    if not reference.id or not reference.thread_id:
+                        continue
+                    existing = references.get(reference.id)
+                    if existing is not None:
+                        duplicate_count += 1
+                        if existing.thread_id != reference.thread_id:
+                            raise GmailRetrievalError(
+                                "duplicate Gmail message ID changed thread identity",
+                                category=(
+                                    GmailFailureCategory.INVALID_PROVIDER_RESPONSE
+                                ),
+                                stage=GmailFailureStage.LISTING,
+                                affected_stream=stream.stream,
+                            )
+                        continue
+                    references[reference.id] = reference
+                    progress.message_references_listed += 1
+                    if len(references) > stream.message_limit:
+                        raise GmailBoundaryExceeded(
+                            f"more than {stream.message_limit} Gmail messages matched "
+                            f"the {stream.stream.value} stream",
+                            boundary=f"{stream.stream.value}_messages",
+                            observed_count=len(references),
+                            limit=stream.message_limit,
+                            stage=GmailFailureStage.LISTING,
+                            affected_stream=stream.stream,
+                        )
+                page_token = page.next_page_token
+                if page_token is None:
+                    break
+                if not page_token or page_token in seen_tokens:
+                    raise GmailRetrievalError(
+                        "Gmail returned an invalid page token",
+                        category=GmailFailureCategory.PAGINATION_FAILURE,
+                        stage=GmailFailureStage.LISTING,
+                        affected_stream=stream.stream,
+                    )
+                seen_tokens.add(page_token)
+        finally:
+            page_token = None
+            seen_tokens.clear()
         return tuple(references.values()), page_count, duplicate_count
+
+    def _progress(self) -> _GmailRetrievalProgress:
+        progress = self._active_progress
+        if progress is None:
+            raise RuntimeError("Gmail retrieval progress is unavailable")
+        return progress
+
+    def _failure_audit(self, error: GmailError) -> GmailFailureAudit:
+        progress = self._progress()
+        boundary_name: str | None = None
+        configured_limit: int | None = None
+        observed_count: int | None = None
+        if isinstance(error, GmailBoundaryExceeded):
+            boundary_name = error.boundary
+            configured_limit = error.limit
+            observed_count = error.observed_count
+        return GmailFailureAudit(
+            connector_alias=GMAIL_WORK_ALIAS,
+            failure_stage=error.stage,
+            failure_category=error.category,
+            affected_stream=error.affected_stream or progress.affected_stream,
+            retrieval_window_start=progress.window_start,
+            retrieval_window_end=progress.window_end,
+            configured_boundary_name=boundary_name,
+            configured_limit=configured_limit,
+            observed_aggregate_count=observed_count,
+            pages_completed=progress.pages_completed,
+            message_references_listed=progress.message_references_listed,
+            metadata_retrieval_began=progress.metadata_retrieval_began,
+            metadata_records_inspected=progress.metadata_records_inspected,
+            body_retrieval_began=progress.body_retrieval_began,
+            bodies_retrieved=progress.bodies_retrieved,
+            persistence_began=False,
+            raw_payloads_retained=False,
+            occurred_at=self.clock(),
+        )
 
     def _coverage_resources(self) -> tuple[ContextResourceCoverage, ...]:
         audit = self.last_audit
@@ -859,12 +1226,54 @@ class GmailConnector:
         )
 
 
+def _gmail_failure_requires_stop(error: GmailRetrievalError) -> bool:
+    """Return whether an operation-level failure invalidates the bounded run."""
+
+    return error.category is not GmailFailureCategory.INVALID_PROVIDER_RESPONSE
+
+
+def _is_transient_gmail_failure(error: GmailError) -> bool:
+    """Return whether the exact same bounded read may be retried."""
+
+    return error.category in {
+        GmailFailureCategory.RATE_LIMITING,
+        GmailFailureCategory.TIMEOUT,
+        GmailFailureCategory.NETWORK_OR_TRANSPORT_FAILURE,
+        GmailFailureCategory.PROVIDER_SERVER_FAILURE,
+    }
+
+
+def _gmail_retry_delay(error: GmailError, failed_attempts: int) -> float:
+    """Return a bounded provider-directed or exponential retry delay."""
+
+    if error.retry_after_seconds is not None:
+        return float(
+            min(
+                max(error.retry_after_seconds, 0),
+                GMAIL_MAX_RETRY_DELAY_SECONDS,
+            )
+        )
+    return float(
+        min(
+            2 ** max(failed_attempts - 1, 0),
+            GMAIL_MAX_RETRY_DELAY_SECONDS,
+        )
+    )
+
+
 def gmail_bounded_streams(
     briefing_date: date,
     timezone: str,
+    *,
+    inbound_days: int = GMAIL_DEFAULT_INBOUND_DAYS,
+    sent_days: int = GMAIL_DEFAULT_SENT_DAYS,
 ) -> tuple[GmailBoundedStream, GmailBoundedStream]:
     """Return exact inbound and sent stream boundaries through briefing day."""
 
+    if not GMAIL_MINIMUM_INBOUND_DAYS <= inbound_days <= GMAIL_DEFAULT_INBOUND_DAYS:
+        raise ValueError("inbound Gmail window is outside its accepted range")
+    if not GMAIL_MINIMUM_SENT_DAYS <= sent_days <= GMAIL_DEFAULT_SENT_DAYS:
+        raise ValueError("sent Gmail window is outside its accepted range")
     zone = ZoneInfo(timezone)
     ends_at = datetime.combine(
         briefing_date + timedelta(days=1),
@@ -872,12 +1281,12 @@ def gmail_bounded_streams(
         tzinfo=zone,
     )
     inbound_starts_at = datetime.combine(
-        briefing_date - timedelta(days=7),
+        briefing_date - timedelta(days=inbound_days),
         time.min,
         tzinfo=zone,
     )
     sent_starts_at = datetime.combine(
-        briefing_date - timedelta(days=14),
+        briefing_date - timedelta(days=sent_days),
         time.min,
         tzinfo=zone,
     )

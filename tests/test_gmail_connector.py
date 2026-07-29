@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import base64
-from dataclasses import dataclass, field
+import json
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
@@ -15,10 +16,13 @@ from chief_of_staff.connectors import (
     GMAIL_SENT_MESSAGE_LIMIT,
     GMAIL_WORK_ACCOUNT,
     ConnectorRequest,
+    GmailAuthenticationError,
     GmailAuthorization,
     GmailBoundaryExceeded,
     GmailConnector,
     GmailDetectionType,
+    GmailFailureCategory,
+    GmailFailureStage,
     GmailFullMessage,
     GmailMessageClassification,
     GmailMessageListPage,
@@ -27,6 +31,7 @@ from chief_of_staff.connectors import (
     GmailMessageReference,
     GmailMimePart,
     GmailProfile,
+    GmailRetrievalError,
     RetrievalWindow,
     classify_gmail_metadata,
     detect_gmail_conclusions,
@@ -279,6 +284,22 @@ def test_candidate_cap_stops_before_any_body_retrieval() -> None:
     assert raised.value.boundary == "body_candidates"
     assert raised.value.observed_count == GMAIL_BODY_CANDIDATE_LIMIT + 1
     assert not any(operation == "full" for operation, _value in transport.calls)
+    assert connector.last_audit is None
+    failure = connector.last_failure_audit
+    assert failure is not None
+    assert failure.failure_category is GmailFailureCategory.CONFIGURED_BOUNDARY_EXCEEDED
+    assert failure.failure_stage is GmailFailureStage.METADATA
+    assert failure.configured_boundary_name == "body_candidates"
+    assert failure.configured_limit == GMAIL_BODY_CANDIDATE_LIMIT
+    assert failure.observed_aggregate_count == GMAIL_BODY_CANDIDATE_LIMIT + 1
+    assert failure.pages_completed == 2
+    assert failure.message_references_listed == GMAIL_BODY_CANDIDATE_LIMIT + 1
+    assert failure.metadata_retrieval_began
+    assert failure.metadata_records_inspected == GMAIL_BODY_CANDIDATE_LIMIT + 1
+    assert not failure.body_retrieval_began
+    assert failure.bodies_retrieved == 0
+    assert not failure.persistence_began
+    assert not failure.raw_payloads_retained
 
 
 @pytest.mark.parametrize(
@@ -337,6 +358,20 @@ def test_each_stream_cap_stops_before_metadata(
     assert raised.value.limit == expected_limit
     assert raised.value.observed_count == expected_limit + 1
     assert not any(operation == "metadata" for operation, _value in transport.calls)
+    failure = connector.last_failure_audit
+    assert failure is not None
+    assert failure.failure_category is GmailFailureCategory.CONFIGURED_BOUNDARY_EXCEEDED
+    assert failure.failure_stage is GmailFailureStage.LISTING
+    assert failure.affected_stream is not None
+    assert failure.affected_stream.value in expected_boundary
+    assert failure.configured_boundary_name == expected_boundary
+    assert failure.configured_limit == expected_limit
+    assert failure.observed_aggregate_count == expected_limit + 1
+    assert failure.message_references_listed == expected_limit + 1
+    assert not failure.metadata_retrieval_began
+    assert failure.metadata_records_inspected == 0
+    assert not failure.body_retrieval_began
+    assert failure.bodies_retrieved == 0
 
 
 def test_cross_stream_ids_are_deduplicated_before_metadata_and_preserve_membership() -> (
@@ -421,6 +456,358 @@ def test_updates_category_gets_metadata_review_without_automatic_body_retrieval(
     assert connector.last_audit is not None
     assert connector.last_audit.inbound.metadata_inspected == 2
     assert connector.last_audit.inbound.body_candidates == 1
+
+
+def test_each_run_clears_prior_success_and_failure_audits_without_private_fields() -> (
+    None
+):
+    connector = GmailConnector(
+        account_reference=ACCOUNT_REFERENCE,
+        authorization_provider=_AuthorizationProvider(),
+        transport=_Transport(
+            pages=(GmailMessageListPage(()), GmailMessageListPage(())),
+            metadata={},
+            bodies={},
+        ),
+        clock=lambda: NOW,
+    )
+
+    connector.retrieve(_request())
+    assert connector.last_audit is not None
+    assert connector.last_failure_audit is None
+
+    connector.transport = _Transport(
+        pages=(
+            GmailMessageListPage(
+                tuple(
+                    GmailMessageReference(
+                        f"private-message-{index}",
+                        f"private-thread-{index}",
+                    )
+                    for index in range(GMAIL_INBOUND_MESSAGE_LIMIT + 1)
+                )
+            ),
+        ),
+        metadata={},
+        bodies={},
+    )
+    with pytest.raises(GmailBoundaryExceeded):
+        connector.retrieve(_request())
+
+    assert connector.last_audit is None
+    failure = connector.last_failure_audit
+    assert failure is not None
+    serialized = json.dumps(asdict(failure), default=str)
+    assert "private-message" not in serialized
+    assert "private-thread" not in serialized
+    assert "query" not in serialized
+
+    connector.transport = _Transport(
+        pages=(GmailMessageListPage(()), GmailMessageListPage(())),
+        metadata={},
+        bodies={},
+    )
+    connector.retrieve(_request())
+
+    assert connector.last_audit is not None
+    assert connector.last_failure_audit is None
+
+
+def test_unexpected_internal_failure_is_wrapped_with_current_safe_progress() -> None:
+    connector = GmailConnector(
+        account_reference=ACCOUNT_REFERENCE,
+        authorization_provider=_AuthorizationProvider(),
+        transport=_Transport(pages=(), metadata={}, bodies={}),
+        clock=lambda: NOW,
+    )
+
+    with pytest.raises(GmailRetrievalError) as raised:
+        connector.retrieve(_request())
+
+    assert raised.value.category is GmailFailureCategory.UNEXPECTED_INTERNAL_FAILURE
+    failure = connector.last_failure_audit
+    assert failure is not None
+    assert failure.failure_category is (
+        GmailFailureCategory.UNEXPECTED_INTERNAL_FAILURE
+    )
+    assert failure.failure_stage is GmailFailureStage.LISTING
+    assert failure.affected_stream is not None
+    assert failure.pages_completed == 0
+    assert failure.message_references_listed == 0
+    assert not failure.metadata_retrieval_began
+    assert connector.last_audit is None
+
+
+def test_transient_failures_retry_at_most_three_times_with_safe_attempt_audits() -> (
+    None
+):
+    @dataclass(slots=True)
+    class TransientTransport:
+        profile_attempts: int = 0
+        list_calls: int = 0
+
+        def get_profile(
+            self,
+            authorization: GmailAuthorization,
+        ) -> GmailProfile:
+            del authorization
+            self.profile_attempts += 1
+            if self.profile_attempts < 3:
+                raise GmailRetrievalError(
+                    "synthetic transient failure",
+                    category=GmailFailureCategory.RATE_LIMITING,
+                    stage=GmailFailureStage.PROFILE,
+                    retry_after_seconds=2,
+                )
+            return GmailProfile(GMAIL_WORK_ACCOUNT)
+
+        def list_messages(
+            self,
+            authorization: GmailAuthorization,
+            request: GmailMessageListRequest,
+        ) -> GmailMessageListPage:
+            del authorization, request
+            self.list_calls += 1
+            return GmailMessageListPage(())
+
+        def get_message_metadata(
+            self,
+            authorization: GmailAuthorization,
+            message_id: str,
+        ) -> GmailMessageMetadata:
+            raise AssertionError((authorization, message_id))
+
+        def get_message_full(
+            self,
+            authorization: GmailAuthorization,
+            message_id: str,
+        ) -> GmailFullMessage:
+            raise AssertionError((authorization, message_id))
+
+    transport = TransientTransport()
+    delays: list[float] = []
+    reports: list[object] = []
+    connector = GmailConnector(
+        account_reference=ACCOUNT_REFERENCE,
+        authorization_provider=_AuthorizationProvider(),
+        transport=transport,
+        max_transient_attempts=3,
+        failure_reporter=reports.append,
+        sleeper=delays.append,
+        clock=lambda: NOW,
+    )
+
+    result = connector.retrieve(_request())
+
+    assert result.coverage.status.value == "complete"
+    assert connector.last_attempt_count == 3
+    assert transport.profile_attempts == 3
+    assert transport.list_calls == 2
+    assert delays == [2.0, 2.0]
+    assert len(connector.attempt_failure_audits) == 2
+    assert len(reports) == 2
+    assert all(
+        audit.failure_category is GmailFailureCategory.RATE_LIMITING
+        for audit in connector.attempt_failure_audits
+    )
+    assert connector.last_failure_audit is None
+
+
+def test_stream_cap_fallback_narrows_only_offending_window_without_raising_cap() -> (
+    None
+):
+    @dataclass(slots=True)
+    class WindowTransport:
+        inbound_attempts: int = 0
+        queries: list[GmailMessageListRequest] = field(default_factory=list)
+
+        def get_profile(
+            self,
+            authorization: GmailAuthorization,
+        ) -> GmailProfile:
+            del authorization
+            return GmailProfile(GMAIL_WORK_ACCOUNT)
+
+        def list_messages(
+            self,
+            authorization: GmailAuthorization,
+            request: GmailMessageListRequest,
+        ) -> GmailMessageListPage:
+            del authorization
+            self.queries.append(request)
+            if "-in:sent" in request.query:
+                self.inbound_attempts += 1
+                if self.inbound_attempts < 3:
+                    return GmailMessageListPage(
+                        tuple(
+                            GmailMessageReference(
+                                f"bounded-{index}",
+                                f"bounded-thread-{index}",
+                            )
+                            for index in range(GMAIL_INBOUND_MESSAGE_LIMIT + 1)
+                        )
+                    )
+            return GmailMessageListPage(())
+
+        def get_message_metadata(
+            self,
+            authorization: GmailAuthorization,
+            message_id: str,
+        ) -> GmailMessageMetadata:
+            raise AssertionError((authorization, message_id))
+
+        def get_message_full(
+            self,
+            authorization: GmailAuthorization,
+            message_id: str,
+        ) -> GmailFullMessage:
+            raise AssertionError((authorization, message_id))
+
+    transport = WindowTransport()
+    connector = GmailConnector(
+        account_reference=ACCOUNT_REFERENCE,
+        authorization_provider=_AuthorizationProvider(),
+        transport=transport,
+        allow_window_fallback=True,
+        clock=lambda: NOW,
+    )
+
+    result = connector.retrieve(_request())
+
+    assert result.coverage.status.value == "complete"
+    assert connector.last_attempt_count == 3
+    assert len(connector.attempt_failure_audits) == 2
+    assert all(
+        failure.configured_limit == GMAIL_INBOUND_MESSAGE_LIMIT
+        for failure in connector.attempt_failure_audits
+    )
+    assert connector.last_audit is not None
+    assert connector.last_audit.inbound.window_start.isoformat() == (
+        "2026-07-23T00:00:00-04:00"
+    )
+    assert connector.last_audit.sent.window_start.isoformat() == (
+        "2026-07-14T00:00:00-04:00"
+    )
+    inbound_queries = [
+        request.query for request in transport.queries if "-in:sent" in request.query
+    ]
+    assert len(inbound_queries) == 3
+    assert len(set(inbound_queries)) == 3
+
+
+def test_body_candidate_boundary_never_uses_window_fallback() -> None:
+    messages = tuple(
+        _metadata(
+            f"candidate-{index}",
+            f"candidate-thread-{index}",
+            sender=f"person-{index}@example.invalid",
+            recipient=GMAIL_WORK_ACCOUNT,
+        )
+        for index in range(GMAIL_BODY_CANDIDATE_LIMIT + 1)
+    )
+    connector = GmailConnector(
+        account_reference=ACCOUNT_REFERENCE,
+        authorization_provider=_AuthorizationProvider(),
+        transport=_Transport(
+            pages=(
+                GmailMessageListPage(
+                    tuple(
+                        GmailMessageReference(message.id, message.thread_id)
+                        for message in messages
+                    )
+                ),
+                GmailMessageListPage(()),
+            ),
+            metadata={message.id: message for message in messages},
+            bodies={},
+        ),
+        allow_window_fallback=True,
+    )
+
+    with pytest.raises(GmailBoundaryExceeded) as raised:
+        connector.retrieve(_request())
+
+    assert raised.value.boundary == "body_candidates"
+    assert connector.last_attempt_count == 1
+    assert len(connector.attempt_failure_audits) == 1
+
+
+def test_http_401_allows_one_exact_scope_refresh_then_stops_retrying() -> None:
+    @dataclass(slots=True)
+    class RefreshingProvider:
+        refreshes: int = 0
+
+        def get_gmail_authorization(
+            self,
+            account_reference: str,
+        ) -> GmailAuthorization:
+            return GmailAuthorization(
+                account_reference=account_reference,
+                granted_scopes=frozenset({GMAIL_READONLY_SCOPE}),
+                credential_reference="synthetic-keychain-reference",
+            )
+
+        def refresh_gmail_authorization(
+            self,
+            account_reference: str,
+        ) -> GmailAuthorization:
+            self.refreshes += 1
+            return self.get_gmail_authorization(account_reference)
+
+    @dataclass(slots=True)
+    class UnauthorizedTransport:
+        profile_attempts: int = 0
+
+        def get_profile(
+            self,
+            authorization: GmailAuthorization,
+        ) -> GmailProfile:
+            del authorization
+            self.profile_attempts += 1
+            raise GmailAuthenticationError(
+                "synthetic 401",
+                stage=GmailFailureStage.AUTHORIZATION,
+            )
+
+        def list_messages(
+            self,
+            authorization: GmailAuthorization,
+            request: GmailMessageListRequest,
+        ) -> GmailMessageListPage:
+            raise AssertionError((authorization, request))
+
+        def get_message_metadata(
+            self,
+            authorization: GmailAuthorization,
+            message_id: str,
+        ) -> GmailMessageMetadata:
+            raise AssertionError((authorization, message_id))
+
+        def get_message_full(
+            self,
+            authorization: GmailAuthorization,
+            message_id: str,
+        ) -> GmailFullMessage:
+            raise AssertionError((authorization, message_id))
+
+    provider = RefreshingProvider()
+    transport = UnauthorizedTransport()
+    connector = GmailConnector(
+        account_reference=ACCOUNT_REFERENCE,
+        authorization_provider=provider,
+        transport=transport,
+        allow_authorization_refresh=True,
+        max_transient_attempts=3,
+        clock=lambda: NOW,
+    )
+
+    with pytest.raises(GmailAuthenticationError):
+        connector.retrieve(_request())
+
+    assert provider.refreshes == 1
+    assert transport.profile_attempts == 2
+    assert connector.last_attempt_count == 2
+    assert len(connector.attempt_failure_audits) == 2
 
 
 def test_mime_minimization_prefers_plain_text_and_never_uses_attachments() -> None:
