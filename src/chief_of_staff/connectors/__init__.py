@@ -23,6 +23,8 @@ from chief_of_staff.connectors.gmail import (
     GmailAuthorization,
     GmailAuthorizationProvider,
     GmailAuthorizationUnavailable,
+    GmailBodyCandidate,
+    GmailBodyCandidateSelection,
     GmailBoundaryExceeded,
     GmailBoundedStream,
     GmailConnector,
@@ -50,6 +52,7 @@ from chief_of_staff.connectors.gmail import (
     detect_gmail_conclusions,
     extract_minimized_message_text,
     gmail_bounded_streams,
+    select_gmail_body_candidates,
 )
 from chief_of_staff.connectors.gmail_live import (
     StoredWorkGmailAuthorizationProvider,
@@ -214,6 +217,8 @@ __all__ = (
     "GmailAuthorization",
     "GmailAuthorizationProvider",
     "GmailAuthorizationUnavailable",
+    "GmailBodyCandidate",
+    "GmailBodyCandidateSelection",
     "GmailBoundaryExceeded",
     "GmailBoundedStream",
     "GmailConnector",
@@ -319,6 +324,7 @@ __all__ = (
     "gmail_bounded_streams",
     "partition_source_items_by_domain",
     "qualify_todoist_task",
+    "select_gmail_body_candidates",
     "stored_task_matches_selection_boundary",
     "task_due_at",
     "verify_todoist_priority_semantics",

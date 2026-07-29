@@ -238,11 +238,22 @@ deduplicates before metadata, and stops if combined unique messages exceed
 stream's start forward by one calendar day, preserving the end, until it fits
 or reaches three inbound days or seven sent days. It never raises a cap and
 discloses any reduced effective window in coverage and the private review.
-It retrieves metadata before any content and retrieves `format=full` only for
-at most 120 bounded direct-human or outbound candidates. It never uses
-`format=raw`, retrieves attachments, renders active HTML, loads remote
-resources, or exposes a Gmail mutation method. Raw responses, MIME trees, and
-complete bodies remain transient.
+It retrieves metadata before any content. If more than 120 direct-human or
+outbound messages are eligible, it allocates the 120 slots proportionally
+between inbound and sent streams, redistributes rounding capacity
+deterministically, and selects the newest messages within each stream with the
+private message identity used only as the final tie-breaker. Omitted candidates
+receive no body request. Coverage and the private review report aggregate
+eligible, selected, omitted, fetched, usable, and unavailable counts and mark
+the source partial.
+
+The connector retrieves `format=full` only for the selected subset. It never
+uses `format=raw`, retrieves attachments, renders active HTML, loads remote
+resources, or exposes a Gmail mutation method. It does not use truncated
+current-message text for a conclusion. If the total extracted-text boundary is
+reached, it preserves completed evidence, omits the message that would exceed
+the remaining limit, stops further body retrieval, and reports partial
+coverage. Raw responses, MIME trees, and complete bodies remain transient.
 
 Before routine use, a second Northridge-controlled owner or editor must be
 added to the Google Cloud project to reduce single-person administrative risk.
@@ -385,12 +396,14 @@ mutation operations.
 Work Gmail tests additionally cover exact restricted scope, state and PKCE,
 account confirmation, Keychain isolation, refresh and revocation, separate
 bounded epoch queries, stable pagination, stream and combined deduplication,
-metadata-first filtering, candidate and content caps, MIME minimization, inert
-malicious content, reply state, explicit
-requests and promises, local correction recurrence, private review artifacts,
-briefing integration, structured failure categories, current-run aggregate
-failure audits, failed-trial non-persistence, and absence of attachment or
-mutation operations.
+metadata-first filtering, proportional and order-independent body-candidate
+selection, the unchanged 120-fetch ceiling, safe omission counts,
+extracted-content partial processing without truncated conclusions, MIME
+minimization, inert malicious content, reply state, explicit requests and
+promises, local correction recurrence, private review artifacts, briefing
+integration, structured failure categories, current-run aggregate failure
+audits, failed-trial non-persistence, and absence of attachment or mutation
+operations.
 ## Current limitations and stop condition
 
 - Google's approved scope can technically read events on other calendars the

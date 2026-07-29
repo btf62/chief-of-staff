@@ -9,6 +9,7 @@ from datetime import UTC, date, datetime, timedelta
 
 import pytest
 
+import chief_of_staff.connectors.gmail as gmail_module
 from chief_of_staff.connectors import (
     GMAIL_BODY_CANDIDATE_LIMIT,
     GMAIL_INBOUND_MESSAGE_LIMIT,
@@ -18,6 +19,7 @@ from chief_of_staff.connectors import (
     ConnectorRequest,
     GmailAuthenticationError,
     GmailAuthorization,
+    GmailBodyCandidate,
     GmailBoundaryExceeded,
     GmailConnector,
     GmailDetectionType,
@@ -32,11 +34,13 @@ from chief_of_staff.connectors import (
     GmailMimePart,
     GmailProfile,
     GmailRetrievalError,
+    GmailStream,
     RetrievalWindow,
     classify_gmail_metadata,
     detect_gmail_conclusions,
     extract_minimized_message_text,
     gmail_bounded_streams,
+    select_gmail_body_candidates,
 )
 
 NOW = datetime(2026, 7, 28, 13, 0, tzinfo=UTC)
@@ -164,6 +168,128 @@ def test_bounded_streams_use_exact_epoch_boundaries_queries_and_caps() -> None:
     )
 
 
+def _body_candidate(
+    candidate_id: str,
+    stream: GmailStream,
+    *,
+    occurred_at: datetime,
+) -> GmailBodyCandidate:
+    return GmailBodyCandidate(
+        message=_metadata(
+            candidate_id,
+            f"thread-{candidate_id}",
+            sender=(
+                "person@example.invalid"
+                if stream is GmailStream.INBOUND
+                else GMAIL_WORK_ACCOUNT
+            ),
+            recipient=(
+                GMAIL_WORK_ACCOUNT
+                if stream is GmailStream.INBOUND
+                else "person@example.invalid"
+            ),
+            occurred_at=occurred_at,
+        ),
+        stream=stream,
+    )
+
+
+def test_candidate_selection_is_proportional_and_provider_order_independent() -> None:
+    candidates = tuple(
+        _body_candidate(
+            f"inbound-{index:03}",
+            GmailStream.INBOUND,
+            occurred_at=NOW - timedelta(minutes=index),
+        )
+        for index in range(100)
+    ) + tuple(
+        _body_candidate(
+            f"sent-{index:03}",
+            GmailStream.SENT,
+            occurred_at=NOW - timedelta(minutes=index),
+        )
+        for index in range(43)
+    )
+
+    selected = select_gmail_body_candidates(candidates)
+    reversed_selection = select_gmail_body_candidates(tuple(reversed(candidates)))
+
+    assert selected.eligible_count == 143
+    assert selected.selected_count == GMAIL_BODY_CANDIDATE_LIMIT
+    assert selected.omitted_count == 23
+    assert selected.inbound_selected == 84
+    assert selected.sent_selected == 36
+    assert selected.inbound_eligible - selected.inbound_selected == 16
+    assert selected.sent_eligible - selected.sent_selected == 7
+    assert tuple(item.message.id for item in selected.selected) == tuple(
+        item.message.id for item in reversed_selection.selected
+    )
+    assert tuple(item.message.id for item in selected.omitted) == tuple(
+        item.message.id for item in reversed_selection.omitted
+    )
+
+
+def test_candidate_selection_redistributes_rounding_and_prefers_newest() -> None:
+    candidates = (
+        _body_candidate(
+            "inbound-only",
+            GmailStream.INBOUND,
+            occurred_at=NOW - timedelta(days=1),
+        ),
+        *(
+            _body_candidate(
+                f"sent-{index}",
+                GmailStream.SENT,
+                occurred_at=NOW - timedelta(minutes=index),
+            )
+            for index in range(9)
+        ),
+    )
+
+    selected = select_gmail_body_candidates(candidates, limit=5)
+
+    assert selected.inbound_selected == 1
+    assert selected.sent_selected == 4
+    sent_ids = tuple(
+        item.message.id for item in selected.selected if item.stream is GmailStream.SENT
+    )
+    assert sent_ids == ("sent-0", "sent-1", "sent-2", "sent-3")
+
+
+def test_candidate_selection_uses_private_id_only_as_final_stable_tie_breaker() -> None:
+    candidates = (
+        _body_candidate("tie-b", GmailStream.INBOUND, occurred_at=NOW),
+        _body_candidate("tie-a", GmailStream.INBOUND, occurred_at=NOW),
+    )
+
+    selected = select_gmail_body_candidates(candidates, limit=1)
+
+    assert selected.selected_count == 1
+    assert selected.selected[0].message.id == "tie-a"
+    assert "tie-a" not in repr(selected)
+    assert "tie-b" not in repr(selected)
+
+
+def test_candidate_selection_deduplicates_cross_stream_identity() -> None:
+    message = _metadata(
+        "shared",
+        "shared-thread",
+        sender=GMAIL_WORK_ACCOUNT,
+        recipient="person@example.invalid",
+    )
+
+    selected = select_gmail_body_candidates(
+        (
+            GmailBodyCandidate(message, GmailStream.SENT),
+            GmailBodyCandidate(message, GmailStream.INBOUND),
+        )
+    )
+
+    assert selected.eligible_count == 1
+    assert selected.selected_count == 1
+    assert selected.omitted_count == 0
+
+
 def test_metadata_first_pagination_filters_candidates_and_detects_explicit_items() -> (
     None
 ):
@@ -250,15 +376,16 @@ def test_metadata_first_pagination_filters_candidates_and_detects_explicit_items
     assert transport.queries[2].page_token is None
 
 
-def test_candidate_cap_stops_before_any_body_retrieval() -> None:
+def test_143_candidates_select_120_and_omit_23_without_extra_body_fetches() -> None:
     messages = tuple(
         _metadata(
             f"message-{index}",
             f"thread-{index}",
             sender=f"person-{index}@example.invalid",
             recipient=GMAIL_WORK_ACCOUNT,
+            occurred_at=NOW - timedelta(minutes=index),
         )
-        for index in range(GMAIL_BODY_CANDIDATE_LIMIT + 1)
+        for index in range(143)
     )
     transport = _Transport(
         pages=(
@@ -270,7 +397,10 @@ def test_candidate_cap_stops_before_any_body_retrieval() -> None:
             GmailMessageListPage(()),
         ),
         metadata={item.id: item for item in messages},
-        bodies={},
+        bodies={
+            item.id: _full(item, "Please confirm the synthetic request.")
+            for item in messages
+        },
     )
     connector = GmailConnector(
         account_reference=ACCOUNT_REFERENCE,
@@ -278,28 +408,165 @@ def test_candidate_cap_stops_before_any_body_retrieval() -> None:
         transport=transport,
     )
 
-    with pytest.raises(GmailBoundaryExceeded, match="120") as raised:
-        connector.retrieve(_request())
+    result = connector.retrieve(_request())
 
-    assert raised.value.boundary == "body_candidates"
-    assert raised.value.observed_count == GMAIL_BODY_CANDIDATE_LIMIT + 1
-    assert not any(operation == "full" for operation, _value in transport.calls)
-    assert connector.last_audit is None
-    failure = connector.last_failure_audit
-    assert failure is not None
-    assert failure.failure_category is GmailFailureCategory.CONFIGURED_BOUNDARY_EXCEEDED
-    assert failure.failure_stage is GmailFailureStage.METADATA
-    assert failure.configured_boundary_name == "body_candidates"
-    assert failure.configured_limit == GMAIL_BODY_CANDIDATE_LIMIT
-    assert failure.observed_aggregate_count == GMAIL_BODY_CANDIDATE_LIMIT + 1
-    assert failure.pages_completed == 2
-    assert failure.message_references_listed == GMAIL_BODY_CANDIDATE_LIMIT + 1
-    assert failure.metadata_retrieval_began
-    assert failure.metadata_records_inspected == GMAIL_BODY_CANDIDATE_LIMIT + 1
-    assert not failure.body_retrieval_began
-    assert failure.bodies_retrieved == 0
-    assert not failure.persistence_began
-    assert not failure.raw_payloads_retained
+    full_calls = {value for operation, value in transport.calls if operation == "full"}
+    assert len(full_calls) == GMAIL_BODY_CANDIDATE_LIMIT
+    assert len({item.id for item in messages} - full_calls) == 23
+    assert len(result.items) == GMAIL_BODY_CANDIDATE_LIMIT
+    assert result.coverage.status.value == "partial"
+    assert result.coverage.error_category == "bounded_body_candidate_selection"
+    assert result.coverage.selected_count == GMAIL_BODY_CANDIDATE_LIMIT
+    resources = {
+        resource.resource: resource.retrieved_count
+        for resource in result.coverage.context_resources
+    }
+    assert resources["eligible body candidates"] == 143
+    assert resources["selected body candidates"] == GMAIL_BODY_CANDIDATE_LIMIT
+    assert resources["omitted body candidates"] == 23
+    assert resources["body fetches attempted"] == GMAIL_BODY_CANDIDATE_LIMIT
+    assert any("23 were omitted" in warning for warning in result.coverage.warnings)
+    assert "message-" not in json.dumps(asdict(result.coverage), default=str)
+    assert connector.last_failure_audit is None
+    audit = connector.last_audit
+    assert audit is not None
+    assert audit.body_candidates_eligible == 143
+    assert audit.body_candidates_selected == GMAIL_BODY_CANDIDATE_LIMIT
+    assert audit.body_candidates_omitted == 23
+    assert audit.body_fetches_attempted == GMAIL_BODY_CANDIDATE_LIMIT
+    assert audit.body_records_retrieved == GMAIL_BODY_CANDIDATE_LIMIT
+    assert audit.body_records_unavailable_or_unsupported == 0
+    assert audit.body_candidate_cap_caused_partial_coverage
+    assert (
+        audit.body_candidates_eligible
+        == audit.body_candidates_selected + audit.body_candidates_omitted
+    )
+    assert (
+        audit.body_candidates_selected
+        == audit.body_records_retrieved + audit.body_records_unavailable_or_unsupported
+    )
+
+
+def test_total_extracted_text_boundary_preserves_completed_evidence_and_stops_fetching(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    newest = _metadata(
+        "newest",
+        "newest-thread",
+        sender="person@example.invalid",
+        recipient=GMAIL_WORK_ACCOUNT,
+        occurred_at=NOW,
+    )
+    next_message = _metadata(
+        "next",
+        "next-thread",
+        sender="person@example.invalid",
+        recipient=GMAIL_WORK_ACCOUNT,
+        occurred_at=NOW - timedelta(minutes=1),
+    )
+    oldest = _metadata(
+        "oldest",
+        "oldest-thread",
+        sender="person@example.invalid",
+        recipient=GMAIL_WORK_ACCOUNT,
+        occurred_at=NOW - timedelta(minutes=2),
+    )
+    first_body = "Please confirm the first decision."
+    monkeypatch.setattr(
+        gmail_module,
+        "GMAIL_MAX_RUN_TEXT_CHARS",
+        len(first_body) + 5,
+    )
+    transport = _Transport(
+        pages=(
+            GmailMessageListPage(
+                tuple(
+                    GmailMessageReference(item.id, item.thread_id)
+                    for item in (oldest, next_message, newest)
+                )
+            ),
+            GmailMessageListPage(()),
+        ),
+        metadata={item.id: item for item in (oldest, next_message, newest)},
+        bodies={
+            newest.id: _full(newest, first_body),
+            next_message.id: _full(
+                next_message,
+                "Please confirm the second decision.",
+            ),
+            oldest.id: _full(oldest, "Please confirm the third decision."),
+        },
+    )
+    connector = GmailConnector(
+        account_reference=ACCOUNT_REFERENCE,
+        authorization_provider=_AuthorizationProvider(),
+        transport=transport,
+        clock=lambda: NOW,
+    )
+
+    result = connector.retrieve(_request())
+
+    assert result.coverage.status.value == "partial"
+    assert result.coverage.error_category == "extracted_content_boundary"
+    assert ("full", newest.id) in transport.calls
+    assert ("full", next_message.id) in transport.calls
+    assert ("full", oldest.id) not in transport.calls
+    assert len(result.items) == 1
+    assert result.items[0].source_record_id == newest.id
+    audit = connector.last_audit
+    assert audit is not None
+    assert audit.body_candidates_selected == 3
+    assert audit.body_fetches_attempted == 2
+    assert audit.body_records_retrieved == 1
+    assert audit.body_records_unavailable_or_unsupported == 2
+    assert audit.extracted_content_limit_caused_partial_coverage
+    assert (
+        audit.body_candidates_selected
+        == audit.body_records_retrieved + audit.body_records_unavailable_or_unsupported
+    )
+
+
+def test_per_message_text_limit_never_produces_a_truncated_conclusion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    message = _metadata(
+        "oversized-current-message",
+        "oversized-current-thread",
+        sender="person@example.invalid",
+        recipient=GMAIL_WORK_ACCOUNT,
+    )
+    monkeypatch.setattr(gmail_module, "GMAIL_MAX_MESSAGE_TEXT_CHARS", 10)
+    transport = _Transport(
+        pages=(
+            GmailMessageListPage(
+                (GmailMessageReference(message.id, message.thread_id),)
+            ),
+            GmailMessageListPage(()),
+        ),
+        metadata={message.id: message},
+        bodies={
+            message.id: _full(
+                message,
+                "Please confirm the decision; this must not be truncated.",
+            )
+        },
+    )
+    connector = GmailConnector(
+        account_reference=ACCOUNT_REFERENCE,
+        authorization_provider=_AuthorizationProvider(),
+        transport=transport,
+        clock=lambda: NOW,
+    )
+
+    result = connector.retrieve(_request())
+
+    assert result.items == ()
+    assert connector.last_proposed_detections == ()
+    assert result.coverage.status.value == "partial"
+    assert connector.last_audit is not None
+    assert connector.last_audit.body_fetches_attempted == 1
+    assert connector.last_audit.body_records_retrieved == 0
+    assert connector.last_audit.body_records_unavailable_or_unsupported == 1
 
 
 @pytest.mark.parametrize(
@@ -695,7 +962,7 @@ def test_stream_cap_fallback_narrows_only_offending_window_without_raising_cap()
     assert len(set(inbound_queries)) == 3
 
 
-def test_body_candidate_boundary_never_uses_window_fallback() -> None:
+def test_body_candidate_selection_never_uses_window_fallback() -> None:
     messages = tuple(
         _metadata(
             f"candidate-{index}",
@@ -719,17 +986,22 @@ def test_body_candidate_boundary_never_uses_window_fallback() -> None:
                 GmailMessageListPage(()),
             ),
             metadata={message.id: message for message in messages},
-            bodies={},
+            bodies={
+                message.id: _full(message, "Synthetic candidate without a request.")
+                for message in messages
+            },
         ),
         allow_window_fallback=True,
     )
 
-    with pytest.raises(GmailBoundaryExceeded) as raised:
-        connector.retrieve(_request())
+    result = connector.retrieve(_request())
 
-    assert raised.value.boundary == "body_candidates"
     assert connector.last_attempt_count == 1
-    assert len(connector.attempt_failure_audits) == 1
+    assert connector.attempt_failure_audits == ()
+    assert result.coverage.status.value == "partial"
+    assert connector.last_audit is not None
+    assert connector.last_audit.body_candidates_selected == (GMAIL_BODY_CANDIDATE_LIMIT)
+    assert connector.last_audit.body_candidates_omitted == 1
 
 
 def test_http_401_allows_one_exact_scope_refresh_then_stops_retrying() -> None:

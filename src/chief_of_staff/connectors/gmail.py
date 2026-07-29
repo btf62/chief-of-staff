@@ -58,7 +58,7 @@ GMAIL_MAX_MESSAGE_SIZE_ESTIMATE: Final = 2 * 1024 * 1024
 GMAIL_MAX_MESSAGE_TEXT_CHARS: Final = 16_000
 GMAIL_MAX_RUN_TEXT_CHARS: Final = 500_000
 GMAIL_REVIEW_REJECTION_LIMIT: Final = 20
-GMAIL_PROCESSING_VERSION: Final = "gmail-deterministic-v2"
+GMAIL_PROCESSING_VERSION: Final = "gmail-deterministic-v3"
 GMAIL_DEFAULT_INBOUND_DAYS: Final = 7
 GMAIL_MINIMUM_INBOUND_DAYS: Final = 3
 GMAIL_DEFAULT_SENT_DAYS: Final = 14
@@ -368,6 +368,58 @@ class GmailBoundedStream:
     message_limit: int
 
 
+@dataclass(frozen=True, slots=True)
+class GmailBodyCandidate:
+    """One metadata-classified eligible body candidate kept private in memory."""
+
+    message: GmailMessageMetadata = field(repr=False)
+    stream: GmailStream
+
+
+@dataclass(frozen=True, slots=True)
+class GmailBodyCandidateSelection:
+    """A deterministic bounded selection with private identities suppressed."""
+
+    selected: tuple[GmailBodyCandidate, ...] = field(repr=False)
+    omitted: tuple[GmailBodyCandidate, ...] = field(repr=False)
+    inbound_eligible: int
+    inbound_selected: int
+    sent_eligible: int
+    sent_selected: int
+
+    @property
+    def eligible_count(self) -> int:
+        """Return the unique eligible-candidate count."""
+
+        return self.inbound_eligible + self.sent_eligible
+
+    @property
+    def selected_count(self) -> int:
+        """Return the bounded selected-candidate count."""
+
+        return self.inbound_selected + self.sent_selected
+
+    @property
+    def omitted_count(self) -> int:
+        """Return the count omitted without body retrieval."""
+
+        return self.eligible_count - self.selected_count
+
+    def eligible_for(self, stream: GmailStream) -> int:
+        """Return eligible candidates assigned to one stream."""
+
+        if stream is GmailStream.INBOUND:
+            return self.inbound_eligible
+        return self.sent_eligible
+
+    def selected_for(self, stream: GmailStream) -> int:
+        """Return selected candidates assigned to one stream."""
+
+        if stream is GmailStream.INBOUND:
+            return self.inbound_selected
+        return self.sent_selected
+
+
 class GmailDetectionType(StrEnum):
     """Deterministic conclusions available to the trial and briefing."""
 
@@ -423,7 +475,11 @@ class GmailStreamAudit:
     duplicate_message_ids: int
     metadata_inspected: int
     body_candidates: int
+    body_candidates_selected: int
+    body_candidates_omitted: int
+    body_fetches_attempted: int
     bodies_retrieved: int
+    bodies_unavailable_or_unsupported: int
     automated_bulk_exclusions: int
     opaque_or_unsupported_messages: int
 
@@ -478,7 +534,14 @@ class GmailRetrievalAudit:
     direct_inbound_candidates: int
     outbound_candidates: int
     automated_bulk_exclusions: int
+    body_candidates_eligible: int
+    body_candidates_selected: int
+    body_candidates_omitted: int
+    body_fetches_attempted: int
     body_records_retrieved: int
+    body_records_unavailable_or_unsupported: int
+    body_candidate_cap_caused_partial_coverage: bool
+    extracted_content_limit_caused_partial_coverage: bool
     opaque_or_unsupported_messages: int
     unique_threads: int
     explicit_requests_detected: int
@@ -793,8 +856,16 @@ class GmailConnector:
             )
         progress.affected_stream = None
 
-        candidate_messages = tuple(
-            message
+        eligible_candidates = tuple(
+            GmailBodyCandidate(
+                message=message,
+                stream=(
+                    GmailStream.INBOUND
+                    if classifications[message.id]
+                    is GmailMessageClassification.DIRECT_INBOUND
+                    else GmailStream.SENT
+                ),
+            )
             for message in metadata
             if (
                 classifications[message.id] is GmailMessageClassification.DIRECT_INBOUND
@@ -805,13 +876,20 @@ class GmailConnector:
                 and GmailStream.SENT in memberships[message.id]
             )
         )
-        if len(candidate_messages) > GMAIL_BODY_CANDIDATE_LIMIT:
-            raise GmailBoundaryExceeded(
-                "more than 120 Gmail messages qualified for body retrieval",
-                boundary="body_candidates",
-                observed_count=len(candidate_messages),
-                limit=GMAIL_BODY_CANDIDATE_LIMIT,
-                stage=GmailFailureStage.METADATA,
+        candidate_selection = select_gmail_body_candidates(eligible_candidates)
+        cap_omitted_ids = {
+            candidate.message.id for candidate in candidate_selection.omitted
+        }
+        if candidate_selection.omitted_count:
+            partial_warnings.append(
+                "bounded body-candidate selection chose "
+                f"{candidate_selection.selected_count} of "
+                f"{candidate_selection.eligible_count} eligible messages; "
+                f"{candidate_selection.omitted_count} were omitted without "
+                "body retrieval"
+            )
+            partial_streams.update(
+                candidate.stream for candidate in candidate_selection.omitted
             )
 
         bodies: dict[str, str] = {}
@@ -820,21 +898,24 @@ class GmailConnector:
             for message_id, classification in classifications.items()
             if classification is GmailMessageClassification.UNSUPPORTED
         }
+        body_unavailable_or_unsupported_ids: set[str] = set()
+        body_fetch_attempted_ids: set[str] = set()
+        content_limit_omitted_ids: set[str] = set()
         run_chars = 0
-        for message in candidate_messages:
-            membership = memberships[message.id]
+        for index, candidate in enumerate(candidate_selection.selected):
+            message = candidate.message
             progress.stage = GmailFailureStage.BODY
-            progress.affected_stream = (
-                next(iter(membership)) if len(membership) == 1 else None
-            )
+            progress.affected_stream = candidate.stream
             if message.size_estimate > GMAIL_MAX_MESSAGE_SIZE_ESTIMATE:
                 unsupported_ids.add(message.id)
+                body_unavailable_or_unsupported_ids.add(message.id)
                 partial_warnings.append(
                     "one or more candidate messages exceeded the content-size limit"
                 )
-                partial_streams.update(memberships[message.id])
+                partial_streams.add(candidate.stream)
                 continue
             progress.body_retrieval_began = True
+            body_fetch_attempted_ids.add(message.id)
             try:
                 full_message = self.transport.get_message_full(
                     authorization,
@@ -845,34 +926,57 @@ class GmailConnector:
             except GmailRetrievalError as error:
                 if _gmail_failure_requires_stop(error):
                     raise
+                body_unavailable_or_unsupported_ids.add(message.id)
                 partial_warnings.append("one or more candidate bodies were unavailable")
-                partial_streams.update(memberships[message.id])
+                partial_streams.add(candidate.stream)
                 continue
             if (
                 full_message.metadata.id != message.id
                 or full_message.metadata.thread_id != message.thread_id
             ):
+                body_unavailable_or_unsupported_ids.add(message.id)
                 partial_warnings.append("one body record had inconsistent identity")
-                partial_streams.update(memberships[message.id])
+                partial_streams.add(candidate.stream)
                 continue
             body = extract_minimized_message_text(full_message.payload)
             if body is None:
                 unsupported_ids.add(message.id)
+                body_unavailable_or_unsupported_ids.add(message.id)
+                partial_warnings.append(
+                    "one or more candidate bodies had no supported current-message text"
+                )
+                partial_streams.add(candidate.stream)
                 continue
             if len(body) > GMAIL_MAX_MESSAGE_TEXT_CHARS:
-                body = body[:GMAIL_MAX_MESSAGE_TEXT_CHARS].rstrip()
-            run_chars += len(body)
-            if run_chars > GMAIL_MAX_RUN_TEXT_CHARS:
-                raise GmailBoundaryExceeded(
-                    "Gmail content run limit was exceeded",
-                    boundary="content_characters",
-                    observed_count=run_chars,
-                    limit=GMAIL_MAX_RUN_TEXT_CHARS,
-                    stage=GmailFailureStage.BODY,
-                    affected_stream=progress.affected_stream,
+                unsupported_ids.add(message.id)
+                body_unavailable_or_unsupported_ids.add(message.id)
+                partial_warnings.append(
+                    "one or more candidate bodies exceeded the per-message "
+                    "extracted-text limit"
                 )
+                partial_streams.add(candidate.stream)
+                continue
+            if run_chars + len(body) > GMAIL_MAX_RUN_TEXT_CHARS:
+                remaining = candidate_selection.selected[index:]
+                content_limit_omitted_ids.update(item.message.id for item in remaining)
+                body_unavailable_or_unsupported_ids.update(
+                    item.message.id for item in remaining
+                )
+                partial_streams.update(item.stream for item in remaining)
+                break
+            run_chars += len(body)
             bodies[message.id] = body
             progress.bodies_retrieved += 1
+        if content_limit_omitted_ids:
+            partial_warnings.append(
+                "the total extracted-text limit preserved completed evidence "
+                f"and omitted {len(content_limit_omitted_ids)} selected messages"
+            )
+        body_unavailable_or_unsupported_ids.update(
+            candidate.message.id
+            for candidate in candidate_selection.selected
+            if candidate.message.id not in bodies
+        )
 
         progress.stage = GmailFailureStage.PROCESSING
         progress.affected_stream = None
@@ -915,8 +1019,13 @@ class GmailConnector:
         detections = tuple(effective_detections)
         self.last_proposed_detections = proposed_detections
         self.last_detections = detections
+        aggregate_only_omitted_ids = cap_omitted_ids | content_limit_omitted_ids
         self.last_rejections = (
-            *rejections,
+            *(
+                rejection
+                for rejection in rejections
+                if rejection.message_id not in aggregate_only_omitted_ids
+            ),
             *disposition_rejections,
         )[:GMAIL_REVIEW_REJECTION_LIMIT]
         exclusion_classes = {
@@ -930,7 +1039,21 @@ class GmailConnector:
                 reference.id for reference in stream_references[stream.stream]
             }
             metadata_ids = message_ids & classifications.keys()
-            candidate_ids = {message.id for message in candidate_messages} & message_ids
+            eligible_ids = {
+                candidate.message.id
+                for candidate in eligible_candidates
+                if candidate.stream is stream.stream
+            }
+            selected_stream_ids = {
+                candidate.message.id
+                for candidate in candidate_selection.selected
+                if candidate.stream is stream.stream
+            }
+            omitted_stream_ids = {
+                candidate.message.id
+                for candidate in candidate_selection.omitted
+                if candidate.stream is stream.stream
+            }
             return GmailStreamAudit(
                 stream=stream.stream,
                 window_start=stream.window_start,
@@ -944,8 +1067,16 @@ class GmailConnector:
                 pages=stream_pages[stream.stream],
                 duplicate_message_ids=stream_duplicates[stream.stream],
                 metadata_inspected=len(metadata_ids),
-                body_candidates=len(candidate_ids),
-                bodies_retrieved=len(message_ids & bodies.keys()),
+                body_candidates=len(eligible_ids),
+                body_candidates_selected=len(selected_stream_ids),
+                body_candidates_omitted=len(omitted_stream_ids),
+                body_fetches_attempted=len(
+                    selected_stream_ids & body_fetch_attempted_ids
+                ),
+                bodies_retrieved=len(selected_stream_ids & bodies.keys()),
+                bodies_unavailable_or_unsupported=len(
+                    selected_stream_ids - bodies.keys()
+                ),
                 automated_bulk_exclusions=sum(
                     classifications[message_id] in exclusion_classes
                     for message_id in metadata_ids
@@ -971,7 +1102,18 @@ class GmailConnector:
             automated_bulk_exclusions=sum(
                 value in exclusion_classes for value in classifications.values()
             ),
+            body_candidates_eligible=candidate_selection.eligible_count,
+            body_candidates_selected=candidate_selection.selected_count,
+            body_candidates_omitted=candidate_selection.omitted_count,
+            body_fetches_attempted=len(body_fetch_attempted_ids),
             body_records_retrieved=len(bodies),
+            body_records_unavailable_or_unsupported=len(
+                body_unavailable_or_unsupported_ids
+            ),
+            body_candidate_cap_caused_partial_coverage=bool(cap_omitted_ids),
+            extracted_content_limit_caused_partial_coverage=bool(
+                content_limit_omitted_ids
+            ),
             opaque_or_unsupported_messages=len(unsupported_ids),
             unique_threads=len({message.thread_id for message in metadata}),
             explicit_requests_detected=sum(
@@ -1033,11 +1175,21 @@ class GmailConnector:
                 ),
                 warnings=tuple(warnings),
                 error_category=(
-                    None if not partial_warnings else "partial_message_retrieval"
+                    (
+                        "bounded_body_candidate_selection"
+                        if cap_omitted_ids
+                        else (
+                            "extracted_content_boundary"
+                            if content_limit_omitted_ids
+                            else "partial_message_retrieval"
+                        )
+                    )
+                    if partial_warnings
+                    else None
                 ),
                 page_count=page_count,
                 retrieved_count=len(references),
-                selected_count=len(candidate_messages),
+                selected_count=candidate_selection.selected_count,
                 candidate_count=len(proposed_detections),
                 context_resources=context,
             ),
@@ -1173,12 +1325,28 @@ class GmailConnector:
                 audit.inbound.metadata_inspected,
             ),
             ContextResourceCoverage(
-                "inbound stream body candidates",
+                "inbound eligible body candidates",
                 audit.inbound.body_candidates,
             ),
             ContextResourceCoverage(
-                "inbound stream bodies",
+                "inbound selected body candidates",
+                audit.inbound.body_candidates_selected,
+            ),
+            ContextResourceCoverage(
+                "inbound omitted body candidates",
+                audit.inbound.body_candidates_omitted,
+            ),
+            ContextResourceCoverage(
+                "inbound body fetches attempted",
+                audit.inbound.body_fetches_attempted,
+            ),
+            ContextResourceCoverage(
+                "inbound usable bodies",
                 audit.inbound.bodies_retrieved,
+            ),
+            ContextResourceCoverage(
+                "inbound bodies unavailable or unsupported",
+                audit.inbound.bodies_unavailable_or_unsupported,
             ),
             ContextResourceCoverage(
                 "inbound stream automated, bulk, or unsupported",
@@ -1195,10 +1363,29 @@ class GmailConnector:
                 "sent stream metadata", audit.sent.metadata_inspected
             ),
             ContextResourceCoverage(
-                "sent stream body candidates",
+                "sent eligible body candidates",
                 audit.sent.body_candidates,
             ),
-            ContextResourceCoverage("sent stream bodies", audit.sent.bodies_retrieved),
+            ContextResourceCoverage(
+                "sent selected body candidates",
+                audit.sent.body_candidates_selected,
+            ),
+            ContextResourceCoverage(
+                "sent omitted body candidates",
+                audit.sent.body_candidates_omitted,
+            ),
+            ContextResourceCoverage(
+                "sent body fetches attempted",
+                audit.sent.body_fetches_attempted,
+            ),
+            ContextResourceCoverage(
+                "sent usable bodies",
+                audit.sent.bodies_retrieved,
+            ),
+            ContextResourceCoverage(
+                "sent bodies unavailable or unsupported",
+                audit.sent.bodies_unavailable_or_unsupported,
+            ),
             ContextResourceCoverage(
                 "sent stream automated, bulk, or unsupported",
                 audit.sent.automated_bulk_exclusions
@@ -1215,8 +1402,28 @@ class GmailConnector:
                 audit.automated_bulk_exclusions,
             ),
             ContextResourceCoverage(
-                "candidate bodies",
+                "eligible body candidates",
+                audit.body_candidates_eligible,
+            ),
+            ContextResourceCoverage(
+                "selected body candidates",
+                audit.body_candidates_selected,
+            ),
+            ContextResourceCoverage(
+                "omitted body candidates",
+                audit.body_candidates_omitted,
+            ),
+            ContextResourceCoverage(
+                "body fetches attempted",
+                audit.body_fetches_attempted,
+            ),
+            ContextResourceCoverage(
+                "usable candidate bodies",
                 audit.body_records_retrieved,
+            ),
+            ContextResourceCoverage(
+                "bodies unavailable or unsupported",
+                audit.body_records_unavailable_or_unsupported,
             ),
             ContextResourceCoverage("unique threads", audit.unique_threads),
             ContextResourceCoverage(
@@ -1316,6 +1523,111 @@ def gmail_bounded_streams(
             message_limit=GMAIL_SENT_MESSAGE_LIMIT,
         ),
     )
+
+
+def select_gmail_body_candidates(
+    candidates: tuple[GmailBodyCandidate, ...],
+    *,
+    limit: int = GMAIL_BODY_CANDIDATE_LIMIT,
+) -> GmailBodyCandidateSelection:
+    """Select a proportional, recent, stable subset without inspecting content."""
+
+    if limit < 0:
+        raise ValueError("Gmail body-candidate limit must not be negative")
+    bounded_limit = min(limit, GMAIL_BODY_CANDIDATE_LIMIT)
+    unique: dict[str, GmailBodyCandidate] = {}
+    for candidate in sorted(
+        candidates,
+        key=lambda item: (item.message.id, item.stream.value),
+    ):
+        existing = unique.get(candidate.message.id)
+        if existing is None:
+            unique[candidate.message.id] = candidate
+            continue
+        if existing.message != candidate.message:
+            raise ValueError("duplicate Gmail candidate metadata was inconsistent")
+
+    grouped = {
+        stream: tuple(
+            sorted(
+                (
+                    candidate
+                    for candidate in unique.values()
+                    if candidate.stream is stream
+                ),
+                key=lambda item: (
+                    -item.message.internal_date.timestamp(),
+                    item.message.id,
+                ),
+            )
+        )
+        for stream in (GmailStream.INBOUND, GmailStream.SENT)
+    }
+    counts = {stream: len(values) for stream, values in grouped.items()}
+    total = sum(counts.values())
+    capacity = min(total, bounded_limit)
+    allocations = _proportional_gmail_allocations(counts, capacity)
+    selected = tuple(
+        candidate
+        for stream in (GmailStream.INBOUND, GmailStream.SENT)
+        for candidate in grouped[stream][: allocations[stream]]
+    )
+    omitted = tuple(
+        candidate
+        for stream in (GmailStream.INBOUND, GmailStream.SENT)
+        for candidate in grouped[stream][allocations[stream] :]
+    )
+    return GmailBodyCandidateSelection(
+        selected=selected,
+        omitted=omitted,
+        inbound_eligible=counts[GmailStream.INBOUND],
+        inbound_selected=allocations[GmailStream.INBOUND],
+        sent_eligible=counts[GmailStream.SENT],
+        sent_selected=allocations[GmailStream.SENT],
+    )
+
+
+def _proportional_gmail_allocations(
+    counts: dict[GmailStream, int],
+    capacity: int,
+) -> dict[GmailStream, int]:
+    """Allocate capacity by largest remainder and redistribute unused slots."""
+
+    streams = (GmailStream.INBOUND, GmailStream.SENT)
+    total = sum(counts.get(stream, 0) for stream in streams)
+    if capacity <= 0 or total <= 0:
+        return {stream: 0 for stream in streams}
+    if capacity >= total:
+        return {stream: counts.get(stream, 0) for stream in streams}
+
+    allocations = {
+        stream: min(
+            counts.get(stream, 0),
+            capacity * counts.get(stream, 0) // total,
+        )
+        for stream in streams
+    }
+    remainders = {
+        stream: capacity * counts.get(stream, 0) % total for stream in streams
+    }
+    unallocated = capacity - sum(allocations.values())
+    priority = sorted(
+        streams,
+        key=lambda stream: (-remainders[stream], streams.index(stream)),
+    )
+    while unallocated:
+        distributed = False
+        for stream in priority:
+            if allocations[stream] >= counts.get(stream, 0):
+                continue
+            allocations[stream] += 1
+            unallocated -= 1
+            distributed = True
+            if not unallocated:
+                break
+        if not distributed:
+            break
+    return allocations
 
 
 def classify_gmail_metadata(

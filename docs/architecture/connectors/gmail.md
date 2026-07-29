@@ -1,7 +1,7 @@
 # Work Gmail Connector
 
 - **Status:** Accepted
-- **Version:** 3
+- **Version:** 4
 - **Owner:** Brad
 - **Last updated:** 2026-07-28
 
@@ -197,8 +197,20 @@ acknowledgment evaluation.
 automatically qualify for body retrieval. The same human-correspondence and
 automation checks apply.
 
-If more than 120 messages qualify for body retrieval, stop before retrieving
-any body and report the candidate composition.
+When more than 120 messages qualify for body retrieval, select no more than
+120 using a deterministic, explainable policy:
+
+- Deduplicate by immutable message identity before allocation.
+- Allocate capacity proportionally to eligible inbound and sent counts.
+- Redistribute unused or rounding capacity deterministically.
+- Within each stream, select the most recent messages first.
+- Use the stable private message identity only as the final tie-breaker.
+
+Do not use subject wording, sender importance, opaque scoring, hosted
+inference, or body content for selection. Retrieve no body for omitted
+candidates. Mark Gmail coverage partial and disclose only safe aggregate
+eligible, selected, and omitted counts. Never describe the selected subset as
+complete window coverage.
 
 ## Bounded content retrieval
 
@@ -221,9 +233,14 @@ Remove or skip:
 - Unrelated MIME parts
 - External-link fetching or execution
 
-Apply configurable per-message and per-run content limits. When current-message
-content cannot be isolated confidently, omit the detection rather than
-broadening retrieval or retaining the full body.
+Apply configurable per-message and per-run extracted-text limits. Never
+truncate current-message text and use the fragment for a conclusion. If one
+message exceeds its limit, omit it. If the next selected message would exceed
+the remaining run limit, omit that message, stop additional body retrieval,
+process already completed bounded evidence, and mark coverage partial with
+safe aggregate omission counts. When current-message content cannot be
+isolated confidently, omit the detection rather than broadening retrieval or
+retaining the full body.
 
 ## Prompt-injection and active-content boundary
 
@@ -319,8 +336,10 @@ Coverage separately reports the inbound and sent stream status, window, and
 the following counts for each stream:
 
 - Messages listed, pages, and duplicate IDs
-- Metadata records inspected and body candidates
-- Body records retrieved
+- Metadata records inspected
+- Eligible, selected, and omitted body candidates
+- Body fetches attempted
+- Usable bodies and bodies unavailable or unsupported
 - Automated or bulk exclusions
 - Opaque or unsupported messages
 
@@ -334,9 +353,12 @@ Combined coverage also reports:
 - Freshness
 
 Distinguish a legitimately empty result from authorization failure, partial
-pagination, metadata failure, body failure, unsupported MIME, and candidate-
-or run-cap stops. Retain successfully minimized evidence during a later
-partial failure only when coverage is disclosed accurately.
+pagination, metadata failure, body failure, unsupported MIME, bounded
+candidate selection, and extracted-content exhaustion. Candidate or content
+omissions produce partial coverage, no conclusions from omitted content, and
+no claim that the full window was analyzed. Retain successfully minimized
+evidence when later bounded processing becomes partial only when coverage is
+disclosed accurately.
 
 ### Structured failure diagnostics
 
@@ -387,8 +409,9 @@ stream exceeds its independent message cap, the runner moves only that
 stream's start forward one calendar day and retains the original end. It may
 repeat this until the stream fits or reaches three inbound days or seven sent
 days. Caps never increase. The effective windows remain explicit in source
-coverage and the private candidate review. A cap failure at the minimum window,
-a body-candidate cap, or a total-content cap stops the trial.
+coverage and the private candidate review. A stream cap failure at the minimum
+window, combined-message cap, pagination cap, response-size cap, permission
+failure, or invariant failure still stops the trial.
 
 ## Private human-review artifact
 
@@ -396,7 +419,9 @@ Each bounded trial writes one ignored mode-`0600` artifact under
 `.local/gmail/`. It contains every proposed People Waiting item, explicit
 commitment, and Commitment at Risk item with inclusion reason, authoritative
 link, and minimal evidence excerpt. It also includes explicit exclusion
-reasons for a bounded sample of rejected candidates.
+reasons for a bounded sample of rejected candidates and safe aggregate
+eligible, selected, omitted, fetched, usable, and unavailable body counts by
+stream. Candidate-cap and extracted-content partial coverage are explicit.
 
 The artifact may contain authorized private work-email content. It never
 enters Git, logs, or chat output.
@@ -408,7 +433,8 @@ must pass before authorization. A separately approved live trial must then:
 
 1. Confirms the exact Northridge-owned OAuth project and internal audience.
 2. Authorizes only `gmail:work` with the exact approved scope and account.
-3. Runs the bounded seven-day inbound and fourteen-day sent streams.
+3. Runs the bounded seven-day inbound and fourteen-day sent streams and applies
+   the deterministic 120-body subset when necessary.
 4. Generates the private candidate-review artifact.
 5. Generates one input-complete briefing using fresh approved repository,
    primary Calendar, Todoist, Jira, and Work Gmail inputs.
@@ -425,10 +451,15 @@ MVP acceptance.
 
 ### Validation status
 
-The first combined trial was attempted on 2026-07-28. It
-stopped before Gmail metadata or body analysis and produced no Gmail records,
-briefing run, review artifact, or combined briefing. It therefore did not
-satisfy the Milestone 6 acceptance gate.
+The latest combined trial on 2026-07-28 listed 356 messages across four pages,
+inspected 356 metadata records, and found 143 eligible body candidates. The
+then-current all-or-nothing rule stopped before body retrieval because the
+hard cap was 120. It produced no Gmail records, briefing run, review artifact,
+or combined briefing and did not satisfy the Milestone 6 acceptance gate.
+
+Version 4 keeps the 120-body hard limit but replaces the all-or-nothing stop
+with deterministic bounded subset processing and transparent partial
+coverage. A same-window combined validation remains required.
 
 Offline diagnostic remediation is complete. Repeatable on-demand attempts may
 refresh or reauthorize only the exact Work Gmail grant and may retrieve the

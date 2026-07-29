@@ -222,6 +222,13 @@ def test_private_review_and_minimized_facts_are_local_inspectable_and_deletable(
 
         assert persisted == 1
         assert stat.S_IMODE(review.stat().st_mode) == 0o600
+        review_text = review.read_text(encoding="utf-8")
+        assert "## Bounded body-candidate coverage" in review_text
+        assert "- Eligible: 1" in review_text
+        assert "- Selected under the hard cap: 1" in review_text
+        assert "- Omitted without body retrieval: 0" in review_text
+        assert "- Body fetches attempted: 1" in review_text
+        assert "- Usable bodies: 1" in review_text
         assert store.inspect_state().normalized_gmail_messages == 1
         assert store.inspect_state().conclusions == 1
         evidence = database.connection.execute(

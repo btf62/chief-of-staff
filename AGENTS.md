@@ -12,18 +12,20 @@ its mocked phase, one resource-restricted project-discovery trial, and one
 exact-project live issue trial integrated with the deterministic briefing.
 Milestone 5 now covers only Todoist and Jira and is complete. Work Gmail is the
 final MVP input connector, and its synthetic implementation gate is complete.
-The first combined Work Gmail trial was attempted on 2026-07-28. It
-stopped before Gmail metadata or body analysis and did not produce Gmail
-records, a briefing run, a review artifact, or a combined briefing, so
-Milestone 6 remains in progress and its acceptance gate is not satisfied.
-Offline diagnostic remediation is complete. Brad has authorized repeatable,
-on-demand, read-only Work Gmail validation attempts within the accepted
-account, scope, privacy, and source boundaries until one MVP briefing is
-successfully produced or a genuine external blocker is reached. Those attempts
-may refresh or reauthorize the exact Work Gmail grant and retrieve the existing
-read-only Calendar, Todoist, Jira, and repository inputs required for the
-combined briefing. Healthy credentials do not authorize broader access.
-Personal Gmail and Google Drive remain deferred and unauthorized.
+The latest combined Work Gmail trial on 2026-07-28 listed 356 messages,
+inspected 356 metadata records, and found 143 eligible body candidates. The
+then-current all-or-nothing behavior stopped at the 120-body cap without
+persistence or briefing artifacts. The connector now keeps that hard cap while
+selecting a deterministic bounded subset and reporting partial coverage.
+Milestone 6 remains in progress pending the same-window combined rerun. Brad
+has authorized repeatable, on-demand, read-only Work Gmail validation attempts
+within the accepted account, scope, privacy, and source boundaries until one
+MVP briefing is successfully produced or a genuine external blocker is
+reached. Those attempts may refresh or reauthorize the exact Work Gmail grant
+and retrieve the existing read-only Calendar, Todoist, Jira, and repository
+inputs required for the combined briefing. Healthy credentials do not
+authorize broader access. Personal Gmail and Google Drive remain deferred and
+unauthorized.
 
 ## Working rules
 

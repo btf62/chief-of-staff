@@ -66,7 +66,11 @@ class GmailStreamTrialReport:
     duplicate_message_ids: int
     metadata_records_inspected: int
     body_candidates: int
+    body_candidates_selected: int
+    body_candidates_omitted: int
+    body_fetches_attempted: int
     body_records_retrieved: int
+    bodies_unavailable_or_unsupported: int
     automated_bulk_exclusions: int
     opaque_or_unsupported_messages: int
 
@@ -89,7 +93,14 @@ class GmailMvpTrialReport:
     direct_inbound_candidates: int
     outbound_candidates: int
     automated_bulk_exclusions: int
+    body_candidates_eligible: int
+    body_candidates_selected: int
+    body_candidates_omitted: int
+    body_fetches_attempted: int
     body_records_retrieved: int
+    bodies_unavailable_or_unsupported: int
+    body_candidate_cap_caused_partial_coverage: bool
+    extracted_content_limit_caused_partial_coverage: bool
     opaque_or_unsupported_messages: int
     unique_threads: int
     explicit_requests_detected: int
@@ -417,7 +428,20 @@ class GmailMvpTrialRunner:
             direct_inbound_candidates=audit.direct_inbound_candidates,
             outbound_candidates=audit.outbound_candidates,
             automated_bulk_exclusions=audit.automated_bulk_exclusions,
+            body_candidates_eligible=audit.body_candidates_eligible,
+            body_candidates_selected=audit.body_candidates_selected,
+            body_candidates_omitted=audit.body_candidates_omitted,
+            body_fetches_attempted=audit.body_fetches_attempted,
             body_records_retrieved=audit.body_records_retrieved,
+            bodies_unavailable_or_unsupported=(
+                audit.body_records_unavailable_or_unsupported
+            ),
+            body_candidate_cap_caused_partial_coverage=(
+                audit.body_candidate_cap_caused_partial_coverage
+            ),
+            extracted_content_limit_caused_partial_coverage=(
+                audit.extracted_content_limit_caused_partial_coverage
+            ),
             opaque_or_unsupported_messages=audit.opaque_or_unsupported_messages,
             unique_threads=audit.unique_threads,
             explicit_requests_detected=audit.explicit_requests_detected,
@@ -534,6 +558,38 @@ class GmailMvpTrialRunner:
                 f"- Sent: {audit.sent.window_start.isoformat()} through "
                 f"{audit.sent.window_end.isoformat()}"
             ),
+            "",
+            "## Bounded body-candidate coverage",
+            "",
+            f"- Eligible: {audit.body_candidates_eligible}",
+            f"- Selected under the hard cap: {audit.body_candidates_selected}",
+            f"- Omitted without body retrieval: {audit.body_candidates_omitted}",
+            f"- Body fetches attempted: {audit.body_fetches_attempted}",
+            f"- Usable bodies: {audit.body_records_retrieved}",
+            (
+                "- Bodies unavailable or unsupported: "
+                f"{audit.body_records_unavailable_or_unsupported}"
+            ),
+            (
+                "- Candidate-cap partial coverage: "
+                f"{audit.body_candidate_cap_caused_partial_coverage}"
+            ),
+            (
+                "- Extracted-content partial coverage: "
+                f"{audit.extracted_content_limit_caused_partial_coverage}"
+            ),
+            (
+                "- Inbound eligible / selected / omitted: "
+                f"{audit.inbound.body_candidates} / "
+                f"{audit.inbound.body_candidates_selected} / "
+                f"{audit.inbound.body_candidates_omitted}"
+            ),
+            (
+                "- Sent eligible / selected / omitted: "
+                f"{audit.sent.body_candidates} / "
+                f"{audit.sent.body_candidates_selected} / "
+                f"{audit.sent.body_candidates_omitted}"
+            ),
         ]
         for detection in self.gmail_connector.last_proposed_detections:
             lines.extend(
@@ -574,7 +630,11 @@ def _stream_report(audit: GmailStreamAudit) -> GmailStreamTrialReport:
         duplicate_message_ids=audit.duplicate_message_ids,
         metadata_records_inspected=audit.metadata_inspected,
         body_candidates=audit.body_candidates,
+        body_candidates_selected=audit.body_candidates_selected,
+        body_candidates_omitted=audit.body_candidates_omitted,
+        body_fetches_attempted=audit.body_fetches_attempted,
         body_records_retrieved=audit.bodies_retrieved,
+        bodies_unavailable_or_unsupported=(audit.bodies_unavailable_or_unsupported),
         automated_bulk_exclusions=audit.automated_bulk_exclusions,
         opaque_or_unsupported_messages=audit.opaque_or_unsupported_messages,
     )

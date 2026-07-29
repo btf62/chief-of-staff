@@ -235,8 +235,8 @@ approval.
 
 ## Milestone 6 — Work Gmail and the Input-Complete MVP Gate
 
-- **Status:** In progress — first live attempt stopped without satisfying the
-  acceptance gate; bounded validation authorized after diagnostic remediation
+- **Status:** In progress — deterministic bounded Gmail subset implemented;
+  same-window combined validation pending
 - **Intended user-visible outcome:** Brad can review one input-complete,
   on-demand MVP briefing that adds high-confidence work correspondence,
   explicit requests, and explicit sent commitments to the existing Calendar,
@@ -274,10 +274,19 @@ The Work Gmail specification and synthetic implementation gate are complete.
 Exact-scope OAuth, metadata-first retrieval, MIME minimization, high-precision
 deterministic detection, minimized persistence, correction recurrence, private
 review artifacts, and briefing integration passed the synthetic quality gate.
-The first combined trial was attempted on 2026-07-28. It
-stopped before Gmail metadata or body analysis and produced no Gmail records,
-briefing run, review artifact, or combined briefing, so the acceptance gate
-was not satisfied.
+The latest combined trial on 2026-07-28 listed 356 messages across four pages,
+inspected 356 metadata records, and found 143 eligible body candidates. The
+then-current all-or-nothing rule stopped before body retrieval because the
+hard cap was 120. It produced no Gmail records, briefing run, review artifact,
+or combined briefing, so the acceptance gate was not satisfied.
+
+The connector now keeps the 120-body privacy boundary and deterministically
+selects a proportional, newest-first inbound/sent subset when eligible
+candidates exceed it. Omitted candidates receive no body request or
+conclusion; coverage and private review report safe aggregate selection and
+omission counts. Extracted-content exhaustion similarly preserves completed
+evidence and produces explicit partial coverage without truncated conclusions.
+The same-window combined trial remains the current acceptance step.
 
 Offline diagnostic remediation now preserves privacy-safe current-run failure
 categories, boundary counts, and lifecycle progress through pipeline isolation

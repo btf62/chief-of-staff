@@ -19,15 +19,17 @@ Todoist portion of Milestone 5. Jira has completed its resource-restricted
 authorization, project discovery, and one explicitly approved, exact-project
 issue-retrieval trial integrated with the deterministic briefing. Milestone 5
 now covers only Todoist and Jira. Work Gmail is the final MVP input connector.
-Its first combined trial stopped before
-Gmail metadata or body analysis, and produced no Gmail records, briefing run,
-review artifact, or combined briefing. Milestone 6 remains in progress.
-Offline diagnostic remediation is complete. Brad has authorized repeatable,
-on-demand, read-only Work Gmail validation attempts within the accepted
-account, scope, privacy, and source boundaries until an MVP briefing succeeds
-or a genuine external blocker is reached. An identical bounded attempt does
-not require separate approval; healthy credentials do not authorize broader
-access. Personal Gmail and Google Drive remain deferred and unauthorized.
+Its latest combined trial listed 356 messages, inspected 356 metadata records,
+and found 143 eligible body candidates. The then-current all-or-nothing
+behavior stopped at the 120-body cap without persistence or briefing artifacts.
+The connector now keeps that hard cap while selecting a deterministic bounded
+subset and reporting partial coverage. Milestone 6 remains in progress pending
+the same-window combined rerun. Brad has authorized repeatable, on-demand,
+read-only Work Gmail validation attempts within the accepted account, scope,
+privacy, and source boundaries until an MVP briefing succeeds or a genuine
+external blocker is reached. An identical bounded attempt does not require
+separate approval; healthy credentials do not authorize broader access.
+Personal Gmail and Google Drive remain deferred and unauthorized.
 
 ## Repository map
 

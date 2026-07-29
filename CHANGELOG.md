@@ -123,6 +123,10 @@ No strict versioning scheme is promised before a distributable product exists.
 - Replaced the mixed Work Gmail trial query with separate seven-day inbound and
   fourteen-day sent streams, independent 300/200 message caps, combined
   immutable-ID deduplication, a 120-body-candidate cap, and per-stream coverage.
+- Replaced the all-or-nothing body-candidate stop with deterministic,
+  proportional inbound/sent selection of at most 120 recent candidates,
+  transparent partial coverage, aggregate omission accounting, and graceful
+  extracted-content exhaustion without truncated conclusions.
 - Recorded that the first combined Work Gmail trial stopped without producing
   Gmail records, persisted briefing state, a review artifact, or a combined
   briefing; Milestone 6 remains in progress.
