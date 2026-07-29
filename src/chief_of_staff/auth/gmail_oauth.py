@@ -43,6 +43,12 @@ from chief_of_staff.persistence import StateStore
 GMAIL_OAUTH_PROJECT: Final = "nrc-chief-of-staff"
 GMAIL_CONNECTOR_PROVIDER: Final = "gmail"
 GMAIL_AUTHORIZATION_ENDPOINT: Final = "https://accounts.google.com/o/oauth2/v2/auth"
+GMAIL_DESKTOP_CLIENT_AUTHORIZATION_ENDPOINTS: Final = frozenset(
+    {
+        GMAIL_AUTHORIZATION_ENDPOINT,
+        "https://accounts.google.com/o/oauth2/auth",
+    }
+)
 GMAIL_TOKEN_ENDPOINT: Final = "https://oauth2.googleapis.com/token"  # noqa: S105
 GMAIL_REVOCATION_ENDPOINT: Final = "https://oauth2.googleapis.com/revoke"
 GMAIL_PROFILE_ENDPOINT: Final = "https://gmail.googleapis.com/gmail/v1/users/me/profile"
@@ -365,7 +371,7 @@ class WorkGmailOAuthClientImporter:
                 isinstance(project_id, str)
                 and isinstance(client_id, str)
                 and isinstance(client_secret, str)
-                and auth_uri == GMAIL_AUTHORIZATION_ENDPOINT
+                and auth_uri in GMAIL_DESKTOP_CLIENT_AUTHORIZATION_ENDPOINTS
                 and token_uri == GMAIL_TOKEN_ENDPOINT
             ):
                 raise ValueError("Gmail OAuth client file had unexpected metadata")

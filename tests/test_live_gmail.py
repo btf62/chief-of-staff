@@ -15,6 +15,7 @@ import pytest
 
 from chief_of_staff.auth.gmail_oauth import (
     GMAIL_AUTHORIZATION_ENDPOINT,
+    GMAIL_DESKTOP_CLIENT_AUTHORIZATION_ENDPOINTS,
     GMAIL_KEYCHAIN_SERVICE,
     GMAIL_OAUTH_PROJECT,
     GMAIL_TOKEN_ENDPOINT,
@@ -203,6 +204,70 @@ def test_desktop_client_import_deletes_file_and_keeps_secret_out_of_sqlite(
 
     assert "synthetic-client-secret" in runner.secrets.values()
     assert b"synthetic-client-secret" not in database_path.read_bytes()
+
+
+def test_desktop_client_import_accepts_google_download_authorization_endpoint(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "client.json"
+    downloaded_endpoint = "https://accounts.google.com/o/oauth2/auth"
+    assert downloaded_endpoint in GMAIL_DESKTOP_CLIENT_AUTHORIZATION_ENDPOINTS
+    source.write_text(
+        json.dumps(
+            {
+                "installed": {
+                    "project_id": GMAIL_OAUTH_PROJECT,
+                    "client_id": CLIENT_ID,
+                    "client_secret": "synthetic-client-secret",
+                    "auth_uri": downloaded_endpoint,
+                    "token_uri": GMAIL_TOKEN_ENDPOINT,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    keychain, _ = _keychain()
+
+    with Database.open(tmp_path / "state.sqlite3") as database:
+        result = WorkGmailOAuthClientImporter(
+            keychain=keychain,
+            state_store=StateStore(database),
+            clock=lambda: NOW,
+        ).import_and_delete(source, application_owner="Northridge")
+
+    assert result.source_deleted
+    assert not source.exists()
+
+
+def test_desktop_client_import_rejects_unapproved_authorization_endpoint(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "client.json"
+    source.write_text(
+        json.dumps(
+            {
+                "installed": {
+                    "project_id": GMAIL_OAUTH_PROJECT,
+                    "client_id": CLIENT_ID,
+                    "client_secret": "synthetic-client-secret",
+                    "auth_uri": "https://example.test/oauth",
+                    "token_uri": GMAIL_TOKEN_ENDPOINT,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    keychain, _ = _keychain()
+
+    with (
+        Database.open(tmp_path / "state.sqlite3") as database,
+        pytest.raises(ValueError, match="unexpected metadata"),
+    ):
+        WorkGmailOAuthClientImporter(
+            keychain=keychain,
+            state_store=StateStore(database),
+            clock=lambda: NOW,
+        ).import_and_delete(source, application_owner="Northridge")
 
 
 def test_oauth_uses_exact_scope_state_pkce_account_and_separate_keychain_entries(
