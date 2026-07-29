@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 from dataclasses import asdict
 from datetime import UTC, date, datetime
 from pathlib import Path
+from typing import TextIO
 
 from chief_of_staff.auth import (
     KeychainSecretReference,
@@ -21,12 +23,17 @@ from chief_of_staff.connectors import (
     StoredWorkGmailAuthorizationProvider,
     WorkGmailHttpTransport,
 )
-from chief_of_staff.gmail_mvp_trial import GmailMvpTrialFailure, GmailMvpTrialRunner
+from chief_of_staff.gmail_mvp_trial import (
+    GmailMvpTrialFailure,
+    GmailMvpTrialReport,
+    GmailMvpTrialRunner,
+)
 from chief_of_staff.jira_issue_live_cli import (
     _calendar_connector,
     _jira_connector,
     _todoist_connector,
 )
+from chief_of_staff.live_trial import LiveTrialError
 from chief_of_staff.persistence import Database, StateStore
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -34,6 +41,7 @@ LOCAL_ROOT = REPOSITORY_ROOT / ".local"
 DATABASE_PATH = LOCAL_ROOT / "state.sqlite3"
 BRIEFING_DIRECTORY = LOCAL_ROOT / "briefings"
 REVIEW_DIRECTORY = LOCAL_ROOT / "gmail" / "reviews"
+BRIEFING_LOCK_PATH = LOCAL_ROOT / "briefing.lock"
 APPROVED_REPOSITORY_PATHS = (
     Path("docs/product/features/daily-briefing-v1.md"),
     Path("docs/roadmap.md"),
@@ -62,6 +70,11 @@ def main(arguments: list[str] | None = None) -> int:
     disconnect_parser.add_argument("--without-revocation", action="store_true")
     trial_parser = subparsers.add_parser("trial")
     trial_parser.add_argument("--briefing-date", type=date.fromisoformat)
+    briefing_parser = subparsers.add_parser(
+        "briefing",
+        help="Generate today's supported on-demand Daily Briefing.",
+    )
+    briefing_parser.add_argument("--briefing-date", type=date.fromisoformat)
 
     parsed = parser.parse_args(arguments)
     LOCAL_ROOT.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -134,25 +147,44 @@ def main(arguments: list[str] | None = None) -> int:
             )
             return 0
 
-        if parsed.command == "trial":
+        if parsed.command in {"trial", "briefing"}:
             gmail = _gmail_connector(state_store, keychain, oauth)
             try:
-                report = GmailMvpTrialRunner(
-                    state_store=state_store,
-                    repository_root=REPOSITORY_ROOT,
-                    repository_paths=APPROVED_REPOSITORY_PATHS,
-                    calendar_connector=_calendar_connector(state_store, keychain),
-                    todoist_connector=_todoist_connector(state_store, keychain),
-                    jira_connector=_jira_connector(state_store, keychain),
-                    gmail_connector=gmail,
-                    briefing_directory=BRIEFING_DIRECTORY,
-                    review_directory=REVIEW_DIRECTORY,
-                    briefing_date_override=parsed.briefing_date,
-                ).run()
+                with _exclusive_briefing_run(BRIEFING_LOCK_PATH):
+                    report = GmailMvpTrialRunner(
+                        state_store=state_store,
+                        repository_root=REPOSITORY_ROOT,
+                        repository_paths=APPROVED_REPOSITORY_PATHS,
+                        calendar_connector=_calendar_connector(state_store, keychain),
+                        todoist_connector=_todoist_connector(state_store, keychain),
+                        jira_connector=_jira_connector(state_store, keychain),
+                        gmail_connector=gmail,
+                        briefing_directory=BRIEFING_DIRECTORY,
+                        review_directory=REVIEW_DIRECTORY,
+                        briefing_date_override=parsed.briefing_date,
+                    ).run()
+            except BlockingIOError:
+                print("A Daily Briefing is already running. No second run was started.")
+                return 3
             except GmailMvpTrialFailure as error:
-                _print_json(asdict(error.report))
+                if parsed.command == "briefing":
+                    _print_briefing_failure(error)
+                else:
+                    _print_json(asdict(error.report))
                 return 2
-            _print_json(asdict(report))
+            except LiveTrialError:
+                if parsed.command == "briefing":
+                    print(
+                        "Daily Briefing stopped safely because an approved "
+                        "source was unavailable."
+                    )
+                    print("No completed briefing was created.")
+                    return 2
+                raise
+            if parsed.command == "briefing":
+                _print_briefing_success(report)
+            else:
+                _print_json(asdict(report))
             return 0
     raise RuntimeError("unsupported Work Gmail command")
 
@@ -247,6 +279,58 @@ def _print_status(state_store: StateStore, keychain: MacOSKeychain) -> None:
 
 def _print_json(payload: dict[str, object]) -> None:
     print(json.dumps(payload, default=_json_default, indent=2, sort_keys=True))
+
+
+class _exclusive_briefing_run:
+    """Hold one non-blocking process lock for an on-demand briefing."""
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self.stream: TextIO | None = None
+
+    def __enter__(self) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        self.path.parent.chmod(0o700)
+        self.stream = self.path.open("a+", encoding="utf-8")
+        self.path.chmod(0o600)
+        try:
+            fcntl.flock(self.stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BaseException:
+            self.stream.close()
+            self.stream = None
+            raise
+
+    def __exit__(self, *args: object) -> None:
+        if self.stream is None:
+            return
+        fcntl.flock(self.stream.fileno(), fcntl.LOCK_UN)
+        self.stream.close()
+        self.stream = None
+
+
+def _print_briefing_success(report: GmailMvpTrialReport) -> None:
+    print("Daily Briefing ready.")
+    print(f"Briefing: {report.briefing_path}")
+    print(f"Private Gmail review: {report.review_path}")
+    print(
+        "Work Gmail coverage: "
+        f"{report.gmail_coverage}; "
+        f"{report.body_candidates_selected} of "
+        f"{report.body_candidates_eligible} eligible messages selected; "
+        f"{report.body_candidates_omitted} omitted without body retrieval."
+    )
+    print("All external sources remained read-only.")
+
+
+def _print_briefing_failure(error: GmailMvpTrialFailure) -> None:
+    failure = error.report.failure
+    print(
+        "Daily Briefing stopped safely: "
+        f"{failure.failure_category.value} during {failure.failure_stage.value}."
+    )
+    if error.report.failure_report_paths:
+        print(f"Private diagnostic: {error.report.failure_report_paths[-1]}")
+    print("No combined briefing or failed-run source data was persisted.")
 
 
 def _json_default(value: object) -> str:

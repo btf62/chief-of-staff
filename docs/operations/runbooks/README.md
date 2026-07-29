@@ -5,7 +5,8 @@ procedures. Runbooks should be created only for implemented operational
 workflows and should link to the policies or deployment documentation that
 govern them.
 
-No runbooks exist because there is no implemented or deployed system.
+- [Run the On-Demand Daily Briefing](on-demand-briefing.md) — supported local
+  command, output locations, partial coverage, and safe failure behavior
 
-See [operations documentation](../README.md) for operational policies and
+See [operations documentation](../README.md) for governing policies and
 deployment documentation.

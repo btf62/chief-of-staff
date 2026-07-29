@@ -96,6 +96,18 @@ The bounded live-trial procedure is documented separately in
 The combined-MVP Work Gmail trial is complete and stopped. It must not be
 repeated or broadened without new explicit approval.
 
+## Run the on-demand briefing
+
+After the supported environment and approved connector credentials are
+configured, generate the current private briefing with:
+
+```text
+make briefing
+```
+
+See the [on-demand briefing runbook](docs/operations/runbooks/on-demand-briefing.md)
+for output locations, partial-coverage behavior, and safe failure handling.
+
 ## Documentation principles
 
 - Document the problem before proposing a solution.

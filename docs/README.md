@@ -84,6 +84,8 @@ not mean the complete Daily Briefing has passed operational acceptance.
   procedure
 - [Runbooks](operations/runbooks/README.md) — step-by-step operational
   procedures
+- [Run the on-demand briefing](operations/runbooks/on-demand-briefing.md) —
+  supported local command and safe operating behavior
 
 ### Repository guidance
 
