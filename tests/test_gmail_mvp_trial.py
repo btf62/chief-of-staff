@@ -63,7 +63,9 @@ class _Transport:
         authorization: GmailAuthorization,
         request: GmailMessageListRequest,
     ) -> GmailMessageListPage:
-        del authorization, request
+        del authorization
+        if "in:sent" in request.query and "-in:sent" not in request.query:
+            return GmailMessageListPage(())
         return GmailMessageListPage(
             (GmailMessageReference(self.metadata.id, self.metadata.thread_id),)
         )

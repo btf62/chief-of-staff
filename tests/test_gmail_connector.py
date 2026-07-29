@@ -10,7 +10,9 @@ import pytest
 
 from chief_of_staff.connectors import (
     GMAIL_BODY_CANDIDATE_LIMIT,
+    GMAIL_INBOUND_MESSAGE_LIMIT,
     GMAIL_READONLY_SCOPE,
+    GMAIL_SENT_MESSAGE_LIMIT,
     GMAIL_WORK_ACCOUNT,
     ConnectorRequest,
     GmailAuthorization,
@@ -29,7 +31,7 @@ from chief_of_staff.connectors import (
     classify_gmail_metadata,
     detect_gmail_conclusions,
     extract_minimized_message_text,
-    gmail_bounded_query,
+    gmail_bounded_streams,
 )
 
 NOW = datetime(2026, 7, 28, 13, 0, tzinfo=UTC)
@@ -133,17 +135,27 @@ def _full(metadata: GmailMessageMetadata, body: str) -> GmailFullMessage:
     )
 
 
-def test_bounded_query_uses_epoch_boundaries_and_excludes_forbidden_mailboxes() -> None:
-    query, starts_at, ends_at = gmail_bounded_query(
+def test_bounded_streams_use_exact_epoch_boundaries_queries_and_caps() -> None:
+    inbound, sent = gmail_bounded_streams(
         date(2026, 7, 28),
         "America/New_York",
     )
 
-    assert starts_at.isoformat() == "2026-07-14T00:00:00-04:00"
-    assert ends_at.isoformat() == "2026-07-29T00:00:00-04:00"
-    assert query == (
-        f"after:{int(starts_at.timestamp())} before:{int(ends_at.timestamp())} "
-        "-in:spam -in:trash -in:drafts"
+    assert inbound.window_start.isoformat() == "2026-07-21T00:00:00-04:00"
+    assert sent.window_start.isoformat() == "2026-07-14T00:00:00-04:00"
+    assert inbound.window_end.isoformat() == "2026-07-29T00:00:00-04:00"
+    assert sent.window_end == inbound.window_end
+    assert inbound.message_limit == GMAIL_INBOUND_MESSAGE_LIMIT
+    assert sent.message_limit == GMAIL_SENT_MESSAGE_LIMIT
+    assert inbound.query == (
+        f"after:{int(inbound.window_start.timestamp())} "
+        f"before:{int(inbound.window_end.timestamp())} "
+        "-in:sent -in:drafts -in:spam -in:trash "
+        "-category:promotions -category:social -category:forums"
+    )
+    assert sent.query == (
+        f"after:{int(sent.window_start.timestamp())} "
+        f"before:{int(sent.window_end.timestamp())} in:sent -in:drafts"
     )
 
 
@@ -180,10 +192,10 @@ def test_metadata_first_pagination_filters_candidates_and_detects_explicit_items
                 next_page_token="next",
             ),
             GmailMessageListPage(
-                (
-                    GmailMessageReference(inbound.id, inbound.thread_id),
-                    GmailMessageReference(outbound.id, outbound.thread_id),
-                )
+                (GmailMessageReference(inbound.id, inbound.thread_id),)
+            ),
+            GmailMessageListPage(
+                (GmailMessageReference(outbound.id, outbound.thread_id),)
             ),
         ),
         metadata={
@@ -213,18 +225,24 @@ def test_metadata_first_pagination_filters_candidates_and_detects_explicit_items
         "waiting_item",
     ]
     assert all(item.display_url for item in result.items)
-    assert result.coverage.page_count == 2
+    assert result.coverage.page_count == 3
     assert result.coverage.retrieved_count == 3
     assert connector.last_audit is not None
     assert connector.last_audit.duplicate_message_ids == 1
+    assert connector.last_audit.inbound.messages_listed == 2
+    assert connector.last_audit.inbound.pages == 2
+    assert connector.last_audit.sent.messages_listed == 1
+    assert connector.last_audit.sent.pages == 1
     assert connector.last_audit.automated_bulk_exclusions == 1
     assert ("full", automated.id) not in transport.calls
     first_full = next(
         index for index, call in enumerate(transport.calls) if call[0] == "full"
     )
-    assert all(call[0] == "metadata" for call in transport.calls[3:first_full])
-    assert len({request.query for request in transport.queries}) == 1
+    assert all(call[0] == "metadata" for call in transport.calls[4:first_full])
+    assert len({request.query for request in transport.queries}) == 2
     assert transport.queries[1].page_token == "next"
+    assert transport.queries[0].query == transport.queries[1].query
+    assert transport.queries[2].page_token is None
 
 
 def test_candidate_cap_stops_before_any_body_retrieval() -> None:
@@ -244,6 +262,7 @@ def test_candidate_cap_stops_before_any_body_retrieval() -> None:
                     GmailMessageReference(item.id, item.thread_id) for item in messages
                 )
             ),
+            GmailMessageListPage(()),
         ),
         metadata={item.id: item for item in messages},
         bodies={},
@@ -254,10 +273,154 @@ def test_candidate_cap_stops_before_any_body_retrieval() -> None:
         transport=transport,
     )
 
-    with pytest.raises(GmailBoundaryExceeded, match="150"):
+    with pytest.raises(GmailBoundaryExceeded, match="120") as raised:
         connector.retrieve(_request())
 
+    assert raised.value.boundary == "body_candidates"
+    assert raised.value.observed_count == GMAIL_BODY_CANDIDATE_LIMIT + 1
     assert not any(operation == "full" for operation, _value in transport.calls)
+
+
+@pytest.mark.parametrize(
+    ("inbound_count", "sent_count", "expected_boundary", "expected_limit"),
+    (
+        (
+            GMAIL_INBOUND_MESSAGE_LIMIT + 1,
+            0,
+            "inbound_messages",
+            GMAIL_INBOUND_MESSAGE_LIMIT,
+        ),
+        (
+            0,
+            GMAIL_SENT_MESSAGE_LIMIT + 1,
+            "sent_messages",
+            GMAIL_SENT_MESSAGE_LIMIT,
+        ),
+    ),
+)
+def test_each_stream_cap_stops_before_metadata(
+    inbound_count: int,
+    sent_count: int,
+    expected_boundary: str,
+    expected_limit: int,
+) -> None:
+    inbound = tuple(
+        GmailMessageReference(f"inbound-{index}", f"thread-inbound-{index}")
+        for index in range(inbound_count)
+    )
+    sent = tuple(
+        GmailMessageReference(f"sent-{index}", f"thread-sent-{index}")
+        for index in range(sent_count)
+    )
+    transport = _Transport(
+        pages=(
+            GmailMessageListPage(inbound),
+            *(
+                ()
+                if inbound_count > GMAIL_INBOUND_MESSAGE_LIMIT
+                else (GmailMessageListPage(sent),)
+            ),
+        ),
+        metadata={},
+        bodies={},
+    )
+    connector = GmailConnector(
+        account_reference=ACCOUNT_REFERENCE,
+        authorization_provider=_AuthorizationProvider(),
+        transport=transport,
+    )
+
+    with pytest.raises(GmailBoundaryExceeded) as raised:
+        connector.retrieve(_request())
+
+    assert raised.value.boundary == expected_boundary
+    assert raised.value.limit == expected_limit
+    assert raised.value.observed_count == expected_limit + 1
+    assert not any(operation == "metadata" for operation, _value in transport.calls)
+
+
+def test_cross_stream_ids_are_deduplicated_before_metadata_and_preserve_membership() -> (
+    None
+):
+    shared = _metadata(
+        "shared",
+        "shared-thread",
+        sender=GMAIL_WORK_ACCOUNT,
+        recipient="person@example.invalid",
+    )
+    transport = _Transport(
+        pages=(
+            GmailMessageListPage((GmailMessageReference(shared.id, shared.thread_id),)),
+            GmailMessageListPage((GmailMessageReference(shared.id, shared.thread_id),)),
+        ),
+        metadata={shared.id: shared},
+        bodies={shared.id: _full(shared, "I'll send it by 2026-07-28.")},
+    )
+    connector = GmailConnector(
+        account_reference=ACCOUNT_REFERENCE,
+        authorization_provider=_AuthorizationProvider(),
+        transport=transport,
+        clock=lambda: NOW,
+    )
+
+    connector.retrieve(_request())
+
+    assert transport.calls.count(("metadata", shared.id)) == 1
+    assert transport.calls.count(("full", shared.id)) == 1
+    assert connector.last_audit is not None
+    assert connector.last_audit.messages_listed == 1
+    assert connector.last_audit.duplicate_message_ids == 1
+    assert connector.last_audit.inbound.messages_listed == 1
+    assert connector.last_audit.sent.messages_listed == 1
+
+
+def test_updates_category_gets_metadata_review_without_automatic_body_retrieval() -> (
+    None
+):
+    human = _metadata(
+        "human-update",
+        "human-update-thread",
+        sender="person@example.invalid",
+        recipient=GMAIL_WORK_ACCOUNT,
+        labels=("INBOX", "CATEGORY_UPDATES"),
+    )
+    automated = _metadata(
+        "automated-update",
+        "automated-update-thread",
+        sender="no-reply@example.invalid",
+        recipient=GMAIL_WORK_ACCOUNT,
+        labels=("INBOX", "CATEGORY_UPDATES"),
+        extra_headers=(("Auto-Submitted", "auto-generated"),),
+    )
+    transport = _Transport(
+        pages=(
+            GmailMessageListPage(
+                (
+                    GmailMessageReference(human.id, human.thread_id),
+                    GmailMessageReference(automated.id, automated.thread_id),
+                )
+            ),
+            GmailMessageListPage(()),
+        ),
+        metadata={human.id: human, automated.id: automated},
+        bodies={human.id: _full(human, "Please review the synthetic update.")},
+    )
+    connector = GmailConnector(
+        account_reference=ACCOUNT_REFERENCE,
+        authorization_provider=_AuthorizationProvider(),
+        transport=transport,
+        clock=lambda: NOW,
+    )
+
+    result = connector.retrieve(_request())
+
+    assert len(result.items) == 1
+    assert ("metadata", automated.id) in transport.calls
+    assert ("full", human.id) in transport.calls
+    assert ("full", automated.id) not in transport.calls
+    assert connector.last_audit is not None
+    assert connector.last_audit.inbound.metadata_inspected == 2
+    assert connector.last_audit.inbound.body_candidates == 1
 
 
 def test_mime_minimization_prefers_plain_text_and_never_uses_attachments() -> None:
@@ -443,6 +606,7 @@ def test_local_recurrence_decisions_suppress_or_correct_unchanged_detections() -
                     GmailMessageReference(second.id, second.thread_id),
                 )
             ),
+            GmailMessageListPage(()),
         ),
         metadata={first.id: first, second.id: second},
         bodies={

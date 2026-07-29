@@ -248,7 +248,9 @@ approval.
   - One independently authorized `Work Gmail` connector instance.
   - Exact `gmail.readonly` scope, installed-app OAuth, Keychain-only secrets,
     account confirmation, refresh, revocation, and disconnection.
-  - Bounded 14-day listing with metadata-first candidate selection.
+  - Separate bounded seven-day inbound and fourteen-day sent streams with
+    metadata-first candidate selection, stream-specific caps, and cross-stream
+    deduplication.
   - Minimized MIME parsing without attachments, active content, remote
     resources, or raw-message retrieval.
   - Deterministic high-precision explicit-request, reply-state, explicit-

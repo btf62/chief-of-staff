@@ -227,12 +227,20 @@ Client and token secrets remain in macOS Keychain. The imported client file is
 deleted after successful bounded import. SQLite receives only non-secret
 authorization metadata and minimized application facts.
 
-The trial lists the previous 14 calendar days through the briefing day,
-retrieves metadata before any content, and retrieves `format=full` only for
+The trial lists two separate streams through the exclusive end of the briefing
+day: seven calendar days of inbound mail and fourteen calendar days of sent
+mail. It enforces independent 300-message and 200-message caps, deduplicates
+before metadata, and stops if combined unique messages exceed 500. It retrieves
+metadata before any content and retrieves `format=full` only for at most 120
 bounded direct-human or outbound candidates. It never uses `format=raw`,
 retrieves attachments, renders active HTML, loads remote resources, or exposes
 a Gmail mutation method. Raw responses, MIME trees, and complete bodies remain
 transient.
+
+Before routine use, a second Northridge-controlled owner or editor must be
+added to the Google Cloud project to reduce single-person administrative risk.
+This is an operational follow-up, not authorization to change IAM or select an
+administrator during the bounded trial.
 
 Every proposed deterministic email conclusion and a bounded rejected sample
 are written to a private mode-`0600` artifact under
@@ -342,9 +350,10 @@ failures, minimized issue persistence, transient raw pages and cursors,
 conservative cross-source association, daily relevance, and absence of
 mutation operations.
 Work Gmail tests additionally cover exact restricted scope, state and PKCE,
-account confirmation, Keychain isolation, refresh and revocation, bounded
-epoch queries, pagination, metadata-first filtering, candidate and content
-caps, MIME minimization, inert malicious content, reply state, explicit
+account confirmation, Keychain isolation, refresh and revocation, separate
+bounded epoch queries, stable pagination, stream and combined deduplication,
+metadata-first filtering, candidate and content caps, MIME minimization, inert
+malicious content, reply state, explicit
 requests and promises, local correction recurrence, private review artifacts,
 briefing integration, and absence of attachment or mutation operations.
 ## Current limitations and stop condition

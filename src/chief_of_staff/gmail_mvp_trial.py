@@ -23,11 +23,11 @@ from chief_of_staff.connectors import (
     ConnectorInstanceIdentity,
     GmailConnector,
     GmailDetectionType,
+    GmailStreamAudit,
     GoogleCalendarConnector,
     JiraConnector,
     RepositoryContextConnector,
     TodoistConnector,
-    gmail_bounded_query,
 )
 from chief_of_staff.domain import (
     Classification,
@@ -53,6 +53,23 @@ from chief_of_staff.pipeline import (
 
 
 @dataclass(frozen=True, slots=True)
+class GmailStreamTrialReport:
+    """Private-content-free coverage report for one Gmail stream."""
+
+    status: str
+    retrieval_window_start: datetime
+    retrieval_window_end: datetime
+    messages_listed: int
+    pages: int
+    duplicate_message_ids: int
+    metadata_records_inspected: int
+    body_candidates: int
+    body_records_retrieved: int
+    automated_bulk_exclusions: int
+    opaque_or_unsupported_messages: int
+
+
+@dataclass(frozen=True, slots=True)
 class GmailMvpTrialReport:
     """Private-content-free aggregate report for the mandatory stop."""
 
@@ -62,8 +79,8 @@ class GmailMvpTrialReport:
     granted_scope: str
     credential_health: str
     refresh_health: str | None
-    retrieval_window_start: datetime
-    retrieval_window_end: datetime
+    inbound: GmailStreamTrialReport
+    sent: GmailStreamTrialReport
     messages_listed: int
     pages: int
     metadata_records_inspected: int
@@ -276,10 +293,6 @@ class GmailMvpTrialRunner:
             )
 
         gmail_coverage = coverage_by_source["gmail"]
-        _query, gmail_window_start, gmail_window_end = gmail_bounded_query(
-            briefing_date,
-            self.timezone,
-        )
         displayed_sections = tuple(
             section.name.value
             for section in result.plan.sections
@@ -296,8 +309,8 @@ class GmailMvpTrialRunner:
                 if authorization.refresh_health is None
                 else authorization.refresh_health.value
             ),
-            retrieval_window_start=gmail_window_start,
-            retrieval_window_end=gmail_window_end,
+            inbound=_stream_report(audit.inbound),
+            sent=_stream_report(audit.sent),
             messages_listed=audit.messages_listed,
             pages=audit.pages,
             metadata_records_inspected=audit.metadata_inspected,
@@ -433,6 +446,22 @@ class GmailMvpTrialRunner:
             f"{run_id}.md",
             "\n".join(lines).rstrip() + "\n",
         )
+
+
+def _stream_report(audit: GmailStreamAudit) -> GmailStreamTrialReport:
+    return GmailStreamTrialReport(
+        status=audit.status,
+        retrieval_window_start=audit.window_start,
+        retrieval_window_end=audit.window_end,
+        messages_listed=audit.messages_listed,
+        pages=audit.pages,
+        duplicate_message_ids=audit.duplicate_message_ids,
+        metadata_records_inspected=audit.metadata_inspected,
+        body_candidates=audit.body_candidates,
+        body_records_retrieved=audit.bodies_retrieved,
+        automated_bulk_exclusions=audit.automated_bulk_exclusions,
+        opaque_or_unsupported_messages=audit.opaque_or_unsupported_messages,
+    )
 
 
 def _instance(

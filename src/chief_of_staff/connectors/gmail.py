@@ -47,15 +47,17 @@ GMAIL_METADATA_HEADERS: Final = (
     "List-Id",
     "List-Unsubscribe",
 )
+GMAIL_INBOUND_MESSAGE_LIMIT: Final = 300
+GMAIL_SENT_MESSAGE_LIMIT: Final = 200
 GMAIL_MESSAGE_LIMIT: Final = 500
-GMAIL_BODY_CANDIDATE_LIMIT: Final = 150
+GMAIL_BODY_CANDIDATE_LIMIT: Final = 120
 GMAIL_PAGE_SIZE: Final = 100
 GMAIL_PAGE_LIMIT: Final = 20
 GMAIL_MAX_MESSAGE_SIZE_ESTIMATE: Final = 2 * 1024 * 1024
 GMAIL_MAX_MESSAGE_TEXT_CHARS: Final = 16_000
 GMAIL_MAX_RUN_TEXT_CHARS: Final = 500_000
 GMAIL_REVIEW_REJECTION_LIMIT: Final = 20
-GMAIL_PROCESSING_VERSION: Final = "gmail-deterministic-v1"
+GMAIL_PROCESSING_VERSION: Final = "gmail-deterministic-v2"
 
 _EXCLUDED_LABELS = frozenset(
     {
@@ -132,7 +134,20 @@ class GmailRetrievalError(GmailError):
 
 
 class GmailBoundaryExceeded(GmailError):
-    """Raised before body retrieval when a configured run cap is exceeded."""
+    """Raised before expansion when a configured run cap is exceeded."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        boundary: str,
+        observed_count: int,
+        limit: int,
+    ) -> None:
+        super().__init__(message)
+        self.boundary = boundary
+        self.observed_count = observed_count
+        self.limit = limit
 
 
 class GmailAuthorizationUnavailable(GmailAuthenticationError):
@@ -270,6 +285,24 @@ class GmailMessageClassification(StrEnum):
     UNSUPPORTED = "unsupported_or_ambiguous"
 
 
+class GmailStream(StrEnum):
+    """The two independently bounded Work Gmail retrieval streams."""
+
+    INBOUND = "inbound"
+    SENT = "sent"
+
+
+@dataclass(frozen=True, slots=True)
+class GmailBoundedStream:
+    """One exact query, time window, and pre-expansion message cap."""
+
+    stream: GmailStream
+    query: str
+    window_start: datetime
+    window_end: datetime
+    message_limit: int
+
+
 class GmailDetectionType(StrEnum):
     """Deterministic conclusions available to the trial and briefing."""
 
@@ -313,6 +346,24 @@ class GmailRejectedCandidate:
 
 
 @dataclass(frozen=True, slots=True)
+class GmailStreamAudit:
+    """Privacy-safe aggregate facts for one completed retrieval stream."""
+
+    stream: GmailStream
+    window_start: datetime
+    window_end: datetime
+    status: str
+    messages_listed: int
+    pages: int
+    duplicate_message_ids: int
+    metadata_inspected: int
+    body_candidates: int
+    bodies_retrieved: int
+    automated_bulk_exclusions: int
+    opaque_or_unsupported_messages: int
+
+
+@dataclass(frozen=True, slots=True)
 class GmailRetrievalAudit:
     """Privacy-safe aggregate retrieval and detection facts."""
 
@@ -330,6 +381,8 @@ class GmailRetrievalAudit:
     explicit_commitments_detected: int
     commitments_at_risk_proposed: int
     duplicate_message_ids: int
+    inbound: GmailStreamAudit
+    sent: GmailStreamAudit
     concurrent_changes_cannot_be_excluded: bool = True
 
 
@@ -386,17 +439,48 @@ class GmailConnector:
         if profile.email_address.casefold() != self.work_account.casefold():
             raise GmailAuthenticationError("Gmail profile did not match Work Gmail")
 
-        query, window_start, window_end = gmail_bounded_query(
+        streams = gmail_bounded_streams(
             request.briefing_date,
             request.timezone,
         )
-        references, page_count, duplicate_count = self._list_all(
-            authorization,
-            query,
-        )
+        stream_references: dict[GmailStream, tuple[GmailMessageReference, ...]] = {}
+        stream_pages: dict[GmailStream, int] = {}
+        stream_duplicates: dict[GmailStream, int] = {}
+        references_by_id: dict[str, GmailMessageReference] = {}
+        memberships: dict[str, set[GmailStream]] = {}
+        cross_stream_duplicates = 0
+        for stream in streams:
+            references, page_count, duplicate_count = self._list_stream(
+                authorization,
+                stream,
+            )
+            stream_references[stream.stream] = references
+            stream_pages[stream.stream] = page_count
+            stream_duplicates[stream.stream] = duplicate_count
+            for reference in references:
+                existing = references_by_id.get(reference.id)
+                if existing is not None:
+                    cross_stream_duplicates += 1
+                    if existing.thread_id != reference.thread_id:
+                        raise GmailRetrievalError(
+                            "cross-stream Gmail message ID changed thread identity"
+                        )
+                else:
+                    references_by_id[reference.id] = reference
+                memberships.setdefault(reference.id, set()).add(stream.stream)
+        if len(references_by_id) > GMAIL_MESSAGE_LIMIT:
+            raise GmailBoundaryExceeded(
+                "more than 500 unique Gmail messages matched the two bounded streams",
+                boundary="combined_unique_messages",
+                observed_count=len(references_by_id),
+                limit=GMAIL_MESSAGE_LIMIT,
+            )
+
+        references = tuple(references_by_id.values())
         metadata: list[GmailMessageMetadata] = []
         classifications: dict[str, GmailMessageClassification] = {}
         partial_warnings: list[str] = []
+        partial_streams: set[GmailStream] = set()
         for reference in references:
             try:
                 message = self.transport.get_message_metadata(
@@ -407,9 +491,11 @@ class GmailConnector:
                 raise
             except GmailRetrievalError:
                 partial_warnings.append("one or more metadata records were unavailable")
+                partial_streams.update(memberships[reference.id])
                 continue
             if message.id != reference.id or message.thread_id != reference.thread_id:
                 partial_warnings.append("one metadata record had inconsistent identity")
+                partial_streams.update(memberships[reference.id])
                 continue
             metadata.append(message)
             classifications[message.id] = classify_gmail_metadata(
@@ -420,29 +506,37 @@ class GmailConnector:
         candidate_messages = tuple(
             message
             for message in metadata
-            if classifications[message.id]
-            in {
-                GmailMessageClassification.OUTBOUND,
-                GmailMessageClassification.DIRECT_INBOUND,
-            }
+            if (
+                classifications[message.id] is GmailMessageClassification.DIRECT_INBOUND
+                and GmailStream.INBOUND in memberships[message.id]
+            )
+            or (
+                classifications[message.id] is GmailMessageClassification.OUTBOUND
+                and GmailStream.SENT in memberships[message.id]
+            )
         )
         if len(candidate_messages) > GMAIL_BODY_CANDIDATE_LIMIT:
             raise GmailBoundaryExceeded(
-                "more than 150 Gmail messages qualified for body retrieval"
+                "more than 120 Gmail messages qualified for body retrieval",
+                boundary="body_candidates",
+                observed_count=len(candidate_messages),
+                limit=GMAIL_BODY_CANDIDATE_LIMIT,
             )
 
         bodies: dict[str, str] = {}
-        unsupported = sum(
-            classification is GmailMessageClassification.UNSUPPORTED
-            for classification in classifications.values()
-        )
+        unsupported_ids = {
+            message_id
+            for message_id, classification in classifications.items()
+            if classification is GmailMessageClassification.UNSUPPORTED
+        }
         run_chars = 0
         for message in candidate_messages:
             if message.size_estimate > GMAIL_MAX_MESSAGE_SIZE_ESTIMATE:
-                unsupported += 1
+                unsupported_ids.add(message.id)
                 partial_warnings.append(
                     "one or more candidate messages exceeded the content-size limit"
                 )
+                partial_streams.update(memberships[message.id])
                 continue
             try:
                 full_message = self.transport.get_message_full(
@@ -453,22 +547,29 @@ class GmailConnector:
                 raise
             except GmailRetrievalError:
                 partial_warnings.append("one or more candidate bodies were unavailable")
+                partial_streams.update(memberships[message.id])
                 continue
             if (
                 full_message.metadata.id != message.id
                 or full_message.metadata.thread_id != message.thread_id
             ):
                 partial_warnings.append("one body record had inconsistent identity")
+                partial_streams.update(memberships[message.id])
                 continue
             body = extract_minimized_message_text(full_message.payload)
             if body is None:
-                unsupported += 1
+                unsupported_ids.add(message.id)
                 continue
             if len(body) > GMAIL_MAX_MESSAGE_TEXT_CHARS:
                 body = body[:GMAIL_MAX_MESSAGE_TEXT_CHARS].rstrip()
             run_chars += len(body)
             if run_chars > GMAIL_MAX_RUN_TEXT_CHARS:
-                raise GmailBoundaryExceeded("Gmail content run limit was exceeded")
+                raise GmailBoundaryExceeded(
+                    "Gmail content run limit was exceeded",
+                    boundary="content_characters",
+                    observed_count=run_chars,
+                    limit=GMAIL_MAX_RUN_TEXT_CHARS,
+                )
             bodies[message.id] = body
 
         proposed_detections, rejections = detect_gmail_conclusions(
@@ -508,6 +609,43 @@ class GmailConnector:
             *rejections,
             *disposition_rejections,
         )[:GMAIL_REVIEW_REJECTION_LIMIT]
+        exclusion_classes = {
+            GmailMessageClassification.AUTOMATED,
+            GmailMessageClassification.BULK,
+            GmailMessageClassification.PROMOTIONAL,
+        }
+
+        def stream_audit(stream: GmailBoundedStream) -> GmailStreamAudit:
+            message_ids = {
+                reference.id for reference in stream_references[stream.stream]
+            }
+            metadata_ids = message_ids & classifications.keys()
+            candidate_ids = {message.id for message in candidate_messages} & message_ids
+            return GmailStreamAudit(
+                stream=stream.stream,
+                window_start=stream.window_start,
+                window_end=stream.window_end,
+                status=(
+                    CoverageStatus.PARTIAL.value
+                    if stream.stream in partial_streams
+                    else CoverageStatus.COMPLETE.value
+                ),
+                messages_listed=len(message_ids),
+                pages=stream_pages[stream.stream],
+                duplicate_message_ids=stream_duplicates[stream.stream],
+                metadata_inspected=len(metadata_ids),
+                body_candidates=len(candidate_ids),
+                bodies_retrieved=len(message_ids & bodies.keys()),
+                automated_bulk_exclusions=sum(
+                    classifications[message_id] in exclusion_classes
+                    for message_id in metadata_ids
+                ),
+                opaque_or_unsupported_messages=len(message_ids & unsupported_ids),
+            )
+
+        inbound_audit, sent_audit = (stream_audit(stream) for stream in streams)
+        duplicate_count = sum(stream_duplicates.values()) + cross_stream_duplicates
+        page_count = sum(stream_pages.values())
         self.last_audit = GmailRetrievalAudit(
             messages_listed=len(references),
             pages=page_count,
@@ -521,16 +659,10 @@ class GmailConnector:
                 for value in classifications.values()
             ),
             automated_bulk_exclusions=sum(
-                value
-                in {
-                    GmailMessageClassification.AUTOMATED,
-                    GmailMessageClassification.BULK,
-                    GmailMessageClassification.PROMOTIONAL,
-                }
-                for value in classifications.values()
+                value in exclusion_classes for value in classifications.values()
             ),
             body_records_retrieved=len(bodies),
-            opaque_or_unsupported_messages=unsupported,
+            opaque_or_unsupported_messages=len(unsupported_ids),
             unique_threads=len({message.thread_id for message in metadata}),
             explicit_requests_detected=sum(
                 detection.type is GmailDetectionType.PEOPLE_WAITING
@@ -553,6 +685,8 @@ class GmailConnector:
                 for detection in proposed_detections
             ),
             duplicate_message_ids=duplicate_count,
+            inbound=inbound_audit,
+            sent=sent_audit,
         )
 
         retrieved_at = self.clock()
@@ -561,8 +695,14 @@ class GmailConnector:
         warnings = [
             "Gmail pagination is not a transactional mailbox snapshot",
             (
-                "bounded window "
-                f"{window_start.isoformat()} through {window_end.isoformat()}"
+                "inbound stream "
+                f"{inbound_audit.status}: {inbound_audit.window_start.isoformat()} "
+                f"through {inbound_audit.window_end.isoformat()}"
+            ),
+            (
+                "sent stream "
+                f"{sent_audit.status}: {sent_audit.window_start.isoformat()} "
+                f"through {sent_audit.window_end.isoformat()}"
             ),
             *dict.fromkeys(partial_warnings),
         ]
@@ -593,10 +733,10 @@ class GmailConnector:
             ),
         )
 
-    def _list_all(
+    def _list_stream(
         self,
         authorization: GmailAuthorization,
-        query: str,
+        stream: GmailBoundedStream,
     ) -> tuple[tuple[GmailMessageReference, ...], int, int]:
         references: dict[str, GmailMessageReference] = {}
         duplicate_count = 0
@@ -607,13 +747,18 @@ class GmailConnector:
             page = self.transport.list_messages(
                 authorization,
                 GmailMessageListRequest(
-                    query=query,
+                    query=stream.query,
                     page_token=page_token,
                 ),
             )
             page_count += 1
             if page_count > GMAIL_PAGE_LIMIT:
-                raise GmailBoundaryExceeded("Gmail pagination exceeded its page limit")
+                raise GmailBoundaryExceeded(
+                    "Gmail pagination exceeded its page limit",
+                    boundary=f"{stream.stream.value}_pages",
+                    observed_count=page_count,
+                    limit=GMAIL_PAGE_LIMIT,
+                )
             for reference in page.messages:
                 if not reference.id or not reference.thread_id:
                     continue
@@ -626,9 +771,13 @@ class GmailConnector:
                         )
                     continue
                 references[reference.id] = reference
-                if len(references) > GMAIL_MESSAGE_LIMIT:
+                if len(references) > stream.message_limit:
                     raise GmailBoundaryExceeded(
-                        "more than 500 Gmail messages matched the bounded query"
+                        f"more than {stream.message_limit} Gmail messages matched "
+                        f"the {stream.stream.value} stream",
+                        boundary=f"{stream.stream.value}_messages",
+                        observed_count=len(references),
+                        limit=stream.message_limit,
                     )
             page_token = page.next_page_token
             if page_token is None:
@@ -643,7 +792,52 @@ class GmailConnector:
         if audit is None:
             return ()
         return (
-            ContextResourceCoverage("message metadata", audit.metadata_inspected),
+            ContextResourceCoverage(
+                "inbound stream messages",
+                audit.inbound.messages_listed,
+            ),
+            ContextResourceCoverage("inbound stream pages", audit.inbound.pages),
+            ContextResourceCoverage(
+                "inbound stream duplicates",
+                audit.inbound.duplicate_message_ids,
+            ),
+            ContextResourceCoverage(
+                "inbound stream metadata",
+                audit.inbound.metadata_inspected,
+            ),
+            ContextResourceCoverage(
+                "inbound stream body candidates",
+                audit.inbound.body_candidates,
+            ),
+            ContextResourceCoverage(
+                "inbound stream bodies",
+                audit.inbound.bodies_retrieved,
+            ),
+            ContextResourceCoverage(
+                "inbound stream automated, bulk, or unsupported",
+                audit.inbound.automated_bulk_exclusions
+                + audit.inbound.opaque_or_unsupported_messages,
+            ),
+            ContextResourceCoverage("sent stream messages", audit.sent.messages_listed),
+            ContextResourceCoverage("sent stream pages", audit.sent.pages),
+            ContextResourceCoverage(
+                "sent stream duplicates",
+                audit.sent.duplicate_message_ids,
+            ),
+            ContextResourceCoverage(
+                "sent stream metadata", audit.sent.metadata_inspected
+            ),
+            ContextResourceCoverage(
+                "sent stream body candidates",
+                audit.sent.body_candidates,
+            ),
+            ContextResourceCoverage("sent stream bodies", audit.sent.bodies_retrieved),
+            ContextResourceCoverage(
+                "sent stream automated, bulk, or unsupported",
+                audit.sent.automated_bulk_exclusions
+                + audit.sent.opaque_or_unsupported_messages,
+            ),
+            ContextResourceCoverage("combined unique messages", audit.messages_listed),
             ContextResourceCoverage(
                 "direct inbound candidates",
                 audit.direct_inbound_candidates,
@@ -665,28 +859,54 @@ class GmailConnector:
         )
 
 
-def gmail_bounded_query(
+def gmail_bounded_streams(
     briefing_date: date,
     timezone: str,
-) -> tuple[str, datetime, datetime]:
-    """Return exact epoch boundaries for the 14-day through-day window."""
+) -> tuple[GmailBoundedStream, GmailBoundedStream]:
+    """Return exact inbound and sent stream boundaries through briefing day."""
 
     zone = ZoneInfo(timezone)
-    starts_at = datetime.combine(
-        briefing_date - timedelta(days=14),
-        time.min,
-        tzinfo=zone,
-    )
     ends_at = datetime.combine(
         briefing_date + timedelta(days=1),
         time.min,
         tzinfo=zone,
     )
-    query = (
-        f"after:{int(starts_at.timestamp())} before:{int(ends_at.timestamp())} "
-        "-in:spam -in:trash -in:drafts"
+    inbound_starts_at = datetime.combine(
+        briefing_date - timedelta(days=7),
+        time.min,
+        tzinfo=zone,
     )
-    return query, starts_at, ends_at
+    sent_starts_at = datetime.combine(
+        briefing_date - timedelta(days=14),
+        time.min,
+        tzinfo=zone,
+    )
+    inbound_query = (
+        f"after:{int(inbound_starts_at.timestamp())} "
+        f"before:{int(ends_at.timestamp())} "
+        "-in:sent -in:drafts -in:spam -in:trash "
+        "-category:promotions -category:social -category:forums"
+    )
+    sent_query = (
+        f"after:{int(sent_starts_at.timestamp())} "
+        f"before:{int(ends_at.timestamp())} in:sent -in:drafts"
+    )
+    return (
+        GmailBoundedStream(
+            stream=GmailStream.INBOUND,
+            query=inbound_query,
+            window_start=inbound_starts_at,
+            window_end=ends_at,
+            message_limit=GMAIL_INBOUND_MESSAGE_LIMIT,
+        ),
+        GmailBoundedStream(
+            stream=GmailStream.SENT,
+            query=sent_query,
+            window_start=sent_starts_at,
+            window_end=ends_at,
+            message_limit=GMAIL_SENT_MESSAGE_LIMIT,
+        ),
+    )
 
 
 def classify_gmail_metadata(

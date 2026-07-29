@@ -649,8 +649,10 @@ The following questions require later product or architecture decisions:
 
 - At what time and through which interface should the briefing be delivered?
 - Where should private one-off workday exceptions be maintained operationally?
-- What Gmail search window and labels should be used?
-- How should commitments in sent mail be detected?
+- How should the accepted bounded Work Gmail retrieval evolve after the MVP
+  trial without reducing precision or expanding access implicitly?
+- Which additional representative scenarios are required before deterministic
+  sent-commitment detection is trusted for operational use?
 - What freshness threshold applies to each source?
 - How should duplicate or conflicting items across task systems be recognized?
 - How should non-Todoist inference confidence be represented without adding

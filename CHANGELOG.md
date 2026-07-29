@@ -116,6 +116,9 @@ No strict versioning scheme is promised before a distributable product exists.
 
 ### Changed
 
+- Replaced the mixed Work Gmail trial query with separate seven-day inbound and
+  fourteen-day sent streams, independent 300/200 message caps, combined
+  immutable-ID deduplication, a 120-body-candidate cap, and per-stream coverage.
 - Marked the Version 1 design baseline ready for implementation beginning with
   Milestone 1 — Python Project Foundation.
 - Clarified that design acceptance authorizes the defined implementation scope

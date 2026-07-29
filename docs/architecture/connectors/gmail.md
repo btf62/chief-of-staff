@@ -1,7 +1,7 @@
 # Work Gmail Connector
 
 - **Status:** Accepted
-- **Version:** 1
+- **Version:** 2
 - **Owner:** Brad
 - **Last updated:** 2026-07-28
 
@@ -110,15 +110,20 @@ It must not implement or expose:
 
 Contract tests must prove that no mutation path is present or reachable.
 
-## Trial retrieval window
+## Trial retrieval streams
 
-The bounded live trial covers the beginning of the previous 14 calendar days
-through the end of the briefing day in Brad's configured timezone. The
-connector should use precise epoch-based Gmail query boundaries where
-practical.
+The bounded live trial uses two independently capped streams with exact epoch
+boundaries in Brad's configured timezone:
 
-The query includes received and sent mail and excludes Spam, Trash, and
-Drafts. It does not automatically retrieve older thread history.
+1. **Inbound:** the previous seven calendar days through the exclusive end of
+   the briefing day, excluding Sent, Drafts, Spam, Trash, Promotions, Social,
+   and Forums.
+2. **Sent:** the previous fourteen calendar days through the same exclusive
+   end, including Sent and excluding Drafts.
+
+The inbound stream supports recent explicit-request and reply-state
+evaluation. The longer sent stream supports explicit-commitment evaluation.
+Neither stream automatically retrieves older thread history.
 
 ## Message listing
 
@@ -128,14 +133,16 @@ List messages only with:
 GET /gmail/v1/users/me/messages
 ```
 
-Use the approved bounded query, conservative page sizes, and stable query
-parameters across pagination. Follow `nextPageToken` to completion,
-deduplicate by immutable Gmail message ID, keep page tokens transient, and
-disclose that concurrent mailbox changes may affect point-in-time
-completeness.
+Use each approved bounded query, conservative page sizes, and stable query
+parameters across pagination. Follow `nextPageToken` to completion, preserve
+stream membership, deduplicate within and across streams by immutable Gmail
+message ID, keep page tokens transient, and disclose that concurrent mailbox
+changes may affect point-in-time completeness.
 
-If more than 500 messages fall within the bounded window, stop before metadata
-or body expansion and require a narrower approved boundary.
+Stop before metadata expansion if the inbound stream exceeds 300 messages, the
+sent stream exceeds 200 messages, or the combined result exceeds 500 unique
+messages. Report the safe observed aggregate for the exceeded boundary; never
+silently shorten a window or alter a filter.
 
 ## Metadata-first retrieval
 
@@ -182,7 +189,11 @@ body retrieval. Sent mail may qualify for explicit-promise detection. Direct
 inbound human correspondence may qualify for explicit-request and unanswered-
 acknowledgment evaluation.
 
-If more than 150 messages qualify for body retrieval, stop before retrieving
+`CATEGORY_UPDATES` remains eligible for metadata review but does not
+automatically qualify for body retrieval. The same human-correspondence and
+automation checks apply.
+
+If more than 120 messages qualify for body retrieval, stop before retrieving
 any body and report the candidate composition.
 
 ## Bounded content retrieval
@@ -300,18 +311,23 @@ complete headers, or unrelated participants.
 
 ## Coverage and failures
 
-Coverage separately reports:
+Coverage separately reports the inbound and sent stream status, window, and
+the following counts for each stream:
 
-- Messages listed and pages
-- Metadata records inspected
-- Direct inbound and outbound candidates
-- Automated or bulk exclusions
+- Messages listed, pages, and duplicate IDs
+- Metadata records inspected and body candidates
 - Body records retrieved
+- Automated or bulk exclusions
 - Opaque or unsupported messages
+
+Combined coverage also reports:
+
+- Unique messages after cross-stream deduplication
+- Direct inbound and outbound candidates
 - Unique threads
 - Explicit detections
 - Persisted and displayed counts
-- Freshness and retrieval window
+- Freshness
 
 Distinguish a legitimately empty result from authorization failure, partial
 pagination, metadata failure, body failure, unsupported MIME, and candidate-
@@ -336,7 +352,7 @@ must pass before authorization. The one approved live trial then:
 
 1. Confirms the exact Northridge-owned OAuth project and internal audience.
 2. Authorizes only `gmail:work` with the exact approved scope and account.
-3. Runs the bounded 14-day retrieval.
+3. Runs the bounded seven-day inbound and fourteen-day sent streams.
 4. Generates the private candidate-review artifact.
 5. Generates one input-complete briefing using fresh approved repository,
    primary Calendar, Todoist, Jira, and Work Gmail inputs.
