@@ -7,7 +7,8 @@ identifying priorities, commitments, and useful signals.
 
 ## Status
 
-**Phase:** Milestones 1–5 complete; Milestone 6 Work Gmail in progress
+**Phase:** Milestones 1–6 complete; Milestone 7 implementation complete —
+Brad review pending
 
 The Python, local-state, deterministic briefing, repository connector, and
 read-only Google Calendar foundations are complete. An explicitly approved,
@@ -23,11 +24,14 @@ Its successful combined trial listed and inspected 357 messages, found 144
 eligible body candidates, selected 120, omitted 24 without body retrieval, and
 produced 106 usable bodies. Gmail coverage was partial as required while the
 other four inputs were complete. The trial created the private review and a
-929-word combined briefing. Milestone 6's live trial is complete; Brad's human
-trust review remains before acceptance. The repeatable validation
-authorization ended at success, so another live retrieval requires new
-explicit approval. Personal Gmail and Google Drive remain deferred and
-unauthorized.
+929-word combined briefing. Brad reviewed the private evidence and combined
+briefing and explicitly judged the logic sound, completing Milestone 6.
+Milestone 7 adds precision-first deterministic commitment, acknowledgment,
+deadline, preparation, and insufficient-evidence behavior. Its synthetic
+evaluation passes, and a 2026-07-29 five-source live validation produced a
+private review artifact and a 635-word briefing without external writes. Brad's
+review of that new evidence remains the acceptance gate. Personal Gmail and
+Google Drive remain deferred and unauthorized.
 
 ## Repository map
 
@@ -93,8 +97,9 @@ lookup, hosted inference, persistence, or external writes. Use
 
 The bounded live-trial procedure is documented separately in
 [First Safe Connector Operations](docs/operations/first-safe-connectors.md).
-The combined-MVP Work Gmail trial is complete and stopped. It must not be
-repeated or broadened without new explicit approval.
+The combined-MVP Work Gmail trust gate is complete. Any additional live use
+must remain within an explicit current-task authorization and the unchanged
+connector boundary.
 
 ## Run the on-demand briefing
 

@@ -19,11 +19,12 @@ connector. Its successful combined trial listed and inspected 357 messages,
 found 144 eligible body candidates, selected 120, omitted 24 without body
 retrieval, and produced 106 usable bodies. Gmail coverage was partial as
 required while the other four inputs were complete. The trial created the
-private review and a 929-word combined briefing. Milestone 6's live trial is
-complete; Brad's human trust review remains before acceptance. The repeatable
-validation authorization ended at success, so another live retrieval requires
-new explicit approval. Personal Gmail and Google Drive remain deferred and
-unauthorized.
+private review and a 929-word combined briefing. Brad reviewed the evidence
+and explicitly judged the logic sound, completing Milestone 6. Milestone 7
+precision-first deterministic detection has passed its synthetic evaluation
+and one five-source live validation. Its implementation is complete; Brad's
+review of the private Milestone 7 evidence remains the acceptance gate.
+Personal Gmail and Google Drive remain deferred and unauthorized.
 Design acceptance authorizes implementation within the accepted scope; it does
 not mean the complete Daily Briefing has passed operational acceptance.
 
@@ -39,6 +40,8 @@ not mean the complete Daily Briefing has passed operational acceptance.
   implementable product behavior
 - [Daily Briefing v1](product/features/daily-briefing-v1.md) — first usable
   product milestone
+- [Deterministic Explicit Detection v1](product/features/deterministic-explicit-detection-v1.md)
+  — precision-first Milestone 7 commitment and preparation rules
 - [Future ideas](product/future-ideas.md) — valuable ideas explicitly outside
   current implementation scope
 

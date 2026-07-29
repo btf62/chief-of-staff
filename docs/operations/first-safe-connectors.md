@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Owner:** Brad
-- **Last updated:** 2026-07-28
+- **Last updated:** 2026-07-29
 
 This document describes the implemented repository, Calendar, Todoist, Jira,
 and Work Gmail boundaries. The synthetic demonstrations, bounded Calendar and
@@ -11,8 +11,17 @@ and one exact-project Jira issue trial are complete. The Work Gmail synthetic
 gate and same-window combined live trial are complete. Gmail processed a
 deterministic subset of 120 from 144 eligible body candidates, reported 24
 omissions and partial coverage, and produced the private review and combined
-briefing. Brad's private evidence review remains before Milestone 6 acceptance.
-The trial is stopped; no repeat live retrieval is authorized.
+briefing. Brad reviewed the evidence and explicitly judged the logic sound,
+completing Milestone 6. Any later live use requires explicit current-task
+authorization within the unchanged connector boundary.
+
+Milestone 7's deterministic-explicit-detection implementation has also passed
+its synthetic evaluation and one five-source live validation. That validation
+selected all 118 eligible Work Gmail body candidates, produced 105 usable
+bodies, and disclosed partial coverage for 13 unavailable or unsupported
+bodies. It created a private review and a 635-word combined briefing without
+external writes. Brad's review of the new evidence remains the Milestone 7
+acceptance gate.
 
 ## Run the safe connector demonstration
 
@@ -285,9 +294,9 @@ and repository inputs required for that combined briefing. Another identical
 bounded attempt needs no separate approval. Healthy credentials do not permit
 broader access, background operation, or an unrelated retrieval.
 
-That authorization ended when the combined briefing was successfully produced
-on 2026-07-28. The paragraph above records the boundary of the completed trial;
-it is not continuing authorization for another retrieval.
+That earlier trial authorization ended when the combined briefing was
+successfully produced on 2026-07-28. Later live use requires explicit
+current-task authorization within the same accepted boundary.
 
 Timeout, network, rate-limit, and provider-5xx failures use a safe
 `Retry-After` delay when available or bounded exponential backoff otherwise.
@@ -422,8 +431,7 @@ operations.
   and commitments are intentionally omitted.
 - Daily Briefing v1 has not been accepted for operational use.
 
-No live connector retrieval may now proceed. Do not refresh or reauthorize a
-grant; repeat Work Gmail, Calendar, Todoist, or Jira access; broaden any
-account, scope, source, endpoint, retrieval cap, or operating mode; or begin
-another connector without new explicit approval from Brad. Personal Gmail and
-Google Drive remain deferred and unauthorized.
+Live connector retrieval requires explicit current-task authorization. Do not
+broaden any account, scope, source, endpoint, retrieval cap, or operating mode,
+and do not begin another connector without new explicit approval from Brad.
+Personal Gmail and Google Drive remain deferred and unauthorized.

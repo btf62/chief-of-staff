@@ -120,6 +120,17 @@ No strict versioning scheme is promised before a distributable product exists.
 
 ### Changed
 
+- Accepted Brad's private Work Gmail evidence review and explicit judgment that
+  the results and logic are sound, completing the Milestone 6 trust gate.
+- Added the supported `make briefing` on-demand command with private artifacts,
+  safe partial-coverage output, failure diagnostics, and duplicate-run locking.
+- Accepted the Milestone 7 deterministic explicit-detection specification and
+  began precision-first deadline, acknowledgment, preparation, evidence-
+  classification, recurrence, and synthetic-evaluation behavior.
+- Completed Milestone 7's deterministic implementation, representative
+  synthetic evaluation, and one five-source live validation. The live run
+  created private mode-`0600` review and briefing artifacts, remained
+  read-only, and left final acceptance pending Brad's evidence review.
 - Replaced the mixed Work Gmail trial query with separate seven-day inbound and
   fourteen-day sent streams, independent 300/200 message caps, combined
   immutable-ID deduplication, a 120-body-candidate cap, and per-stream coverage.

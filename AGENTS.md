@@ -18,11 +18,14 @@ body retrieval, attempted 117 body reads, and produced 106 usable bodies. Gmail
 coverage was partial as required; repository, Calendar, Todoist, and Jira
 coverage was complete. The trial persisted three minimized Gmail conclusions
 and produced a private candidate review plus a 929-word combined briefing.
-Milestone 6's live trial is complete; Brad's human trust review remains before
-acceptance. The repeatable validation authorization ended when the briefing
-was successfully produced. No repeat source retrieval, authorization refresh,
-scope change, or broader live access is now authorized. Personal Gmail and
-Google Drive remain deferred and unauthorized.
+Brad reviewed the private Work Gmail evidence and combined briefing and judged
+the logic sound, completing Milestone 6. Milestone 7 deterministic explicit
+detection has passed its synthetic evaluation and one five-source live
+validation. Its implementation is complete; Brad's review of the new private
+evidence remains the acceptance gate. The temporary live-validation
+authorization ended when that artifact was produced. No repeat source
+retrieval, authorization refresh, scope change, or broader live access is now
+authorized. Personal Gmail and Google Drive remain deferred and unauthorized.
 
 ## Working rules
 

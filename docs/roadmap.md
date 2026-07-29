@@ -1,9 +1,9 @@
 # Daily Briefing v1 Implementation Roadmap
 
 - **Status:** Accepted
-- **Version:** 3
+- **Version:** 4
 - **Owner:** Brad
-- **Last updated:** 2026-07-28
+- **Last updated:** 2026-07-29
 
 This roadmap sequences implementation of the accepted
 [Daily Briefing v1](product/features/daily-briefing-v1.md) design. Milestones 0
@@ -13,8 +13,12 @@ boundary, combined Calendar-and-Todoist trial, and one explicitly approved
 complete-retrieval and normal-workday quality validation. Jira has completed
 its mocked phase, project discovery, and one exact-project live issue trial.
 Milestone 5 now covers only the accepted Todoist and Jira task-system sources
-and is complete. Milestone 6 makes Work Gmail the final MVP input connector;
-Personal Gmail and Google Drive are deferred until after MVP validation.
+and is complete. Milestone 6 completed the Work Gmail input gate and Brad's
+human trust review. Milestone 7 deterministic explicit detection has passed
+its synthetic evaluation and one five-source live validation. Its
+implementation is complete; Brad's review of the private evidence remains the
+acceptance gate. Personal Gmail and Google Drive are deferred until after MVP
+validation.
 Dates and estimates remain intentionally omitted until implementation
 evidence supports them.
 
@@ -235,8 +239,7 @@ approval.
 
 ## Milestone 6 — Work Gmail and the Input-Complete MVP Gate
 
-- **Status:** In progress — combined live trial complete; Brad's human trust
-  review pending
+- **Status:** Complete
 - **Intended user-visible outcome:** Brad can review one input-complete,
   on-demand MVP briefing that adds high-confidence work correspondence,
   explicit requests, and explicit sent commitments to the existing Calendar,
@@ -286,21 +289,18 @@ The connector kept the 120-body privacy boundary. Coverage and the private
 review disclosed aggregate selection and omission counts, no extracted-content
 exhaustion occurred, and no truncated conclusion was used. Structural review
 confirmed authoritative links and no quoted-history markers in minimal
-evidence. Brad's review of the private evidence remains the Milestone 6 trust
-acceptance step.
-
-The repeatable validation authorization ended at success. Another live
-retrieval, authorization refresh, reauthorization, or boundary change requires
-new explicit approval. Personal Gmail, Google Drive, hosted inference, and
+evidence. Brad reviewed the private evidence and combined briefing and
+explicitly judged the results and logic sound. That judgment completes the
+Milestone 6 trust gate. Personal Gmail, Google Drive, hosted inference, and
 another connector remain unauthorized.
 
 ## Milestone 7 — Explicit Commitment and Preparation Detection
 
-- **Status:** Planned
+- **Status:** Implementation complete — Brad review pending
 - **Intended user-visible outcome:** Brad receives conservative, explainable
   source-backed notice of directly stated commitments, preparation needs, and
   people explicitly waiting.
-- **Dependencies:** Milestone 6 and representative synthetic scenarios for
+- **Dependencies:** Completed Milestone 6 and representative synthetic scenarios for
   deterministic classification beyond the high-precision Work Gmail rules
   completed at the input gate.
 - **Principal deliverables:**
@@ -318,6 +318,14 @@ another connector remain unauthorized.
 - **Explicitly excluded work:** Contextual model inference, treating inferred
   claims as explicit, opaque scoring, production model selection, and
   automatic external action.
+
+The synthetic evaluation and automated regression gates pass. A 2026-07-29
+five-source live run generated a private mode-`0600` evidence review and a
+635-word briefing. Work Gmail selected all 118 eligible bounded body
+candidates, produced 105 usable bodies, and disclosed partial coverage for 13
+unavailable or unsupported bodies. Repository, Calendar, Todoist, and Jira
+retrieval completed. The run remained read-only and did not use hosted
+inference. Milestone 7 is not accepted until Brad reviews the private evidence.
 
 ## Milestone 8 — Provider-Neutral Inference
 
