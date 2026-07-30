@@ -39,6 +39,12 @@ actionable recommendations. The review also confirmed source-attributed
 conflicts, link-preserving duplicate suppression, inspectable source-backed
 ranking factors, and the accepted presentation rules. No provider, connector,
 or external-write operation occurred.
+Milestone 10's secure loopback-only Flask and Waitress interface, structured
+briefing presentation, complete local disposition history, recurrence
+projection, and transactional deletion behavior are implemented and have
+passed the synthetic gate. Brad's browser review remains the milestone
+acceptance gate, so Milestone 10 must not be marked accepted and Milestone 11
+must not begin.
 Personal Gmail and Google Drive remain deferred and unauthorized.
 
 ## Working rules
@@ -108,10 +114,10 @@ have been exercised. Do not repeat live retrieval or provider calls, refresh
 authorization, broaden access, repeat Jira discovery, run an unrelated live
 retrieval, enable routine hosted inference, select a model for another
 inference task, or begin another connector without new explicit approval from
-Brad. Milestone 9 is accepted, so explicitly authorized Milestone 10 work may
-proceed after its consequential local-web choice is documented. Satisfy a
-milestone's acceptance gate before beginning dependent work. Record material
-new product or architecture decisions before implementing them.
+Brad. Milestone 10 implementation is complete, but its browser-review
+acceptance gate remains open. Do not begin Milestone 11. Satisfy a milestone's
+acceptance gate before beginning dependent work. Record material new product
+or architecture decisions before implementing them.
 
 ## Validation
 

@@ -50,6 +50,10 @@ or false-positive actionable recommendations; conflicts remain
 source-attributed, duplicate suppression preserves authoritative records and
 links, and ranking factors remain inspectable and source-backed. No provider,
 connector, or external-write operation occurred.
+Milestone 10 now provides the secure loopback-only briefing and correction
+experience with all required local dispositions, inspectable history,
+recurrence controls, and transactional deletion. Its synthetic implementation
+gate is complete; Brad's browser review remains the acceptance gate.
 
 ## Repository map
 
@@ -130,6 +134,19 @@ make briefing
 
 See the [on-demand briefing runbook](docs/operations/runbooks/on-demand-briefing.md)
 for output locations, partial-coverage behavior, and safe failure handling.
+
+## Open the local briefing
+
+After a structured briefing has been persisted, start the local interface:
+
+```text
+chief-of-staff-web --open
+```
+
+It serves only `http://127.0.0.1:8765` by default and runs in the foreground
+until stopped with Control-C. See
+[Local Web Interface Operations](docs/operations/local-web.md) for data
+location, alternate-port behavior, and safe diagnostics.
 
 ## Documentation principles
 

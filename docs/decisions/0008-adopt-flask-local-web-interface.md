@@ -119,9 +119,11 @@ bind to every interface, a LAN address, or a trusted network. Flask debug mode
 and the interactive debugger are disabled, and Flask's development server is
 not a supported normal-operation path.
 
-The application validates exact loopback Host and Origin values for its
+The application validates the exact loopback Host and expected Origin for its
 documented port, trusts no forwarded headers or proxy, uses no CORS, and
-exposes no remote API. Every mutation uses a server-rendered POST form with a
+exposes no remote API. A sandboxed local browser's opaque `null` Origin is
+accepted only when browser-controlled Fetch Metadata identifies a same-origin
+navigation. Every mutation uses a server-rendered POST form with a
 session-bound CSRF token, request-size and field validation, an idempotency or
 version token, and post/redirect/get behavior.
 

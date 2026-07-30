@@ -9,6 +9,16 @@ No strict versioning scheme is promised before a distributable product exists.
 
 ### Added
 
+- A loopback-only Flask and Jinja briefing interface served by Waitress, with
+  strict Host and Origin enforcement, CSRF, request limits, optimistic
+  versions, idempotency, response security headers, and no remote API or
+  browser-held private state.
+- Complete local confirm, correct, dismiss, delegate, reschedule, complete,
+  intentionally abandon, and delete controls with inspectable history,
+  current-state projection, recurrence behavior, and transactional minimal
+  deletion tombstones.
+- Forward-only migration 0010 for structured briefing presentation, complete
+  disposition events, current-state projections, and deletion semantics.
 - ADR-0008, selecting exact-pinned Flask and Waitress releases for a
   server-rendered, loopback-only local web interface within the existing
   Python and SQLite boundary.

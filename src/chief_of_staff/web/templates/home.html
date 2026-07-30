@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Daily Briefing · Chief of Staff{% endblock %}
+{% block content %}
+  {% if status == "deleted" %}
+    <p class="status-message" role="status">
+      The local conclusion was deleted. Its authoritative source was unchanged.
+    </p>
+  {% endif %}
+
+  {% if briefing %}
+    <header class="briefing-header">
+      <p class="eyebrow">Daily Briefing</p>
+      <h1>{{ briefing.run.briefing_date.strftime("%A, %B %-d") }}</h1>
+      <p class="briefing-meta">
+        {{ generation_mode }} briefing
+      </p>
+    </header>
+
+    <section class="chief-note" aria-labelledby="chief-note-heading">
+      <p class="eyebrow">Chief of Staff Note</p>
+      <h2 id="chief-note-heading" class="visually-hidden">Chief of Staff Note</h2>
+      <p>{{ briefing.presentation.chief_of_staff_note }}</p>
+    </section>
+
+    {% for section in sections %}
+      <section class="briefing-section" aria-labelledby="section-{{ loop.index }}">
+        <h2 id="section-{{ loop.index }}">{{ section.name }}</h2>
+        {% if section.summary %}<p class="section-summary">{{ section.summary }}</p>{% endif %}
+        <div class="briefing-items">
+          {% for item in section["items"] %}
+            <article class="briefing-item">
+              <div class="item-labels">
+                <span class="label">{{ item.role }}</span>
+                {% if item.local_state %}
+                  <span class="label label-muted">{{ item.local_state }}</span>
+                {% endif %}
+              </div>
+              <h3>{{ item.headline }}</h3>
+              {% if item.detail %}<p>{{ item.detail }}</p>{% endif %}
+              {% if item.uncertainty %}
+                <p class="uncertainty">{{ item.uncertainty }}</p>
+              {% endif %}
+              {% if item.explanation %}
+                <p class="explanation">{{ item.explanation }}</p>
+              {% endif %}
+              {% if item.sources %}
+                <p class="sources">
+                  {% for source in item.sources %}
+                    {% if source.url %}
+                      <a href="{{ source.url }}" rel="noreferrer noopener">{{ source.name }}</a>
+                    {% else %}
+                      <span>{{ source.name }}</span>
+                    {% endif %}
+                    {% if source.freshness %}<small>fresh {{ source.freshness }}</small>{% endif %}
+                    {% if not loop.last %}<span aria-hidden="true"> · </span>{% endif %}
+                  {% endfor %}
+                </p>
+              {% endif %}
+              {% if item.handle %}
+                <a class="text-link" href="{{ url_for('conclusion_detail', handle=item.handle) }}">
+                  Inspect evidence or change local interpretation
+                </a>
+              {% endif %}
+            </article>
+          {% endfor %}
+        </div>
+      </section>
+    {% endfor %}
+
+    <details class="coverage">
+      <summary>Source coverage and freshness</summary>
+      {% if coverage %}
+        <ul>
+          {% for source in coverage %}
+            <li>
+              <strong>{{ source.source }}</strong> — {{ source.status }}
+              {% if source.freshness %}
+                <small>as of {{ source.freshness }}</small>
+              {% endif %}
+              {% if source.limitation %}
+                <span class="coverage-warning">{{ source.limitation }}</span>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p>Coverage metadata is not available for this briefing.</p>
+      {% endif %}
+    </details>
+  {% else %}
+    <section class="empty-state">
+      <p class="eyebrow">Daily Briefing</p>
+      <h1>No briefing is available yet</h1>
+      <p>
+        Generate an on-demand briefing first, then reopen this local page.
+        No connector was contacted by this interface.
+      </p>
+    </section>
+  {% endif %}
+{% endblock %}

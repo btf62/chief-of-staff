@@ -47,7 +47,15 @@ class Database:
         """Open a configured path, enforce integrity, and migrate it."""
 
         path.parent.mkdir(parents=True, exist_ok=True)
-        connection = sqlite3.connect(path, isolation_level=None)
+        # Waitress owns its single request worker even though the application
+        # opens and closes the connection on the foreground server thread.
+        # Callers must continue to serialize access; the supported web server
+        # enforces one worker thread.
+        connection = sqlite3.connect(
+            path,
+            isolation_level=None,
+            check_same_thread=False,
+        )
         path.chmod(0o600)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON")

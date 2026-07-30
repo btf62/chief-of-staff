@@ -17,6 +17,9 @@ dependencies = [
   "waitress==3.0.2",
 ]
 
+[project.scripts]
+chief-of-staff-web = "chief_of_staff.web.server:main"
+
 [dependency-groups]
 dev = [
   "mypy==2.3.0",
@@ -28,7 +31,12 @@ dev = [
 where = ["src"]
 
 [tool.setuptools.package-data]
-chief_of_staff = ["py.typed", "persistence/migrations/*.sql"]
+chief_of_staff = [
+  "py.typed",
+  "persistence/migrations/*.sql",
+  "web/static/*.css",
+  "web/templates/*.html",
+]
 
 [tool.ruff]
 target-version = "py314"

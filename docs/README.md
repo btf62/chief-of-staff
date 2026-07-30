@@ -43,6 +43,10 @@ false-positive actionable recommendations. Conflict attribution, duplicate
 suppression, authoritative links, source-backed ranking factors, and all
 accepted presentation rules passed without a provider, connector, or
 external-write operation.
+Milestone 10's secure loopback-only reading and local correction experience is
+implemented and has passed its synthetic gate. Brad's browser review remains
+the acceptance gate; Milestone 10 is not yet accepted and Milestone 11 has not
+begun.
 Design acceptance authorizes implementation within the accepted scope; it does
 not mean the complete Daily Briefing has passed operational acceptance.
 
@@ -102,6 +106,8 @@ not mean the complete Daily Briefing has passed operational acceptance.
   documentation
 - [Local state operations](operations/local-state.md) — SQLite migration,
   inspection, deletion, reset, and recurrence behavior
+- [Local web interface operations](operations/local-web.md) — loopback
+  startup, shutdown, data location, diagnostics, and security controls
 - [Deterministic briefing operations](operations/deterministic-briefing.md) —
   synthetic invocation, pipeline behavior, validation, and limitations
 - [First safe connector operations](operations/first-safe-connectors.md) —

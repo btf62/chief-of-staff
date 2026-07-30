@@ -1,7 +1,7 @@
 # Architecture Overview
 
 - **Status:** Accepted
-- **Version:** 9
+- **Version:** 10
 - **Owner:** Brad
 - **Last updated:** 2026-07-30
 
@@ -569,6 +569,16 @@ presentation refinements do not reopen the accepted trust gate.
   backups, prompts, fixtures, or briefing output.
 - Logs exclude full prompts, responses, evidence excerpts, source bodies,
   credentials, authorization headers, and hidden model reasoning.
+- The local interface uses Flask and Jinja in the existing process and
+  Waitress bound only to `127.0.0.1`; it rejects unexpected Host, Origin,
+  remote-address, and forwarded-header values. A sandboxed browser's opaque
+  `null` Origin is accepted only with same-origin navigation Fetch Metadata;
+  all other session and request protections remain mandatory.
+- Local mutations use POST, session-bound CSRF, request limits, optimistic
+  versions, idempotency, server validation, and post/redirect/get.
+- Browser responses use local-only resource policy, no-store caching, frame
+  denial, MIME sniffing protection, no-referrer behavior, and restrictive
+  permissions. No private record is stored in browser storage.
 
 The accepted persistence, retention, inspection, deletion, encryption, backup,
 and portability boundaries are defined in
@@ -579,6 +589,9 @@ reauthorization boundaries are defined in
 The accepted inference, provider, egress, sensitivity, structured-output,
 versioning, logging, fallback, and evaluation boundaries are defined in
 [ADR-0006](../decisions/0006-adopt-provider-neutral-inference-with-openai.md).
+The accepted local web framework, serving, cookie, and browser-security
+boundary is defined in
+[ADR-0008](../decisions/0008-adopt-flask-local-web-interface.md).
 
 ### Remaining decisions and investigation
 

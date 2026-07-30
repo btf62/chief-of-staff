@@ -2,7 +2,7 @@
 
 - **Status:** Draft
 - **Owner:** TBD
-- **Last updated:** 2026-07-25
+- **Last updated:** 2026-07-30
 
 This directory is the authoritative location for operational policies and
 deployment documentation. The deployment model is now established; operational
@@ -31,6 +31,8 @@ because the system is not deployed or approved for operational use.
 - [Local state operations](local-state.md) — SQLite migrations, inspection,
   recurrence projection, deletion, retention pruning, reset, and current
   limitations
+- [Local web interface operations](local-web.md) — loopback launch, stop,
+  reopen, data location, startup diagnostics, and security boundary
 - [Deterministic briefing operations](deterministic-briefing.md) — synthetic
   invocation, source coverage, composition, validation, and current
   limitations

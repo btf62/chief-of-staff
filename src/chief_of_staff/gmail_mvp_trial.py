@@ -389,6 +389,16 @@ class GmailMvpTrialRunner:
                 }
             },
         )
+        from chief_of_staff.web import presentation_from_plan
+
+        self.state_store.save_briefing_presentation(
+            presentation_from_plan(
+                result.plan,
+                briefing_run_id=run_id,
+                created_at=completed_at,
+                state_store=self.state_store,
+            )
+        )
         displayed_gmail_source_ids = {
             source.source_record_id
             for section in result.plan.sections

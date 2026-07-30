@@ -142,7 +142,7 @@ def test_fresh_database_applies_all_migrations_and_enforces_foreign_keys(
     with Database.open(tmp_path / "state.sqlite3") as database:
         inspection = StateStore(database).inspect_state()
 
-        assert inspection.schema_versions == (1, 2, 3, 4, 5, 6, 7, 8, 9)
+        assert inspection.schema_versions == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
         assert database.connection.execute("PRAGMA foreign_keys").fetchone()[0] == 1
 
 
@@ -170,7 +170,109 @@ def test_database_upgrades_from_first_migration_and_is_idempotent(
             "SELECT version FROM schema_migrations ORDER BY version"
         )
     ]
-    assert upgraded_versions == [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    assert upgraded_versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    connection.close()
+
+
+@pytest.mark.parametrize("existing_version", range(1, 10))
+def test_database_upgrades_from_every_supported_existing_schema(
+    tmp_path: Path,
+    existing_version: int,
+) -> None:
+    path = tmp_path / f"upgrade-from-{existing_version}.sqlite3"
+    connection = sqlite3.connect(path, isolation_level=None)
+    connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys = ON")
+    migrations = load_migrations()
+
+    apply_migrations(connection, migrations[:existing_version])
+    apply_migrations(connection, migrations)
+
+    versions = tuple(
+        int(row["version"])
+        for row in connection.execute(
+            "SELECT version FROM schema_migrations ORDER BY version"
+        )
+    )
+    assert versions == tuple(range(1, 11))
+    assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
+    connection.close()
+
+
+def test_migration_preserves_legacy_disposition_history_and_projection(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "legacy-history.sqlite3"
+    connection = sqlite3.connect(path, isolation_level=None)
+    connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys = ON")
+    migrations = load_migrations()
+    apply_migrations(connection, migrations[:9])
+    connection.execute(
+        """
+        INSERT INTO briefing_runs(
+            id, briefing_date, timezone, invocation_mode, started_at, status
+        )
+        VALUES ('legacy-briefing', '2026-07-25', 'America/New_York',
+                'test', ?, 'succeeded')
+        """,
+        (NOW.isoformat(),),
+    )
+    connection.execute(
+        """
+        INSERT INTO source_evidence(
+            id, source, source_record_id, excerpt, evidence_fingerprint,
+            retrieved_at
+        )
+        VALUES ('legacy-evidence', 'synthetic_tasks', 'legacy-task',
+                'Legacy minimized evidence.', 'legacy-fingerprint', ?)
+        """,
+        (NOW.isoformat(),),
+    )
+    connection.execute(
+        """
+        INSERT INTO conclusions(
+            id, kind, classification, statement, explanation, confidence,
+            evidence_fingerprint, processing_version, created_at
+        )
+        VALUES ('legacy-conclusion', 'commitment', 'explicit',
+                'Legacy statement.', 'Legacy explanation.', 1.0,
+                'legacy-fingerprint', 'legacy-rules-v1', ?)
+        """,
+        (NOW.isoformat(),),
+    )
+    connection.execute(
+        """
+        INSERT INTO conclusion_evidence(conclusion_id, evidence_id, ordinal)
+        VALUES ('legacy-conclusion', 'legacy-evidence', 0)
+        """
+    )
+    connection.execute(
+        """
+        INSERT INTO disposition_events(
+            id, conclusion_id, briefing_run_id, disposition,
+            replacement_text, note, created_at
+        )
+        VALUES ('legacy-event-0001', 'legacy-conclusion', 'legacy-briefing',
+                'corrected', 'Corrected legacy statement.',
+                'Legacy explanation.', ?)
+        """,
+        ((NOW + timedelta(minutes=1)).isoformat(),),
+    )
+
+    apply_migrations(connection, migrations)
+    store = StateStore(Database(connection))
+    state = store.inspect_conclusion("legacy-conclusion")
+
+    assert state is not None
+    assert state.projection is not None
+    assert state.projection.current_state == "corrected"
+    assert state.projection.display_statement == "Corrected legacy statement."
+    assert state.projection.version == 1
+    assert state.history[0].previous_state == "active"
+    assert state.history[0].new_state == "corrected"
+    assert state.history[0].evidence_fingerprint == "legacy-fingerprint"
+    assert state.history[0].processing_version == "legacy-rules-v1"
     connection.close()
 
 
@@ -651,7 +753,18 @@ def test_reset_removes_product_state_but_preserves_migrations(tmp_path: Path) ->
 
         inspection = store.reset()
 
-        assert inspection.schema_versions == (1, 2, 3, 4, 5, 6, 7, 8, 9)
+        assert inspection.schema_versions == (
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+        )
         assert inspection.connector_runs == 0
         assert inspection.briefing_runs == 0
         assert inspection.source_evidence == 0

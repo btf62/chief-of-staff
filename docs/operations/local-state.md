@@ -2,7 +2,7 @@
 
 - **Status:** Draft
 - **Owner:** Brad
-- **Last updated:** 2026-07-28
+- **Last updated:** 2026-07-30
 
 This document describes the implemented local-state foundation and minimized
 task-source extensions. It operates within
@@ -12,10 +12,11 @@ product memory.
 
 ## Storage boundary
 
-Chief of Staff uses one application-owned SQLite database at the explicit path
-provided by `CHIEF_OF_STAFF_DATABASE_PATH`. The application does not select a
-machine-specific default. Database files and common SQLite suffixes are ignored
-by Git.
+Chief of Staff uses one application-owned SQLite database. Lower-level state
+operations require an explicit path; supported application commands use the
+repository-local, ignored `.local/state.sqlite3` path by default and accept an
+explicit override where documented. Database files and common SQLite suffixes
+are ignored by Git.
 
 Opening the database:
 
@@ -41,6 +42,10 @@ The implemented schema stores:
 - Explicit or inferred conclusions with processing versions.
 - Ordered conclusion-to-evidence links.
 - Append-oriented correction and disposition events.
+- Derived current-state projections with optimistic version protection.
+- Structured local briefing presentations and minimized source links.
+- Minimal conclusion-deletion tombstones containing only an evidence
+  fingerprint, processing version, opaque idempotency key, and deletion time.
 - Selected normalized Todoist task facts and only their referenced project,
   section, and label context.
 - Selected normalized Jira issue facts, labels, and issue-link references.
@@ -70,7 +75,9 @@ Recurrence projection uses the conclusion's material-evidence fingerprint:
 - Dismissed, delegated, rescheduled, completed, or intentionally abandoned
   evidence is suppressed while the fingerprint remains unchanged.
 - Materially changed evidence receives a new fingerprint and may be
-  reconsidered.
+  reconsidered with an explanation that the material source evidence changed.
+- A locally deleted conclusion remains suppressed while its minimal tombstone
+  fingerprint is unchanged.
 
 This is an explicit local overlay. It never changes an external source.
 
@@ -90,13 +97,21 @@ Deleting old run metadata does not delete still-useful correction evidence.
 The relevant connector or briefing reference becomes `NULL`, while the
 minimal provenance and recurrence state remain until explicitly deleted.
 
-No tombstone remains after an explicit conclusion or evidence deletion.
+The Milestone 10 local-deletion transaction removes the conclusion statement,
+dependent presentation item, disposition history, current-state projection,
+and evidence payload when that evidence is not required by another
+conclusion. It retains only a minimal non-sensitive fingerprint tombstone to
+prevent unchanged recurrence. Shared authoritative evidence remains until it
+is no longer referenced. A failed transaction rolls back the tombstone and
+all deletion work together.
+
 Deleting local state does not modify an authoritative external system.
 
 ## Current limitations
 
-- Inspection and deletion are Python APIs exercised through synthetic tests;
-  there is no user interface or operator CLI yet.
+- Inspection and conclusion correction or deletion are available through the
+  loopback-only local web interface. Lower-level retention and reset
+  operations remain explicit Python APIs.
 - Retention pruning requires an explicit caller and is not scheduled.
 - Application-managed backup is disabled and undocumented by design.
 - The repository contains no runtime database or production fixture.

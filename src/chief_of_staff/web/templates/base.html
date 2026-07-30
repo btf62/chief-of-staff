@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Chief of Staff{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="wordmark" href="{{ url_for('home') }}">Chief of Staff</a>
+      <span class="local-boundary">Private · Local only</span>
+    </header>
+    <main id="main-content" tabindex="-1">
+      {% block content %}{% endblock %}
+    </main>
+    <footer>
+      External sources remain authoritative. Local actions never modify them.
+    </footer>
+  </body>
+</html>

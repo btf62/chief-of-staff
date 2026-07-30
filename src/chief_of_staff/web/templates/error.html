@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Request not completed · Chief of Staff{% endblock %}
+{% block content %}
+  <section class="empty-state">
+    <p class="eyebrow">Local request not completed</p>
+    <h1>{{ message }}</h1>
+    <p>No external source was modified.</p>
+    <a class="text-link" href="{{ url_for('home') }}">Return to the briefing</a>
+  </section>
+{% endblock %}

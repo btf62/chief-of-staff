@@ -1,9 +1,9 @@
 # Feature: Daily Briefing v1
 
 - **Status:** Accepted
-- **Version:** 10
+- **Version:** 11
 - **Owner:** Brad
-- **Last updated:** 2026-07-28
+- **Last updated:** 2026-07-30
 
 ## Summary
 
@@ -509,9 +509,11 @@ place private source content in the repository.
 
 ## Local State and Correction Loop
 
-Daily Briefing v1 must provide a way for Brad to inspect, correct, and
-disposition inferred items. The exact interface is deferred, but the behavior
-is required for v1.
+Daily Briefing v1 provides a local-only, server-rendered web interface where
+Brad can inspect, correct, disposition, or delete supported local
+conclusions. [ADR-0008](../../decisions/0008-adopt-flask-local-web-interface.md)
+defines the framework and serving boundary; the behavior below remains the
+product contract.
 
 Local state must support at least these dispositions:
 

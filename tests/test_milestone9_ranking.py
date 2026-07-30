@@ -50,7 +50,7 @@ def test_representative_corpus_passes_without_false_positive_actions() -> None:
     assert report.unsupported_claims == 0
 
 
-def test_milestone_9_spec_is_accepted_and_human_review_remains_the_gate() -> None:
+def test_milestone_9_spec_and_human_review_are_accepted() -> None:
     root = Path(__file__).parents[1]
     specification = (
         root / "docs/product/features/ranking-and-briefing-composition-v1.md"
@@ -62,8 +62,9 @@ def test_milestone_9_spec_is_accepted_and_human_review_remains_the_gate() -> Non
         "## Milestone 9 — Ranking and Briefing Composition",
         maxsplit=1,
     )[1].split("## Milestone 10", maxsplit=1)[0]
-    assert "Implementation complete — Brad review pending" in milestone
-    assert "Brad's review" in milestone
+    assert "**Status:** Complete" in milestone
+    assert "explicitly accepted" in milestone
+    assert "zero unsupported claims" in milestone
 
 
 def test_every_applied_ranking_factor_is_inspectable_and_source_backed() -> None:

@@ -69,6 +69,7 @@ class DispositionKind(StrEnum):
     RESCHEDULED = "rescheduled"
     COMPLETED = "completed"
     INTENTIONALLY_ABANDONED = "intentionally_abandoned"
+    DELETED = "deleted"
 
 
 class RecurrenceAction(StrEnum):
@@ -180,6 +181,16 @@ class DispositionEvent:
     briefing_run_id: str | None = None
     replacement_text: str | None = None
     note: str | None = None
+    previous_state: str = "active"
+    new_state: str | None = None
+    delegate_description: str | None = None
+    follow_up_at: datetime | None = None
+    rescheduled_for: datetime | None = None
+    evidence_fingerprint: str = ""
+    processing_version: str = ""
+    expected_version: int = 0
+    resulting_version: int = 1
+    idempotency_key: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -189,6 +200,7 @@ class ConclusionState:
     conclusion: Conclusion
     evidence: tuple[SourceEvidence, ...]
     history: tuple[DispositionEvent, ...]
+    projection: ConclusionProjection | None = None
 
     @property
     def latest_disposition(self) -> DispositionEvent | None:
@@ -205,6 +217,94 @@ class RecurrenceDecision:
     prior_conclusion_id: str | None = None
     replacement_text: str | None = None
     disposition: DispositionKind | None = None
+    material_evidence_changed: bool = False
+    reappearance_explanation: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ConclusionProjection:
+    """Derived current local interpretation for one conclusion."""
+
+    conclusion_id: str
+    current_state: str
+    display_statement: str
+    version: int
+    updated_at: datetime
+    last_event_id: str | None = None
+    delegate_description: str | None = None
+    follow_up_at: datetime | None = None
+    rescheduled_for: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class DispositionResult:
+    """Idempotent result of applying one local disposition."""
+
+    applied: bool
+    projection: ConclusionProjection
+    event: DispositionEvent | None
+
+
+@dataclass(frozen=True, slots=True)
+class BriefingPresentationSource:
+    """Minimized source link shown with one briefing item."""
+
+    source: str
+    display_url: str | None = None
+    freshness_at: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class BriefingPresentationItem:
+    """Persistable presentation item without raw source payloads."""
+
+    id: str
+    headline: str
+    detail: str
+    content_kind: str
+    sources: tuple[BriefingPresentationSource, ...]
+    conclusion_id: str | None = None
+    uncertainty: str | None = None
+    explanation: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class BriefingPresentationSection:
+    """One persisted canonical section."""
+
+    name: str
+    items: tuple[BriefingPresentationItem, ...]
+    summary: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class BriefingPresentation:
+    """One safe, structured local briefing presentation."""
+
+    briefing_run_id: str
+    generation_mode: str
+    chief_of_staff_note: str
+    created_at: datetime
+    sections: tuple[BriefingPresentationSection, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class BriefingCoverage:
+    """One source-coverage row associated with a briefing."""
+
+    source: str
+    coverage_status: CoverageStatus
+    freshness_at: datetime | None
+    error_category: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class BriefingPresentationState:
+    """Presentation plus run metadata, coverage, and conclusion projections."""
+
+    run: BriefingRun
+    presentation: BriefingPresentation
+    coverage: tuple[BriefingCoverage, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -228,6 +328,10 @@ class StateInspection:
     normalized_gmail_messages: int
     connector_instances: int
     inference_audits: int
+    conclusion_current_states: int
+    conclusion_tombstones: int
+    briefing_presentations: int
+    briefing_items: int
 
 
 @dataclass(frozen=True, slots=True)

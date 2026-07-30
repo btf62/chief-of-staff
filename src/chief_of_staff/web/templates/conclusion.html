@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}Inspect conclusion · Chief of Staff{% endblock %}
+{% block content %}
+  <nav aria-label="Breadcrumb">
+    <a class="text-link" href="{{ url_for('home') }}">← Back to briefing</a>
+  </nav>
+
+  {% if status == "updated" %}
+    <p class="status-message" role="status">Local interpretation updated.</p>
+  {% elif status == "unchanged" %}
+    <p class="status-message" role="status">That local action was already applied.</p>
+  {% endif %}
+
+  <header class="detail-header">
+    <div class="item-labels">
+      <span class="label">{{ conclusion.role }}</span>
+      <span class="label label-muted">{{ conclusion.state }}</span>
+      {% if conclusion.uncertainty %}<span class="label label-muted">{{ conclusion.uncertainty }}</span>{% endif %}
+    </div>
+    <h1>{{ conclusion.statement }}</h1>
+    <p>{{ conclusion.explanation }}</p>
+    {% if conclusion.delegate_description %}
+      <p><strong>Local delegate:</strong> {{ conclusion.delegate_description }}</p>
+    {% endif %}
+    {% if conclusion.follow_up_at %}
+      <p><strong>Local follow-up:</strong> {{ conclusion.follow_up_at }}</p>
+    {% endif %}
+    {% if conclusion.rescheduled_for %}
+      <p><strong>Locally rescheduled:</strong> {{ conclusion.rescheduled_for }}</p>
+    {% endif %}
+  </header>
+
+  <details class="evidence-panel">
+    <summary>Why this appeared and supporting evidence</summary>
+    <dl class="metadata">
+      <div><dt>Role</dt><dd>{{ conclusion.role }}</dd></div>
+      <div><dt>Evidence version</dt><dd>{{ conclusion.evidence_version }}</dd></div>
+      <div><dt>Processing version</dt><dd>{{ conclusion.processing_version }}</dd></div>
+    </dl>
+    {% for evidence in conclusion.evidence %}
+      <article class="evidence-item">
+        <h2>{{ evidence.source }}</h2>
+        {% if evidence.excerpt %}<p>{{ evidence.excerpt }}</p>{% endif %}
+        <p class="sources">
+          {% if evidence.url %}
+            <a href="{{ evidence.url }}" rel="noreferrer noopener">Open authoritative source</a>
+          {% endif %}
+          {% if evidence.freshness %}<small>Fresh {{ evidence.freshness }}</small>{% endif %}
+          <small>Evidence version {{ evidence.evidence_version }}</small>
+        </p>
+      </article>
+    {% else %}
+      <p>The minimized source evidence has been removed.</p>
+    {% endfor %}
+  </details>
+
+  <section class="actions" aria-labelledby="actions-heading">
+    <p class="eyebrow">Local interpretation only</p>
+    <h2 id="actions-heading">Correct or disposition this conclusion</h2>
+    <p class="boundary-notice">
+      These controls change only Chief of Staff’s local interpretation. They do
+      not modify Gmail, Calendar, Todoist, Jira, or any other source. The
+      authoritative source remains unchanged.
+    </p>
+
+    {% macro hidden_fields(action) -%}
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="version" value="{{ conclusion.version }}">
+      <input type="hidden" name="submission_token" value="{{ form_tokens[action] }}">
+    {%- endmacro %}
+
+    <div class="action-grid">
+      <details>
+        <summary>Confirm</summary>
+        <form method="post" action="{{ url_for('apply_conclusion_action', handle=handle, action='confirm') }}">
+          {{ hidden_fields("confirm") }}
+          <label>Optional note<textarea name="note" maxlength="1000"></textarea></label>
+          <button type="submit">Confirm locally</button>
+        </form>
+      </details>
+
+      <details>
+        <summary>Correct</summary>
+        <form method="post" action="{{ url_for('apply_conclusion_action', handle=handle, action='correct') }}">
+          {{ hidden_fields("correct") }}
+          <label>Corrected interpretation<textarea name="replacement_text" maxlength="1000" required></textarea></label>
+          <label>Optional explanation<textarea name="explanation" maxlength="1000"></textarea></label>
+          <button type="submit">Use corrected interpretation</button>
+        </form>
+      </details>
+
+      <details>
+        <summary>Dismiss</summary>
+        <form method="post" action="{{ url_for('apply_conclusion_action', handle=handle, action='dismiss') }}">
+          {{ hidden_fields("dismiss") }}
+          <label>Optional reason<textarea name="explanation" maxlength="1000"></textarea></label>
+          <button type="submit">Dismiss locally</button>
+        </form>
+      </details>
+
+      <details>
+        <summary>Delegate</summary>
+        <form method="post" action="{{ url_for('apply_conclusion_action', handle=handle, action='delegate') }}">
+          {{ hidden_fields("delegate") }}
+          <label>Local delegate description<input name="delegate_description" maxlength="300" required></label>
+          <label>Optional follow-up date<input type="date" name="follow_up_date"></label>
+          <label>Optional explanation<textarea name="explanation" maxlength="1000"></textarea></label>
+          <button type="submit">Record local delegation</button>
+        </form>
+      </details>
+
+      <details>
+        <summary>Reschedule</summary>
+        <form method="post" action="{{ url_for('apply_conclusion_action', handle=handle, action='reschedule') }}">
+          {{ hidden_fields("reschedule") }}
+          <label>Local date and time<input type="datetime-local" name="rescheduled_for" required></label>
+          <label>Optional explanation<textarea name="explanation" maxlength="1000"></textarea></label>
+          <button type="submit">Reschedule locally</button>
+        </form>
+      </details>
+
+      <details>
+        <summary>Complete</summary>
+        <form method="post" action="{{ url_for('apply_conclusion_action', handle=handle, action='complete') }}">
+          {{ hidden_fields("complete") }}
+          <label>Optional note<textarea name="note" maxlength="1000"></textarea></label>
+          <button type="submit">Mark complete locally</button>
+        </form>
+      </details>
+
+      <details>
+        <summary>Intentionally abandon</summary>
+        <form method="post" action="{{ url_for('apply_conclusion_action', handle=handle, action='abandon') }}">
+          {{ hidden_fields("abandon") }}
+          <label>Optional reason<textarea name="explanation" maxlength="1000"></textarea></label>
+          <button type="submit">Abandon locally</button>
+        </form>
+      </details>
+
+      <details class="danger-zone">
+        <summary>Delete local conclusion</summary>
+        <form method="post" action="{{ url_for('apply_conclusion_action', handle=handle, action='delete') }}">
+          {{ hidden_fields("delete") }}
+          <p>
+            This removes the local statement, evidence payload, correction
+            history, and dependent briefing item. A minimal non-sensitive
+            evidence fingerprint remains so materially unchanged evidence
+            stays suppressed. External source records are not deleted.
+          </p>
+          <label class="checkbox">
+            <input type="checkbox" name="delete_confirmation" value="delete-local-only" required>
+            I understand this deletes local Chief of Staff data only.
+          </label>
+          <button class="danger-button" type="submit">Delete local conclusion</button>
+        </form>
+      </details>
+    </div>
+  </section>
+
+  <section class="history" aria-labelledby="history-heading">
+    <h2 id="history-heading">Local history</h2>
+    {% for event in conclusion.history %}
+      <article>
+        <h3>{{ event.action }}</h3>
+        <p>{{ event.previous_state }} → {{ event.new_state }}</p>
+        {% if event.explanation %}<p>{{ event.explanation }}</p>{% endif %}
+        {% if event.replacement_text %}<p><strong>Corrected to:</strong> {{ event.replacement_text }}</p>{% endif %}
+        {% if event.delegate_description %}<p><strong>Delegate:</strong> {{ event.delegate_description }}</p>{% endif %}
+        {% if event.follow_up_at %}<p><strong>Follow-up:</strong> {{ event.follow_up_at }}</p>{% endif %}
+        {% if event.rescheduled_for %}<p><strong>Rescheduled:</strong> {{ event.rescheduled_for }}</p>{% endif %}
+        <p class="history-meta">
+          {{ event.created_at }} · Originating briefing {{ event.briefing_date }}
+          · Evidence {{ event.evidence_version }} · {{ event.processing_version }}
+        </p>
+      </article>
+    {% else %}
+      <p>No local corrections or dispositions have been recorded.</p>
+    {% endfor %}
+  </section>
+{% endblock %}

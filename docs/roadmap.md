@@ -1,7 +1,7 @@
 # Daily Briefing v1 Implementation Roadmap
 
 - **Status:** Accepted
-- **Version:** 10
+- **Version:** 11
 - **Owner:** Brad
 - **Last updated:** 2026-07-30
 
@@ -453,7 +453,7 @@ this trust gate. No model is selected for `priority_comparison` or
 
 ## Milestone 10 — Local Web Experience and Correction Loop
 
-- **Status:** Planned
+- **Status:** Implementation complete — Brad review pending
 - **Intended user-visible outcome:** Brad can read the briefing, understand why
   each conclusion appeared, and correct or disposition local conclusions so
   materially unchanged mistakes do not recur.
@@ -474,6 +474,28 @@ this trust gate. No model is selected for `priority_comparison` or
 - **Explicitly excluded work:** Remote or public exposure, external-source
   mutation, mobile or multi-user interfaces, dashboards, scheduled delivery,
   and framework-driven architecture expansion.
+
+The Flask and Jinja interface is implemented over the existing application and
+SQLite boundary, with Waitress bound only to `127.0.0.1`. It presents the
+latest structured briefing, minimized evidence, explanations, uncertainty,
+source links, freshness, and coverage without exposing database identifiers or
+raw private payloads. Every mutation is a local-only POST protected by exact
+Host and strict Origin validation, session-bound CSRF, request limits,
+optimistic versioning, idempotency, and post/redirect/get.
+
+All required dispositions are implemented with complete timestamped history
+and a derived current-state projection. Unchanged dismissed, corrected,
+delegated, rescheduled, completed, or intentionally abandoned evidence follows
+the local disposition; materially changed evidence may reappear with an
+explanation. Transactional deletion removes conclusion payload, dependent
+presentation and unshared evidence, and history while retaining only the
+minimal fingerprint tombstone needed to prevent unchanged recurrence.
+
+The synthetic UI and security matrix covers normal, partial, unavailable,
+inferred, explicit, conflicting, corrected, dismissed, completed,
+changed-evidence, empty, long-content, and malicious-text states without live
+retrieval, provider calls, or external writes. Brad's browser review of the
+private Milestone 10 artifacts remains the acceptance gate.
 
 ## Milestone 11 — Acceptance and Operational Hardening
 

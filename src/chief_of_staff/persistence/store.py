@@ -4,15 +4,24 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from chief_of_staff.domain.models import (
     AuthorizationStatus,
+    BriefingCoverage,
+    BriefingPresentation,
+    BriefingPresentationItem,
+    BriefingPresentationSection,
+    BriefingPresentationSource,
+    BriefingPresentationState,
     BriefingRun,
+    BriefingStatus,
     Classification,
     Conclusion,
     ConclusionKind,
+    ConclusionProjection,
     ConclusionState,
     ConnectorAuthorizationMetadata,
     ConnectorDomain,
@@ -23,6 +32,7 @@ from chief_of_staff.domain.models import (
     CredentialHealth,
     DispositionEvent,
     DispositionKind,
+    DispositionResult,
     NormalizedGmailMessage,
     NormalizedJiraIssue,
     NormalizedSourceTask,
@@ -42,8 +52,17 @@ _SUPPRESSING_DISPOSITIONS = frozenset(
         DispositionKind.RESCHEDULED,
         DispositionKind.COMPLETED,
         DispositionKind.INTENTIONALLY_ABANDONED,
+        DispositionKind.DELETED,
     }
 )
+
+
+class StaleConclusionVersionError(RuntimeError):
+    """Raised when a correction form targets an outdated local projection."""
+
+
+class InvalidDispositionError(ValueError):
+    """Raised when disposition fields do not satisfy the action contract."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -1365,39 +1384,289 @@ class StateStore:
                     for ordinal, evidence_id in enumerate(conclusion.evidence_ids)
                 ),
             )
+            connection.execute(
+                """
+                INSERT INTO conclusion_current_state(
+                    conclusion_id,
+                    current_state,
+                    display_statement,
+                    version,
+                    updated_at
+                )
+                VALUES (?, 'active', ?, 0, ?)
+                """,
+                (
+                    conclusion.id,
+                    conclusion.statement,
+                    _serialize_datetime(conclusion.created_at),
+                ),
+            )
 
     def append_disposition(self, event: DispositionEvent) -> None:
         """Append a user-controlled disposition without replacing history."""
 
+        projection = self.get_conclusion_projection(event.conclusion_id)
+        if projection is None:
+            raise ValueError("conclusion is missing")
+        self.apply_disposition(
+            conclusion_id=event.conclusion_id,
+            disposition=event.disposition,
+            expected_version=projection.version,
+            idempotency_key=f"legacy-api:{event.id}",
+            created_at=event.created_at,
+            briefing_run_id=event.briefing_run_id,
+            replacement_text=event.replacement_text,
+            explanation=event.note,
+            delegate_description=event.delegate_description,
+            follow_up_at=event.follow_up_at,
+            rescheduled_for=event.rescheduled_for,
+            event_id=event.id,
+            allow_legacy_missing_fields=True,
+        )
+
+    def get_conclusion_projection(
+        self,
+        conclusion_id: str,
+    ) -> ConclusionProjection | None:
+        """Return the derived current local state for one conclusion."""
+
+        row = self.database.connection.execute(
+            """
+            SELECT *
+            FROM conclusion_current_state
+            WHERE conclusion_id = ?
+            """,
+            (conclusion_id,),
+        ).fetchone()
+        return None if row is None else _conclusion_projection_from_row(row)
+
+    def apply_disposition(
+        self,
+        *,
+        conclusion_id: str,
+        disposition: DispositionKind,
+        expected_version: int,
+        idempotency_key: str,
+        created_at: datetime,
+        briefing_run_id: str | None = None,
+        replacement_text: str | None = None,
+        explanation: str | None = None,
+        delegate_description: str | None = None,
+        follow_up_at: datetime | None = None,
+        rescheduled_for: datetime | None = None,
+        event_id: str | None = None,
+        allow_legacy_missing_fields: bool = False,
+    ) -> DispositionResult:
+        """Apply one validated local-only disposition transactionally."""
+
+        if disposition is DispositionKind.DELETED:
+            raise InvalidDispositionError(
+                "deletion uses the dedicated local-deletion operation"
+            )
+        _require_aware(created_at)
+        if follow_up_at is not None:
+            _require_aware(follow_up_at)
+        if rescheduled_for is not None:
+            _require_aware(rescheduled_for)
+        normalized_key = idempotency_key.strip()
+        if len(normalized_key) < 16 or len(normalized_key) > 200:
+            raise InvalidDispositionError("idempotency key is invalid")
+        normalized_replacement = _bounded_optional_text(
+            replacement_text,
+            field="corrected interpretation",
+            maximum=1000,
+        )
+        normalized_explanation = _bounded_optional_text(
+            explanation,
+            field="explanation",
+            maximum=1000,
+        )
+        normalized_delegate = _bounded_optional_text(
+            delegate_description,
+            field="delegate description",
+            maximum=300,
+        )
+        if disposition is DispositionKind.CORRECTED and not normalized_replacement:
+            raise InvalidDispositionError(
+                "a corrected disposition requires corrected interpretation"
+            )
         if (
-            event.disposition is DispositionKind.CORRECTED
-            and not event.replacement_text
+            disposition is DispositionKind.DELEGATED
+            and not normalized_delegate
+            and not allow_legacy_missing_fields
         ):
-            raise ValueError("a corrected disposition requires replacement text")
+            raise InvalidDispositionError(
+                "a delegated disposition requires a delegate description"
+            )
+        if (
+            disposition is DispositionKind.RESCHEDULED
+            and rescheduled_for is None
+            and not allow_legacy_missing_fields
+        ):
+            raise InvalidDispositionError(
+                "a rescheduled disposition requires a local date and time"
+            )
 
         with self.database.transaction() as connection:
+            existing_row = connection.execute(
+                """
+                SELECT *
+                FROM disposition_events
+                WHERE idempotency_key = ?
+                """,
+                (normalized_key,),
+            ).fetchone()
+            if existing_row is not None:
+                if (
+                    str(existing_row["conclusion_id"]) != conclusion_id
+                    or str(existing_row["disposition"]) != disposition.value
+                ):
+                    raise InvalidDispositionError(
+                        "idempotency key was already used for another action"
+                    )
+                projection_row = connection.execute(
+                    """
+                    SELECT *
+                    FROM conclusion_current_state
+                    WHERE conclusion_id = ?
+                    """,
+                    (conclusion_id,),
+                ).fetchone()
+                if projection_row is None:
+                    raise RuntimeError("conclusion projection is missing")
+                return DispositionResult(
+                    applied=False,
+                    projection=_conclusion_projection_from_row(projection_row),
+                    event=_disposition_from_row(existing_row),
+                )
+
+            state_row = connection.execute(
+                """
+                SELECT
+                    state.*,
+                    conclusion.evidence_fingerprint,
+                    conclusion.processing_version
+                FROM conclusion_current_state AS state
+                JOIN conclusions AS conclusion
+                    ON conclusion.id = state.conclusion_id
+                WHERE state.conclusion_id = ?
+                """,
+                (conclusion_id,),
+            ).fetchone()
+            if state_row is None:
+                raise KeyError("conclusion is missing")
+            current_version = int(state_row["version"])
+            if expected_version != current_version:
+                raise StaleConclusionVersionError(
+                    "the local conclusion changed; reload before trying again"
+                )
+
+            previous_state = str(state_row["current_state"])
+            resulting_version = current_version + 1
+            new_display_statement = str(state_row["display_statement"])
+            if disposition is DispositionKind.CORRECTED:
+                if normalized_replacement is None:
+                    raise AssertionError("corrected text was validated")
+                new_display_statement = normalized_replacement
+
+            new_delegate = (
+                normalized_delegate
+                if disposition is DispositionKind.DELEGATED
+                else None
+            )
+            new_follow_up = (
+                follow_up_at if disposition is DispositionKind.DELEGATED else None
+            )
+            new_rescheduled = (
+                rescheduled_for if disposition is DispositionKind.RESCHEDULED else None
+            )
+            selected_event_id = event_id or uuid.uuid4().hex
             connection.execute(
                 """
                 INSERT INTO disposition_events(
                     id,
                     conclusion_id,
-                    briefing_run_id,
+                    originating_briefing_id,
                     disposition,
+                    previous_state,
+                    new_state,
                     replacement_text,
-                    note,
+                    explanation,
+                    delegate_description,
+                    follow_up_at,
+                    rescheduled_for,
+                    evidence_fingerprint,
+                    processing_version,
+                    expected_version,
+                    resulting_version,
+                    idempotency_key,
                     created_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    event.id,
-                    event.conclusion_id,
-                    event.briefing_run_id,
-                    event.disposition.value,
-                    event.replacement_text,
-                    event.note,
-                    _serialize_datetime(event.created_at),
+                    selected_event_id,
+                    conclusion_id,
+                    briefing_run_id,
+                    disposition.value,
+                    previous_state,
+                    disposition.value,
+                    normalized_replacement,
+                    normalized_explanation,
+                    new_delegate,
+                    _serialize_optional_datetime(new_follow_up),
+                    _serialize_optional_datetime(new_rescheduled),
+                    str(state_row["evidence_fingerprint"]),
+                    str(state_row["processing_version"]),
+                    current_version,
+                    resulting_version,
+                    normalized_key,
+                    _serialize_datetime(created_at),
                 ),
+            )
+            connection.execute(
+                """
+                UPDATE conclusion_current_state
+                SET current_state = ?,
+                    display_statement = ?,
+                    delegate_description = ?,
+                    follow_up_at = ?,
+                    rescheduled_for = ?,
+                    version = ?,
+                    last_event_id = ?,
+                    updated_at = ?
+                WHERE conclusion_id = ?
+                """,
+                (
+                    disposition.value,
+                    new_display_statement,
+                    new_delegate,
+                    _serialize_optional_datetime(new_follow_up),
+                    _serialize_optional_datetime(new_rescheduled),
+                    resulting_version,
+                    selected_event_id,
+                    _serialize_datetime(created_at),
+                    conclusion_id,
+                ),
+            )
+            event_row = connection.execute(
+                "SELECT * FROM disposition_events WHERE id = ?",
+                (selected_event_id,),
+            ).fetchone()
+            projection_row = connection.execute(
+                """
+                SELECT *
+                FROM conclusion_current_state
+                WHERE conclusion_id = ?
+                """,
+                (conclusion_id,),
+            ).fetchone()
+            if event_row is None or projection_row is None:
+                raise RuntimeError("disposition projection failed")
+            return DispositionResult(
+                applied=True,
+                projection=_conclusion_projection_from_row(projection_row),
+                event=_disposition_from_row(event_row),
             )
 
     def inspect_conclusion(self, conclusion_id: str) -> ConclusionState | None:
@@ -1437,16 +1706,64 @@ class StateStore:
             tuple(item.id for item in evidence),
         )
         history = tuple(_disposition_from_row(row) for row in history_rows)
+        projection = self.get_conclusion_projection(conclusion_id)
         return ConclusionState(
             conclusion=conclusion,
             evidence=evidence,
             history=history,
+            projection=projection,
         )
 
-    def recurrence_decision(self, evidence_fingerprint: str) -> RecurrenceDecision:
+    def find_conclusion_id_by_source_records(
+        self,
+        source_records: tuple[tuple[str, str], ...],
+    ) -> str | None:
+        """Resolve one unambiguous local conclusion from source-owned identity."""
+
+        conclusion_ids: set[str] = set()
+        for source, source_record_id in source_records:
+            rows = self.database.connection.execute(
+                """
+                SELECT DISTINCT conclusion.id
+                FROM conclusions AS conclusion
+                JOIN conclusion_evidence AS link
+                    ON link.conclusion_id = conclusion.id
+                JOIN source_evidence AS evidence
+                    ON evidence.id = link.evidence_id
+                WHERE evidence.source = ?
+                  AND evidence.source_record_id = ?
+                """,
+                (source, source_record_id),
+            ).fetchall()
+            conclusion_ids.update(str(row["id"]) for row in rows)
+        if len(conclusion_ids) != 1:
+            return None
+        return next(iter(conclusion_ids))
+
+    def recurrence_decision(
+        self,
+        evidence_fingerprint: str,
+        *,
+        source_records: tuple[tuple[str, str], ...] = (),
+    ) -> RecurrenceDecision:
         """Project prior local state for materially unchanged evidence."""
 
-        conclusion_row = self.database.connection.execute(
+        connection = self.database.connection
+        tombstone_row = connection.execute(
+            """
+            SELECT evidence_fingerprint
+            FROM conclusion_tombstones
+            WHERE evidence_fingerprint = ?
+            """,
+            (evidence_fingerprint,),
+        ).fetchone()
+        if tombstone_row is not None:
+            return RecurrenceDecision(
+                action=RecurrenceAction.SUPPRESS,
+                disposition=DispositionKind.DELETED,
+            )
+
+        conclusion_row = connection.execute(
             """
             SELECT id
             FROM conclusions
@@ -1457,10 +1774,15 @@ class StateStore:
             (evidence_fingerprint,),
         ).fetchone()
         if conclusion_row is None:
+            if source_records:
+                return self.changed_evidence_decision(
+                    evidence_fingerprint,
+                    source_records=source_records,
+                )
             return RecurrenceDecision(action=RecurrenceAction.SHOW)
 
         conclusion_id = str(conclusion_row["id"])
-        event_row = self.database.connection.execute(
+        event_row = connection.execute(
             """
             SELECT disposition, replacement_text
             FROM disposition_events
@@ -1471,30 +1793,570 @@ class StateStore:
             (conclusion_id,),
         ).fetchone()
         if event_row is None:
-            return RecurrenceDecision(
+            exact = RecurrenceDecision(
                 action=RecurrenceAction.SHOW,
                 prior_conclusion_id=conclusion_id,
             )
+        else:
+            disposition = DispositionKind(str(event_row["disposition"]))
+            if disposition is DispositionKind.CORRECTED:
+                exact = RecurrenceDecision(
+                    action=RecurrenceAction.REPLACE,
+                    prior_conclusion_id=conclusion_id,
+                    replacement_text=str(event_row["replacement_text"]),
+                    disposition=disposition,
+                )
+            elif disposition in _SUPPRESSING_DISPOSITIONS:
+                exact = RecurrenceDecision(
+                    action=RecurrenceAction.SUPPRESS,
+                    prior_conclusion_id=conclusion_id,
+                    disposition=disposition,
+                )
+            else:
+                exact = RecurrenceDecision(
+                    action=RecurrenceAction.SHOW,
+                    prior_conclusion_id=conclusion_id,
+                    disposition=disposition,
+                )
+        return exact
 
+    def changed_evidence_decision(
+        self,
+        evidence_fingerprint: str,
+        *,
+        source_records: tuple[tuple[str, str], ...],
+    ) -> RecurrenceDecision:
+        """Explain reconsideration when known source identity has new evidence."""
+
+        exact = self.recurrence_decision(evidence_fingerprint)
+        if (
+            exact.prior_conclusion_id is not None
+            or exact.disposition is DispositionKind.DELETED
+            or not source_records
+        ):
+            return exact
+
+        prior_rows: list[sqlite3.Row] = []
+        for source, source_record_id in source_records:
+            row = self.database.connection.execute(
+                """
+                SELECT conclusion.id, conclusion.evidence_fingerprint,
+                       conclusion.created_at
+                FROM conclusions AS conclusion
+                JOIN conclusion_evidence AS link
+                    ON link.conclusion_id = conclusion.id
+                JOIN source_evidence AS evidence
+                    ON evidence.id = link.evidence_id
+                WHERE evidence.source = ?
+                  AND evidence.source_record_id = ?
+                  AND conclusion.evidence_fingerprint != ?
+                ORDER BY conclusion.created_at DESC, conclusion.id DESC
+                LIMIT 1
+                """,
+                (source, source_record_id, evidence_fingerprint),
+            ).fetchone()
+            if row is not None:
+                prior_rows.append(row)
+        if not prior_rows:
+            return exact
+        prior_row = max(
+            prior_rows,
+            key=lambda row: (str(row["created_at"]), str(row["id"])),
+        )
+
+        prior_conclusion_id = str(prior_row["id"])
+        event_row = self.database.connection.execute(
+            """
+            SELECT disposition
+            FROM disposition_events
+            WHERE conclusion_id = ?
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+            """,
+            (prior_conclusion_id,),
+        ).fetchone()
+        if event_row is None:
+            return exact
         disposition = DispositionKind(str(event_row["disposition"]))
-        if disposition is DispositionKind.CORRECTED:
-            return RecurrenceDecision(
-                action=RecurrenceAction.REPLACE,
-                prior_conclusion_id=conclusion_id,
-                replacement_text=str(event_row["replacement_text"]),
-                disposition=disposition,
-            )
-        if disposition in _SUPPRESSING_DISPOSITIONS:
-            return RecurrenceDecision(
-                action=RecurrenceAction.SUPPRESS,
-                prior_conclusion_id=conclusion_id,
-                disposition=disposition,
-            )
+        if (
+            disposition not in _SUPPRESSING_DISPOSITIONS
+            and disposition is not DispositionKind.CORRECTED
+        ):
+            return exact
         return RecurrenceDecision(
             action=RecurrenceAction.SHOW,
-            prior_conclusion_id=conclusion_id,
+            prior_conclusion_id=prior_conclusion_id,
             disposition=disposition,
+            material_evidence_changed=True,
+            reappearance_explanation=(
+                "Material source evidence changed after the prior local "
+                f"{_disposition_display_name(disposition)} action, so the "
+                "conclusion is being reconsidered."
+            ),
         )
+
+    def save_briefing_presentation(
+        self,
+        presentation: BriefingPresentation,
+    ) -> None:
+        """Persist one minimized structured briefing for local presentation."""
+
+        _require_aware(presentation.created_at)
+        with self.database.transaction() as connection:
+            run_row = connection.execute(
+                "SELECT id FROM briefing_runs WHERE id = ?",
+                (presentation.briefing_run_id,),
+            ).fetchone()
+            if run_row is None:
+                raise ValueError("briefing run is missing")
+            connection.execute(
+                """
+                INSERT INTO briefing_presentations(
+                    briefing_run_id,
+                    generation_mode,
+                    chief_of_staff_note,
+                    created_at
+                )
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(briefing_run_id) DO UPDATE SET
+                    generation_mode = excluded.generation_mode,
+                    chief_of_staff_note = excluded.chief_of_staff_note,
+                    created_at = excluded.created_at
+                """,
+                (
+                    presentation.briefing_run_id,
+                    _required_bounded_text(
+                        presentation.generation_mode,
+                        field="generation mode",
+                        maximum=100,
+                    ),
+                    _required_bounded_text(
+                        presentation.chief_of_staff_note,
+                        field="Chief of Staff Note",
+                        maximum=4000,
+                    ),
+                    _serialize_datetime(presentation.created_at),
+                ),
+            )
+            connection.execute(
+                """
+                DELETE FROM briefing_sections
+                WHERE briefing_run_id = ?
+                """,
+                (presentation.briefing_run_id,),
+            )
+            seen_item_ids: set[str] = set()
+            for section_ordinal, section in enumerate(presentation.sections):
+                section_cursor = connection.execute(
+                    """
+                    INSERT INTO briefing_sections(
+                        briefing_run_id,
+                        ordinal,
+                        name,
+                        summary
+                    )
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (
+                        presentation.briefing_run_id,
+                        section_ordinal,
+                        _required_bounded_text(
+                            section.name,
+                            field="section name",
+                            maximum=100,
+                        ),
+                        _bounded_optional_text(
+                            section.summary,
+                            field="section summary",
+                            maximum=2000,
+                        ),
+                    ),
+                )
+                if section_cursor.lastrowid is None:
+                    raise RuntimeError("briefing section insert failed")
+                section_id = int(section_cursor.lastrowid)
+                for item_ordinal, item in enumerate(section.items):
+                    if item.id in seen_item_ids:
+                        raise ValueError("briefing item IDs must be unique")
+                    seen_item_ids.add(item.id)
+                    connection.execute(
+                        """
+                        INSERT INTO briefing_items(
+                            id,
+                            briefing_run_id,
+                            section_id,
+                            conclusion_id,
+                            ordinal,
+                            headline,
+                            detail,
+                            content_kind,
+                            uncertainty,
+                            explanation
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            item.id,
+                            presentation.briefing_run_id,
+                            section_id,
+                            item.conclusion_id,
+                            item_ordinal,
+                            _required_bounded_text(
+                                item.headline,
+                                field="item headline",
+                                maximum=1000,
+                            ),
+                            _required_bounded_text(
+                                item.detail,
+                                field="item detail",
+                                maximum=4000,
+                                allow_empty=True,
+                            ),
+                            item.content_kind,
+                            _bounded_optional_text(
+                                item.uncertainty,
+                                field="uncertainty",
+                                maximum=500,
+                            ),
+                            _bounded_optional_text(
+                                item.explanation,
+                                field="item explanation",
+                                maximum=2000,
+                            ),
+                        ),
+                    )
+                    for source_ordinal, source in enumerate(item.sources):
+                        connection.execute(
+                            """
+                            INSERT INTO briefing_item_sources(
+                                briefing_item_id,
+                                ordinal,
+                                source,
+                                display_url,
+                                freshness_at
+                            )
+                            VALUES (?, ?, ?, ?, ?)
+                            """,
+                            (
+                                item.id,
+                                source_ordinal,
+                                _required_bounded_text(
+                                    source.source,
+                                    field="source",
+                                    maximum=100,
+                                ),
+                                source.display_url,
+                                _serialize_optional_datetime(source.freshness_at),
+                            ),
+                        )
+
+    def latest_briefing_presentation(
+        self,
+    ) -> BriefingPresentationState | None:
+        """Return the latest successfully generated local briefing."""
+
+        row = self.database.connection.execute(
+            """
+            SELECT run.id
+            FROM briefing_runs AS run
+            JOIN briefing_presentations AS presentation
+                ON presentation.briefing_run_id = run.id
+            WHERE run.status = 'succeeded'
+            ORDER BY run.briefing_date DESC,
+                     run.completed_at DESC,
+                     run.started_at DESC,
+                     run.id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+        if row is None:
+            return None
+        return self.get_briefing_presentation(str(row["id"]))
+
+    def get_briefing_presentation(
+        self,
+        briefing_run_id: str,
+    ) -> BriefingPresentationState | None:
+        """Load one structured local briefing and its source coverage."""
+
+        connection = self.database.connection
+        run_row = connection.execute(
+            """
+            SELECT run.*, presentation.generation_mode,
+                   presentation.chief_of_staff_note,
+                   presentation.created_at AS presentation_created_at
+            FROM briefing_runs AS run
+            JOIN briefing_presentations AS presentation
+                ON presentation.briefing_run_id = run.id
+            WHERE run.id = ?
+            """,
+            (briefing_run_id,),
+        ).fetchone()
+        if run_row is None:
+            return None
+
+        section_rows = connection.execute(
+            """
+            SELECT *
+            FROM briefing_sections
+            WHERE briefing_run_id = ?
+            ORDER BY ordinal
+            """,
+            (briefing_run_id,),
+        ).fetchall()
+        sections: list[BriefingPresentationSection] = []
+        for section_row in section_rows:
+            item_rows = connection.execute(
+                """
+                SELECT *
+                FROM briefing_items
+                WHERE section_id = ?
+                ORDER BY ordinal
+                """,
+                (int(section_row["id"]),),
+            ).fetchall()
+            items: list[BriefingPresentationItem] = []
+            for item_row in item_rows:
+                source_rows = connection.execute(
+                    """
+                    SELECT *
+                    FROM briefing_item_sources
+                    WHERE briefing_item_id = ?
+                    ORDER BY ordinal
+                    """,
+                    (str(item_row["id"]),),
+                ).fetchall()
+                sources = tuple(
+                    BriefingPresentationSource(
+                        source=str(source_row["source"]),
+                        display_url=(
+                            None
+                            if source_row["display_url"] is None
+                            else str(source_row["display_url"])
+                        ),
+                        freshness_at=_parse_optional_datetime(
+                            None
+                            if source_row["freshness_at"] is None
+                            else str(source_row["freshness_at"])
+                        ),
+                    )
+                    for source_row in source_rows
+                )
+                items.append(
+                    BriefingPresentationItem(
+                        id=str(item_row["id"]),
+                        conclusion_id=(
+                            None
+                            if item_row["conclusion_id"] is None
+                            else str(item_row["conclusion_id"])
+                        ),
+                        headline=str(item_row["headline"]),
+                        detail=str(item_row["detail"]),
+                        content_kind=str(item_row["content_kind"]),
+                        uncertainty=(
+                            None
+                            if item_row["uncertainty"] is None
+                            else str(item_row["uncertainty"])
+                        ),
+                        explanation=(
+                            None
+                            if item_row["explanation"] is None
+                            else str(item_row["explanation"])
+                        ),
+                        sources=sources,
+                    )
+                )
+            sections.append(
+                BriefingPresentationSection(
+                    name=str(section_row["name"]),
+                    summary=(
+                        None
+                        if section_row["summary"] is None
+                        else str(section_row["summary"])
+                    ),
+                    items=tuple(items),
+                )
+            )
+
+        coverage_rows = connection.execute(
+            """
+            SELECT run.source, run.coverage_status, run.freshness_at,
+                   run.error_category
+            FROM connector_runs AS run
+            JOIN briefing_connector_runs AS link
+                ON link.connector_run_id = run.id
+            WHERE link.briefing_run_id = ?
+            ORDER BY run.source, run.id
+            """,
+            (briefing_run_id,),
+        ).fetchall()
+        coverage = tuple(
+            BriefingCoverage(
+                source=str(row["source"]),
+                coverage_status=CoverageStatus(str(row["coverage_status"])),
+                freshness_at=_parse_optional_datetime(
+                    None if row["freshness_at"] is None else str(row["freshness_at"])
+                ),
+                error_category=(
+                    None
+                    if row["error_category"] is None
+                    else str(row["error_category"])
+                ),
+            )
+            for row in coverage_rows
+        )
+        run = BriefingRun(
+            id=str(run_row["id"]),
+            briefing_date=date.fromisoformat(str(run_row["briefing_date"])),
+            timezone=str(run_row["timezone"]),
+            invocation_mode=str(run_row["invocation_mode"]),
+            started_at=_parse_datetime(str(run_row["started_at"])),
+            completed_at=_parse_optional_datetime(
+                None
+                if run_row["completed_at"] is None
+                else str(run_row["completed_at"])
+            ),
+            status=BriefingStatus(str(run_row["status"])),
+        )
+        return BriefingPresentationState(
+            run=run,
+            presentation=BriefingPresentation(
+                briefing_run_id=briefing_run_id,
+                generation_mode=str(run_row["generation_mode"]),
+                chief_of_staff_note=str(run_row["chief_of_staff_note"]),
+                created_at=_parse_datetime(str(run_row["presentation_created_at"])),
+                sections=tuple(sections),
+            ),
+            coverage=coverage,
+        )
+
+    def delete_local_conclusion(
+        self,
+        *,
+        conclusion_id: str,
+        expected_version: int,
+        idempotency_key: str,
+        deleted_at: datetime,
+    ) -> bool:
+        """Delete local conclusion payloads while retaining a minimal tombstone."""
+
+        _require_aware(deleted_at)
+        normalized_key = idempotency_key.strip()
+        if len(normalized_key) < 16 or len(normalized_key) > 200:
+            raise InvalidDispositionError("idempotency key is invalid")
+        with self.database.transaction() as connection:
+            prior_tombstone = connection.execute(
+                """
+                SELECT evidence_fingerprint
+                FROM conclusion_tombstones
+                WHERE idempotency_key = ?
+                """,
+                (normalized_key,),
+            ).fetchone()
+            if prior_tombstone is not None:
+                return False
+
+            row = connection.execute(
+                """
+                SELECT
+                    conclusion.evidence_fingerprint,
+                    conclusion.processing_version,
+                    state.version
+                FROM conclusions AS conclusion
+                JOIN conclusion_current_state AS state
+                    ON state.conclusion_id = conclusion.id
+                WHERE conclusion.id = ?
+                """,
+                (conclusion_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError("conclusion is missing")
+            if int(row["version"]) != expected_version:
+                raise StaleConclusionVersionError(
+                    "the local conclusion changed; reload before trying again"
+                )
+            evidence_rows = connection.execute(
+                """
+                SELECT evidence_id
+                FROM conclusion_evidence
+                WHERE conclusion_id = ?
+                """,
+                (conclusion_id,),
+            ).fetchall()
+            presentation_section_rows = connection.execute(
+                """
+                SELECT DISTINCT section_id
+                FROM briefing_items
+                WHERE conclusion_id = ?
+                """,
+                (conclusion_id,),
+            ).fetchall()
+            connection.execute(
+                """
+                INSERT INTO conclusion_tombstones(
+                    evidence_fingerprint,
+                    processing_version,
+                    idempotency_key,
+                    deleted_at
+                )
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(evidence_fingerprint) DO UPDATE SET
+                    processing_version = excluded.processing_version,
+                    idempotency_key = excluded.idempotency_key,
+                    deleted_at = excluded.deleted_at
+                """,
+                (
+                    str(row["evidence_fingerprint"]),
+                    str(row["processing_version"]),
+                    normalized_key,
+                    _serialize_datetime(deleted_at),
+                ),
+            )
+            delete_cursor = connection.execute(
+                "DELETE FROM conclusions WHERE id = ?",
+                (conclusion_id,),
+            )
+            if delete_cursor.rowcount != 1:
+                raise RuntimeError("local conclusion deletion failed")
+            for section_row in presentation_section_rows:
+                section_id = int(section_row["section_id"])
+                connection.execute(
+                    """
+                    UPDATE briefing_sections
+                    SET summary = NULL
+                    WHERE id = ?
+                    """,
+                    (section_id,),
+                )
+                connection.execute(
+                    """
+                    DELETE FROM briefing_sections
+                    WHERE id = ?
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM briefing_items
+                          WHERE section_id = ?
+                      )
+                    """,
+                    (section_id, section_id),
+                )
+            for evidence_row in evidence_rows:
+                evidence_id = str(evidence_row["evidence_id"])
+                remaining_link = connection.execute(
+                    """
+                    SELECT 1
+                    FROM conclusion_evidence
+                    WHERE evidence_id = ?
+                    LIMIT 1
+                    """,
+                    (evidence_id,),
+                ).fetchone()
+                if remaining_link is None:
+                    connection.execute(
+                        "DELETE FROM source_evidence WHERE id = ?",
+                        (evidence_id,),
+                    )
+        return True
 
     def inspect_state(self) -> StateInspection:
         """Return non-content counts and applied migration versions."""
@@ -1545,6 +2407,19 @@ class StateStore:
             ),
             connector_instances=_table_count(connection, "connector_instances"),
             inference_audits=_table_count(connection, "inference_audits"),
+            conclusion_current_states=_table_count(
+                connection,
+                "conclusion_current_state",
+            ),
+            conclusion_tombstones=_table_count(
+                connection,
+                "conclusion_tombstones",
+            ),
+            briefing_presentations=_table_count(
+                connection,
+                "briefing_presentations",
+            ),
+            briefing_items=_table_count(connection, "briefing_items"),
         )
 
     def delete_disposition_history(self, conclusion_id: str) -> int:
@@ -1624,6 +2499,7 @@ class StateStore:
 
         with self.database.transaction() as connection:
             connection.execute("DELETE FROM inference_audits")
+            connection.execute("DELETE FROM conclusion_tombstones")
             connection.execute("DELETE FROM disposition_events")
             connection.execute("DELETE FROM conclusion_evidence")
             connection.execute("DELETE FROM conclusions")
@@ -1650,6 +2526,42 @@ def _parse_datetime(value: str) -> datetime:
 
 def _parse_optional_datetime(value: str | None) -> datetime | None:
     return None if value is None else _parse_datetime(value)
+
+
+def _require_aware(value: datetime) -> None:
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError("timestamps must be timezone-aware")
+
+
+def _bounded_optional_text(
+    value: str | None,
+    *,
+    field: str,
+    maximum: int,
+) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    if not normalized:
+        return None
+    if len(normalized) > maximum:
+        raise InvalidDispositionError(f"{field} exceeds its size limit")
+    return normalized
+
+
+def _required_bounded_text(
+    value: str,
+    *,
+    field: str,
+    maximum: int,
+    allow_empty: bool = False,
+) -> str:
+    normalized = value.strip()
+    if not normalized and not allow_empty:
+        raise ValueError(f"{field} must not be empty")
+    if len(normalized) > maximum:
+        raise ValueError(f"{field} exceeds its size limit")
+    return normalized
 
 
 def _connector_instance_values(
@@ -1747,15 +2659,63 @@ def _disposition_from_row(row: sqlite3.Row) -> DispositionEvent:
         id=str(row["id"]),
         conclusion_id=str(row["conclusion_id"]),
         briefing_run_id=(
-            None if row["briefing_run_id"] is None else str(row["briefing_run_id"])
+            None
+            if row["originating_briefing_id"] is None
+            else str(row["originating_briefing_id"])
         ),
         disposition=DispositionKind(str(row["disposition"])),
         replacement_text=(
             None if row["replacement_text"] is None else str(row["replacement_text"])
         ),
-        note=None if row["note"] is None else str(row["note"]),
+        note=(None if row["explanation"] is None else str(row["explanation"])),
         created_at=_parse_datetime(str(row["created_at"])),
+        previous_state=str(row["previous_state"]),
+        new_state=str(row["new_state"]),
+        delegate_description=(
+            None
+            if row["delegate_description"] is None
+            else str(row["delegate_description"])
+        ),
+        follow_up_at=_parse_optional_datetime(
+            None if row["follow_up_at"] is None else str(row["follow_up_at"])
+        ),
+        rescheduled_for=_parse_optional_datetime(
+            None if row["rescheduled_for"] is None else str(row["rescheduled_for"])
+        ),
+        evidence_fingerprint=str(row["evidence_fingerprint"]),
+        processing_version=str(row["processing_version"]),
+        expected_version=int(row["expected_version"]),
+        resulting_version=int(row["resulting_version"]),
+        idempotency_key=str(row["idempotency_key"]),
     )
+
+
+def _conclusion_projection_from_row(row: sqlite3.Row) -> ConclusionProjection:
+    return ConclusionProjection(
+        conclusion_id=str(row["conclusion_id"]),
+        current_state=str(row["current_state"]),
+        display_statement=str(row["display_statement"]),
+        delegate_description=(
+            None
+            if row["delegate_description"] is None
+            else str(row["delegate_description"])
+        ),
+        follow_up_at=_parse_optional_datetime(
+            None if row["follow_up_at"] is None else str(row["follow_up_at"])
+        ),
+        rescheduled_for=_parse_optional_datetime(
+            None if row["rescheduled_for"] is None else str(row["rescheduled_for"])
+        ),
+        version=int(row["version"]),
+        last_event_id=(
+            None if row["last_event_id"] is None else str(row["last_event_id"])
+        ),
+        updated_at=_parse_datetime(str(row["updated_at"])),
+    )
+
+
+def _disposition_display_name(disposition: DispositionKind) -> str:
+    return disposition.value.replace("_", " ")
 
 
 def _table_count(connection: sqlite3.Connection, table: str) -> int:
@@ -1790,6 +2750,16 @@ def _table_count(connection: sqlite3.Connection, table: str) -> int:
             "SELECT COUNT(*) AS count FROM normalized_gmail_messages"
         ),
         "inference_audits": "SELECT COUNT(*) AS count FROM inference_audits",
+        "conclusion_current_state": (
+            "SELECT COUNT(*) AS count FROM conclusion_current_state"
+        ),
+        "conclusion_tombstones": (
+            "SELECT COUNT(*) AS count FROM conclusion_tombstones"
+        ),
+        "briefing_presentations": (
+            "SELECT COUNT(*) AS count FROM briefing_presentations"
+        ),
+        "briefing_items": "SELECT COUNT(*) AS count FROM briefing_items",
     }
     query = queries.get(table)
     if query is None:
