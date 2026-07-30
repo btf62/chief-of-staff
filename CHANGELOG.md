@@ -164,6 +164,10 @@ No strict versioning scheme is promised before a distributable product exists.
 
 ### Changed
 
+- Accepted Brad's review of the actual Milestone 10 interface at normal
+  browser zoom, a successful five-source July 30 briefing, the correction
+  controls and evidence links, and the four-page PDF rendering, completing the
+  local web and correction-loop trust gate.
 - Accepted Brad's review of the corrected Milestone 9 representative
   briefings, completing the ranking and composition trust gate after all 26
   scenarios passed with zero unsupported claims or false-positive actionable

@@ -41,10 +41,12 @@ ranking factors, and the accepted presentation rules. No provider, connector,
 or external-write operation occurred.
 Milestone 10's secure loopback-only Flask and Waitress interface, structured
 briefing presentation, complete local disposition history, recurrence
-projection, and transactional deletion behavior are implemented and have
-passed the synthetic gate. Brad's browser review remains the milestone
-acceptance gate, so Milestone 10 must not be marked accepted and Milestone 11
-must not begin.
+projection, and transactional deletion behavior are complete and accepted.
+Brad reviewed the actual interface at normal browser zoom, a successful
+five-source July 30 briefing, the correction controls and evidence links, and
+the four-page PDF rendering. Milestone 11 operational hardening is authorized
+only through its local and synthetic review gate. Brad's final review of the
+Milestone 11 artifacts remains the acceptance gate.
 Personal Gmail and Google Drive remain deferred and unauthorized.
 
 ## Working rules
@@ -114,10 +116,14 @@ have been exercised. Do not repeat live retrieval or provider calls, refresh
 authorization, broaden access, repeat Jira discovery, run an unrelated live
 retrieval, enable routine hosted inference, select a model for another
 inference task, or begin another connector without new explicit approval from
-Brad. Milestone 10 implementation is complete, but its browser-review
-acceptance gate remains open. Do not begin Milestone 11. Satisfy a milestone's
-acceptance gate before beginning dependent work. Record material new product
-or architecture decisions before implementing them.
+Brad. Milestone 10 is accepted. Milestone 11 may proceed only within the
+currently approved local and synthetic hardening boundary. Do not perform
+another live retrieval, request or refresh authorization, invoke hosted
+inference, enable scheduling, add a connector, modify an external system, or
+begin a deferred milestone. Brad's final review of the private Milestone 11
+artifacts remains its acceptance gate. Satisfy that gate before treating the
+MVP as accepted. Record material new product or architecture decisions before
+implementing them.
 
 ## Validation
 

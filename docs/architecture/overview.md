@@ -802,8 +802,8 @@ documents. The following dependencies remain unresolved:
 
 - Connector-specific cache needs must be justified and assigned a bounded
   retention and deletion policy before caching is enabled.
-- The accepted local web framework and serving boundary still require
-  Milestone 10 implementation and Brad's browser review.
+- The accepted local web framework and serving boundary were implemented and
+  accepted through Milestone 10.
 - Connector account scopes, OAuth registration details, retrieval windows,
   freshness thresholds, and source-specific authorization behavior remain to
   be defined in connector specifications.

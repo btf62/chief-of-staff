@@ -7,7 +7,7 @@ identifying priorities, commitments, and useful signals.
 
 ## Status
 
-**Phase:** Milestones 1–9 complete; Milestone 10 not yet accepted
+**Phase:** Milestones 1–10 complete and accepted; Milestone 11 in progress
 
 The Python, local-state, deterministic briefing, repository connector, and
 read-only Google Calendar foundations are complete. An explicitly approved,
@@ -50,10 +50,14 @@ or false-positive actionable recommendations; conflicts remain
 source-attributed, duplicate suppression preserves authoritative records and
 links, and ranking factors remain inspectable and source-backed. No provider,
 connector, or external-write operation occurred.
-Milestone 10 now provides the secure loopback-only briefing and correction
+Milestone 10 provides the secure loopback-only briefing and correction
 experience with all required local dispositions, inspectable history,
-recurrence controls, and transactional deletion. Its synthetic implementation
-gate is complete; Brad's browser review remains the acceptance gate.
+recurrence controls, and transactional deletion. Brad reviewed the actual
+interface at normal browser zoom, a successful five-source July 30 briefing,
+the correction controls and evidence links, and the four-page PDF rendering,
+then accepted the milestone. Milestone 11 operational hardening is authorized
+only through its local and synthetic review gate; Brad's final artifact review
+remains required.
 
 ## Repository map
 

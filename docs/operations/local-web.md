@@ -1,14 +1,15 @@
 # Local Web Interface Operations
 
-- **Status:** Draft
+- **Status:** Accepted
 - **Owner:** Brad
 - **Last updated:** 2026-07-30
 
 This document describes the implemented Milestone 10 local interface under
 [ADR-0008](../decisions/0008-adopt-flask-local-web-interface.md). It does not
 authorize remote exposure, live retrieval, hosted inference, background
-operation, scheduling, or external-source writes. Brad's browser review
-remains the Milestone 10 acceptance gate.
+operation, scheduling, or external-source writes. Brad reviewed the actual
+interface, a successful five-source July 30 briefing, correction controls and
+evidence links, and the four-page PDF rendering, then accepted Milestone 10.
 
 ## Start
 
@@ -128,8 +129,10 @@ fallback.
 - The interface exposes no CORS policy, remote API, external assets,
   telemetry, service worker, or browser storage for private records.
 
-## Current gate
+## Acceptance
 
-The implementation and synthetic browser-review artifacts are ready for
-Brad's review. Do not mark Milestone 10 accepted or begin Milestone 11 until
-that review is complete.
+Brad accepted the Milestone 10 local interface after reviewing it at normal
+browser zoom with a successful five-source July 30 briefing, its correction
+controls and evidence links, and the four-page PDF rendering. Milestone 11 may
+build on this interface only within its separately approved local and
+synthetic hardening boundary.

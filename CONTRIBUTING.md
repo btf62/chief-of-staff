@@ -2,14 +2,14 @@
 
 ## Current scope
 
-The Version 1 design baseline and Milestones 1–9 are complete and accepted.
-Milestone 10's local web and correction-loop implementation is complete;
-Brad's browser review remains its acceptance gate. Contributions may improve
-authoritative documentation or the non-live implementation when explicitly
-authorized. Do not repeat live retrieval, make a provider call, broaden an
-authorization boundary, refresh credentials, begin another connector, mark
-Milestone 10 accepted, or begin Milestone 11 without new explicit approval.
-Do not begin a later milestone before its dependencies and acceptance gate are
+The Version 1 design baseline and Milestones 1–10 are complete and accepted.
+Milestone 11 operational hardening may proceed through its approved local and
+synthetic review gate. Contributions may improve authoritative documentation
+or the non-live implementation when explicitly authorized. Do not repeat live
+retrieval, make a provider call, broaden an authorization boundary, refresh
+credentials, begin another connector, enable scheduling, modify an external
+system, or treat Milestone 11 as accepted without new explicit approval. Do
+not begin a later milestone before its dependencies and acceptance gate are
 satisfied.
 
 ## Python environment

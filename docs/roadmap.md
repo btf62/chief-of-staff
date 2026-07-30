@@ -453,7 +453,7 @@ this trust gate. No model is selected for `priority_comparison` or
 
 ## Milestone 10 — Local Web Experience and Correction Loop
 
-- **Status:** Implementation complete — Brad review pending
+- **Status:** Complete and accepted
 - **Intended user-visible outcome:** Brad can read the briefing, understand why
   each conclusion appeared, and correct or disposition local conclusions so
   materially unchanged mistakes do not recur.
@@ -494,12 +494,16 @@ minimal fingerprint tombstone needed to prevent unchanged recurrence.
 The synthetic UI and security matrix covers normal, partial, unavailable,
 inferred, explicit, conflicting, corrected, dismissed, completed,
 changed-evidence, empty, long-content, and malicious-text states without live
-retrieval, provider calls, or external writes. Brad's browser review of the
-private Milestone 10 artifacts remains the acceptance gate.
+retrieval, provider calls, or external writes.
+
+Brad reviewed the actual local interface at normal browser zoom, a successfully
+generated five-source July 30 briefing, the correction controls and evidence
+links, and the four-page PDF rendering. He assessed the result as “Looking
+good,” explicitly accepting Milestone 10.
 
 ## Milestone 11 — Acceptance and Operational Hardening
 
-- **Status:** Planned
+- **Status:** In progress — local and synthetic review gate
 - **Intended user-visible outcome:** Brad can rely on an on-demand Daily
   Briefing v1 within its disclosed source coverage and privacy boundaries.
 - **Dependencies:** Milestone 10, approved live connector access, and an

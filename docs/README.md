@@ -44,9 +44,11 @@ suppression, authoritative links, source-backed ranking factors, and all
 accepted presentation rules passed without a provider, connector, or
 external-write operation.
 Milestone 10's secure loopback-only reading and local correction experience is
-implemented and has passed its synthetic gate. Brad's browser review remains
-the acceptance gate; Milestone 10 is not yet accepted and Milestone 11 has not
-begun.
+complete and accepted. Brad reviewed the actual interface at normal browser
+zoom, a successful five-source July 30 briefing, the correction controls and
+evidence links, and its four-page PDF rendering. Milestone 11 operational
+hardening is now in progress through its local and synthetic review gate;
+Brad's final artifact review remains required.
 Design acceptance authorizes implementation within the accepted scope; it does
 not mean the complete Daily Briefing has passed operational acceptance.
 
