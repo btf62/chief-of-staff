@@ -29,10 +29,13 @@ gate, and one bounded twenty-call synthetic Terra–Luna comparison are
 complete. The comparison produced no false-positive actionable claims,
 schema, provenance, provider, cache, or correction failures; three
 moderate-uncertainty suggestions were safely rejected by deterministic policy.
-Work is paused for Brad's category-specific review and explicit
-production-model decision. The one-time authorization is consumed, and
-routine hosted inference and private-data egress remain unauthorized. Personal
-Gmail and Google Drive remain deferred and unauthorized.
+Brad reviewed the category-specific results and selected OpenAI
+`gpt-5.6-luna` with low reasoning for
+`contextual_action_classification` only, completing Milestone 8. The one-time
+authorization is consumed, the adapter remains disabled by default, and
+routine hosted inference and private-data egress remain unauthorized. No
+model is selected for ranking or synthesis. Personal Gmail and Google Drive
+remain deferred and unauthorized.
 Design acceptance authorizes implementation within the accepted scope; it does
 not mean the complete Daily Briefing has passed operational acceptance.
 
@@ -51,7 +54,7 @@ not mean the complete Daily Briefing has passed operational acceptance.
 - [Deterministic Explicit Detection v1](product/features/deterministic-explicit-detection-v1.md)
   — precision-first Milestone 7 commitment and preparation rules
 - [Contextual Action Classification v1](product/features/contextual-action-classification-v1.md)
-  — bounded Milestone 8 contextual classification contract
+  — accepted Milestone 8 task contract and task-specific Luna selection
 - [Future ideas](product/future-ideas.md) — valuable ideas explicitly outside
   current implementation scope
 
@@ -101,7 +104,7 @@ not mean the complete Daily Briefing has passed operational acceptance.
   supported local command and safe operating behavior
 - [Milestone 8 live-evaluation gate](operations/milestone-8-live-evaluation-gate.md)
   — accepted and exercised OpenAI project, retention, cost, request, and
-  synthetic-comparison boundary
+  synthetic-comparison boundary plus Brad's task-specific selection
 
 ### Repository guidance
 

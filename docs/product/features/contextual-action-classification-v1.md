@@ -1,7 +1,7 @@
 # Feature: Contextual Action Classification v1
 
 - **Status:** Accepted
-- **Version:** 1
+- **Version:** 2
 - **Owner:** Brad
 - **Last updated:** 2026-07-29
 
@@ -190,8 +190,8 @@ It recorded three true positives, five correct exclusions, three
 insufficient-evidence results, four sensitivity or secret exclusions, one
 schema failure, one provenance failure, one policy failure, and four provider
 failure fallbacks, with zero false positives, false negatives, or correction
-regressions. This completes the synthetic gate only; live evaluation and
-production-model selection remain unapproved.
+regressions. This completed the synthetic gate. The later bounded live
+comparison and Brad's task-specific selection completed Milestone 8.
 
 ## OpenAI API verification
 
@@ -232,9 +232,22 @@ once against both `gpt-5.6-terra` and `gpt-5.6-luna`. All twenty calls
 completed with zero false-positive actionable claims, schema failures,
 provenance failures, provider failures, cache reads, cache writes, or
 correction regressions. The deterministic precision-first policy safely
-rejected three moderate-uncertainty actionable suggestions. Brad's
-category-specific review and production-model selection remain pending. See
-the [live-evaluation gate](../../operations/milestone-8-live-evaluation-gate.md)
+rejected three moderate-uncertainty actionable suggestions.
+
+Brad reviewed the category-specific results and selected OpenAI
+`gpt-5.6-luna`, low reasoning effort, and the exact evaluated Responses
+configuration for `contextual_action_classification`. Luna produced zero
+false-positive actionable claims, fewer false negatives than Terra, correct
+`insufficient_evidence` behavior for conflicting and adversarial scenarios,
+successful schema, provenance, policy, correction, and provider gates, lower
+average latency, and lower bounded cost.
+
+This selection applies only to this task. It does not select a model for
+priority comparison, ranking, Chief of Staff Note synthesis, section prose,
+or another future inference task. The adapter remains disabled by default,
+and the selection does not authorize another provider call, routine hosted
+inference, private-source egress, or Tier 2 or Tier 3 hosted use. See the
+[live-evaluation gate](../../operations/milestone-8-live-evaluation-gate.md)
 for the aggregate results and consumed authorization boundary.
 
 ## Related documents

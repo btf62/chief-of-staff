@@ -142,12 +142,17 @@ No strict versioning scheme is promised before a distributable product exists.
 
 ### Changed
 
+- Brad selected OpenAI `gpt-5.6-luna` with low reasoning and the exact
+  evaluated Responses configuration for
+  `contextual_action_classification` only, completing Milestone 8. The adapter
+  remains disabled by default, no ranking or synthesis model is selected, and
+  no new provider call or private-source egress is authorized.
 - Accepted and exercised the Milestone 8 live-evaluation gate. All twenty
   synthetic calls completed with zero false-positive actionable claims,
   schema, provenance, provider, cache, or correction failures; deterministic
-  policy safely rejected three moderate-uncertainty suggestions. Human model
-  review remains pending, and no production model or routine hosted inference
-  is authorized.
+  policy safely rejected three moderate-uncertainty suggestions. The
+  comparison authorization is consumed, and routine hosted inference remains
+  unauthorized.
 - Accepted Brad's Milestone 7 private evidence and briefing review, completing
   the precision-first deterministic trust gate. Every displayed conclusion
   remains evidence-linked, unsupported candidates remain

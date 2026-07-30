@@ -1,7 +1,7 @@
 # Architecture Overview
 
 - **Status:** Accepted
-- **Version:** 5
+- **Version:** 6
 - **Owner:** Brad
 - **Last updated:** 2026-07-28
 
@@ -354,8 +354,11 @@ OpenAI project, an exact Responses-only service role, Keychain-only
 credentials, and explicit application controls for models, retention, prompt
 caching, cost, retries, timeout, and provider state. The official-SDK
 transport remains disabled by default outside separately authorized
-evaluation. The comparison did not select a production model or authorize
-private-source evidence or routine hosted inference.
+evaluation. Brad reviewed the results and selected OpenAI `gpt-5.6-luna` with
+low reasoning for `contextual_action_classification` only. The adapter remains
+disabled by default, and the selection does not authorize private-source
+evidence or routine hosted inference. Priority comparison, ranking, note
+synthesis, and section prose have no selected model.
 
 Evidence packets remain within one work or personal domain by default.
 Combining domains requires an explicit, reviewable inference need and separate
@@ -399,8 +402,10 @@ cost.
 
 Corrections influence future behavior through explicit local overlays,
 versioned rules, and reviewed regression scenarios. They do not silently train
-an uninspectable personal model. OpenAI is the initial hosted provider, but the
-exact model remains an evaluated configuration decision.
+an uninspectable personal model. OpenAI is the initial hosted provider.
+`gpt-5.6-luna` with low reasoning is selected only for
+`contextual_action_classification`; every other model-assisted task still
+requires its own representative evaluation and configuration decision.
 
 ### Sensitivity tiers
 
@@ -565,8 +570,9 @@ versioning, logging, fallback, and evaluation boundaries are defined in
 - Detailed backup tooling, rotation, restoration, and deletion procedures
 - Application-level encryption if a future threat model, backup method, or
   remote-access design requires it
-- Production OpenAI model selection, future provider-policy reverification,
-  and any private-source hosted-inference category
+- Model selection for any task beyond `contextual_action_classification`,
+  future provider-policy reverification, and any private-source
+  hosted-inference category
 
 Connector specifications must identify when records may be referenced without
 persisting source content. Any cache exception must justify its content,
@@ -728,7 +734,7 @@ schema-validated, and hosted failure degrades explicitly.
 | --- | --- | --- |
 | Connector-specific accounts and scopes | Determines the exact authority, sensitivity, registration, refresh, and revocation behavior for each source | In each connector specification before authorization is enabled |
 | Connector-specific cache exceptions | Determines whether a source needs narrowly bounded persistence beyond the transient default | In each connector specification before its cache is enabled |
-| Production OpenAI model selection | Determines accepted quality, cost, latency, and exact provider behavior within the evaluated inference boundary | Before routine probabilistic inference |
+| Model selection for each additional inference task | Determines accepted quality, cost, latency, and exact provider behavior within the evaluated task boundary | Before model use for that task |
 | Local web framework and interaction design | Determines presentation and the required correction loop within the accepted local web direction | Before completing the usable v1 experience |
 | Scheduling mechanism | Determines morning reliability and host requirements | Before scheduled delivery |
 
@@ -768,8 +774,8 @@ documents. The following dependencies remain unresolved:
   and representative evaluation data.
 - The product requires precision-first inference evaluation, but its minimum
   acceptance thresholds remain a product decision.
-- Brad's category-specific review and explicit production-model selection
-  remain required after the bounded Terra–Luna comparison.
+- Routine hosted inference and any private-source evidence require a new
+  explicit authorization despite the task-specific Luna selection.
 - Scheduled morning delivery depends on the selected host being awake and a
   scheduler that has not been selected.
 

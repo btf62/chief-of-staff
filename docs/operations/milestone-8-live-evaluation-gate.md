@@ -1,7 +1,7 @@
 # Milestone 8 Live OpenAI Evaluation Gate
 
 - **Status:** Accepted
-- **Version:** 1
+- **Version:** 2
 - **Owner:** Brad
 - **Last updated:** 2026-07-29
 
@@ -10,11 +10,12 @@ the accepted
 [`contextual_action_classification`](../product/features/contextual-action-classification-v1.md)
 task. The one-time authorization permitted a dedicated project and credential
 plus twenty synthetic Tier 1 Responses API calls. It did not authorize
-private-source evidence, routine hosted inference, or a production model.
+private-source evidence or routine hosted inference.
 
-The trial ended after its private comparison artifact was produced. Any repeat
-call, private-data egress, production-model selection, or routine hosted use
-requires new explicit approval.
+The trial ended after its private comparison artifact was produced. Brad later
+reviewed the results and selected the task-specific production configuration
+without making another call. Any repeat call, private-data egress, or routine
+hosted use requires new explicit approval.
 
 ## Accepted configuration
 
@@ -95,18 +96,39 @@ The one-time synthetic comparison completed on 2026-07-29:
 | Estimated cost | $0.020283 | $0.009894 |
 
 Total estimated cost was $0.030177. No cache read or write tokens were
-reported, no correction regression occurred, and no production model was
-selected.
+reported, and no correction regression occurred.
 
 The three policy rejections were moderate-uncertainty actionable suggestions.
 The application correctly rejected them under its precision-first rule and
 entered deterministic reduced mode; they were not policy-invalid accepted
-results. Luna produced the stronger bounded quantitative result, but Brad's
-category-specific review and explicit production selection remain required.
+results.
+
+## Accepted task-specific selection
+
+Brad reviewed the category-specific results and selected:
+
+| Setting | Accepted value |
+| --- | --- |
+| Task | `contextual_action_classification` |
+| Provider | OpenAI |
+| Model | `gpt-5.6-luna` |
+| Reasoning effort | `low` |
+| Endpoint and controls | Exact configuration exercised by this comparison |
+
+Luna produced zero false-positive actionable claims, fewer false negatives
+than Terra, correct `insufficient_evidence` behavior for conflicting and
+adversarial scenarios, successful schema, provenance, policy, correction, and
+provider gates, slightly lower average latency, and lower cost.
+
+This is not a universal Chief of Staff model selection. No model is selected
+for ranking, priority comparison, Chief of Staff Note synthesis, section
+prose, or another future inference task. The adapter remains disabled by
+default, and the selected configuration does not authorize provider calls or
+private-source egress.
 
 ## Mandatory stop
 
 The synthetic live authorization is consumed. Do not repeat an API call,
-refresh or broaden the credential, send private source evidence, select a
-production model, enable routine hosted inference, or begin Milestone 9
-without a new explicit instruction from Brad.
+refresh or broaden the credential, send private source evidence, enable
+routine hosted inference, or apply the selected model to another task without
+a new explicit instruction from Brad.

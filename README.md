@@ -7,8 +7,7 @@ identifying priorities, commitments, and useful signals.
 
 ## Status
 
-**Phase:** Milestones 1–7 complete; Milestone 8 live comparison complete,
-awaiting human model review
+**Phase:** Milestones 1–8 complete; deterministic Milestone 9 authorized
 
 The Python, local-state, deterministic briefing, repository connector, and
 read-only Google Calendar foundations are complete. An explicitly approved,
@@ -36,10 +35,13 @@ detections and supporting logic. Milestone 8's provider-neutral boundary,
 Terra–Luna comparison are complete. Every live call completed with zero
 false-positive actionable claims or schema, provenance, provider, cache, or
 correction failures. Three moderate-uncertainty suggestions were safely
-rejected by deterministic policy. The adapter remains disabled by default; no
-production model is selected, the one-time authorization is consumed, and
-routine hosted inference and private-data egress remain unauthorized. Personal
-Gmail and Google Drive remain deferred and unauthorized.
+rejected by deterministic policy. Brad reviewed the category-specific results
+and selected OpenAI `gpt-5.6-luna` with low reasoning for
+`contextual_action_classification` only, completing Milestone 8. The adapter
+remains disabled by default, the one-time authorization is consumed, and
+routine hosted inference and private-data egress remain unauthorized. No
+model is selected for ranking or synthesis. Personal Gmail and Google Drive
+remain deferred and unauthorized.
 
 ## Repository map
 

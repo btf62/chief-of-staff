@@ -29,6 +29,7 @@ from chief_of_staff.inference.evidence import (
 )
 from chief_of_staff.inference.models import (
     ALL_CONTEXTUAL_CLASSIFICATIONS,
+    INFERENCE_TASK_NAME,
     CandidateEvidence,
     CandidateResolution,
     ContextualClassification,
@@ -44,6 +45,9 @@ from chief_of_staff.inference.models import (
     UsageMetadata,
     ValidationStatus,
 )
+from chief_of_staff.inference.models import (
+    MODEL_CONFIGURATION_VERSION as SELECTED_MODEL_CONFIGURATION_VERSION,
+)
 from chief_of_staff.inference.policy import validate_inference_result
 from chief_of_staff.inference.providers.base import (
     InferenceConfigurationError,
@@ -57,6 +61,8 @@ from chief_of_staff.inference.providers.openai import (
     CONTEXTUAL_ACTION_RESULT_SCHEMA,
     OPENAI_API_KEY_REFERENCE,
     OPENAI_MAX_OUTPUT_TOKENS,
+    OPENAI_SELECTED_CONTEXTUAL_ACTION_MODEL,
+    OPENAI_TASK_MODEL_SELECTIONS,
     OpenAIAdapterConfiguration,
     OpenAIResponsesAdapter,
     OpenAIRetentionStatus,
@@ -291,6 +297,32 @@ def _approved_adapter(
         keychain=keychain or _FakeKeychain(),
         transport=transport,
     )
+
+
+def test_luna_is_selected_only_for_contextual_action_classification() -> None:
+    assert tuple(OPENAI_TASK_MODEL_SELECTIONS) == (INFERENCE_TASK_NAME,)
+    selection = OPENAI_TASK_MODEL_SELECTIONS[INFERENCE_TASK_NAME]
+    assert selection.model_id == OPENAI_SELECTED_CONTEXTUAL_ACTION_MODEL
+    assert selection.model_id == "gpt-5.6-luna"
+    assert selection.reasoning_effort == "low"
+    assert selection.model_configuration_version == (
+        SELECTED_MODEL_CONFIGURATION_VERSION
+    )
+    assert selection.enabled_by_default is False
+
+
+def test_milestone_8_is_recorded_as_complete_and_accepted() -> None:
+    root = Path(__file__).parents[1]
+    roadmap = (root / "docs/roadmap.md").read_text(encoding="utf-8")
+    agents = (root / "AGENTS.md").read_text(encoding="utf-8")
+
+    milestone = roadmap.split(
+        "## Milestone 8 — Provider-Neutral Inference",
+        maxsplit=1,
+    )[1].split("## Milestone 9", maxsplit=1)[0]
+    assert "**Status:** Complete" in milestone
+    assert "completes and accepts Milestone 8" in milestone
+    assert "Milestone 8 is complete and accepted" in agents
 
 
 def test_milestone_7_is_recorded_as_complete_and_accepted() -> None:

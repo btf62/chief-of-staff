@@ -1,7 +1,7 @@
 # Daily Briefing v1 Implementation Roadmap
 
 - **Status:** Accepted
-- **Version:** 7
+- **Version:** 8
 - **Owner:** Brad
 - **Last updated:** 2026-07-29
 
@@ -17,10 +17,11 @@ and is complete. Milestone 6 completed the Work Gmail input gate and Brad's
 human trust review. Milestone 7 deterministic explicit detection passed its
 synthetic evaluation and one five-source live validation. Brad reviewed the
 private evidence and briefing and accepted the detections and supporting
-logic, completing Milestone 7. Milestone 8's synthetic, mocked, and bounded
-live comparison gates are complete. It is paused for Brad's category-specific
-review and production-model decision. Personal Gmail and Google Drive are
-deferred until after MVP validation.
+logic, completing Milestone 7. Brad reviewed Milestone 8's synthetic, mocked,
+and bounded live comparison results and selected OpenAI `gpt-5.6-luna` with
+low reasoning for `contextual_action_classification` only, completing
+Milestone 8. Personal Gmail and Google Drive are deferred until after MVP
+validation.
 Dates and estimates remain intentionally omitted until implementation
 evidence supports them.
 
@@ -335,8 +336,7 @@ unchanged evidence.
 
 ## Milestone 8 — Provider-Neutral Inference
 
-- **Status:** In progress — bounded live comparison complete; human selection
-  pending
+- **Status:** Complete
 - **Intended user-visible outcome:** Where permitted and demonstrably useful,
   Brad receives bounded contextual inference and synthesis with evidence,
   explanations, sensitivity controls, and a clear reduced-mode fallback.
@@ -384,10 +384,19 @@ or correction regressions. The application safely rejected three
 moderate-uncertainty actionable suggestions. Total estimated cost was
 $0.030177.
 
-The one-time authorization is consumed. The private comparison now awaits
-Brad's category-specific review and explicit production-model decision. Do not
-repeat provider calls, send private-source evidence, enable routine hosted
-inference, or begin Milestone 9 without a new explicit instruction.
+Brad reviewed the category-specific results and selected OpenAI
+`gpt-5.6-luna` with low reasoning for
+`contextual_action_classification` only. Luna produced zero false-positive
+actionable claims, fewer false negatives than Terra, correct
+`insufficient_evidence` behavior in conflicting and adversarial scenarios,
+successful schema, provenance, policy, correction, and provider gates,
+slightly lower latency, and lower bounded cost. This task-specific selection
+completes and accepts Milestone 8.
+
+The one-time authorization is consumed. The adapter remains disabled by
+default. The selection does not apply to ranking or synthesis and does not
+authorize another provider call, private-source evidence, or routine hosted
+inference.
 
 ## Milestone 9 — Ranking and Briefing Composition
 

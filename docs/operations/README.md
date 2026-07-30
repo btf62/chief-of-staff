@@ -39,4 +39,5 @@ because the system is not deployed or approved for operational use.
   validation, and mandatory stop
 - [Milestone 8 live-evaluation gate](milestone-8-live-evaluation-gate.md) —
   accepted and exercised OpenAI project, retention, cost, request, and
-  synthetic-comparison boundary; the one-time authorization is consumed
+  synthetic-comparison boundary plus Brad's task-specific Luna selection; the
+  one-time authorization is consumed

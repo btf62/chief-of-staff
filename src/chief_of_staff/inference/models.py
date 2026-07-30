@@ -11,7 +11,7 @@ INFERENCE_TASK_VERSION = "1"
 PROMPT_VERSION = "contextual-action-v1"
 SCHEMA_VERSION = "contextual-action-result-v1"
 POLICY_VERSION = "contextual-action-policy-v1"
-MODEL_CONFIGURATION_VERSION = "unselected-v1"
+MODEL_CONFIGURATION_VERSION = "m8-live-comparison-v1:gpt-5.6-luna:low"
 MAX_EXPLANATION_CHARACTERS = 400
 
 

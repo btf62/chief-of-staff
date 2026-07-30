@@ -8,6 +8,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import ROUND_CEILING, Decimal
 from enum import StrEnum
+from types import MappingProxyType
 from typing import Any, Final, Protocol, cast
 
 import openai
@@ -15,7 +16,9 @@ from openai import OpenAI
 
 from chief_of_staff.auth import KeychainSecretReference
 from chief_of_staff.inference.models import (
+    INFERENCE_TASK_NAME,
     MAX_EXPLANATION_CHARACTERS,
+    MODEL_CONFIGURATION_VERSION,
     ContextualClassification,
     InclusionRecommendation,
     InferenceRequest,
@@ -44,6 +47,7 @@ OPENAI_EVALUATION_MODELS: Final = (
     "gpt-5.6-terra",
     "gpt-5.6-luna",
 )
+OPENAI_SELECTED_CONTEXTUAL_ACTION_MODEL: Final = "gpt-5.6-luna"
 OPENAI_API_KEY_REFERENCE: Final = KeychainSecretReference(
     service="chief-of-staff/openai",
     account="milestone-8-evaluation-api-key",
@@ -52,6 +56,34 @@ OPENAI_REASONING_EFFORT: Final = "low"
 OPENAI_SERVICE_TIER: Final = "default"
 OPENAI_PROMPT_CACHE_MODE: Final = "explicit"
 OPENAI_MAX_OUTPUT_TOKENS: Final = 500
+
+
+@dataclass(frozen=True, slots=True)
+class OpenAITaskModelSelection:
+    """Reviewed task-specific model choice without enabling provider access."""
+
+    task_name: str
+    provider: str
+    model_id: str
+    reasoning_effort: str
+    endpoint: str
+    model_configuration_version: str
+    enabled_by_default: bool
+
+
+OPENAI_TASK_MODEL_SELECTIONS: Final = MappingProxyType(
+    {
+        INFERENCE_TASK_NAME: OpenAITaskModelSelection(
+            task_name=INFERENCE_TASK_NAME,
+            provider=OPENAI_PROVIDER_NAME,
+            model_id=OPENAI_SELECTED_CONTEXTUAL_ACTION_MODEL,
+            reasoning_effort=OPENAI_REASONING_EFFORT,
+            endpoint=OPENAI_RESPONSES_ENDPOINT,
+            model_configuration_version=MODEL_CONFIGURATION_VERSION,
+            enabled_by_default=False,
+        )
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)

@@ -23,18 +23,16 @@ the logic sound, completing Milestone 6. Milestone 7 deterministic explicit
 detection has passed its synthetic evaluation and one five-source live
 validation. Brad reviewed the private evidence and briefing and judged the
 detections and supporting logic sound, completing and accepting Milestone 7.
-Milestone 8's provider-neutral boundary, deterministic sensitivity and
-evidence controls, disabled OpenAI Responses adapter, persistence metadata,
-synthetic evaluation, and official-SDK live transport are implemented. Its
-25-scenario mocked gate and one authorized twenty-call synthetic Terra–Luna
-comparison are complete. The live comparison produced zero false-positive
-actionable claims, schema failures, provenance failures, provider failures,
-cache reads or writes, or correction regressions; deterministic policy safely
-rejected three moderate-uncertainty suggestions. Brad's category-specific
-review and production-model decision remain pending. The one-time provider
-authorization is consumed. No repeat provider call, source retrieval,
-authorization refresh, scope change, routine hosted inference, private-data
-egress, production-model selection, or Milestone 9 work is now authorized.
+Milestone 8 is complete and accepted. Brad reviewed the category-specific
+Terra–Luna results and selected OpenAI `gpt-5.6-luna` with low reasoning for
+the `contextual_action_classification` task only, using the exact evaluated
+Responses configuration. The adapter remains disabled by default. The
+selection does not apply to ranking, priority comparison, note synthesis, or
+section prose, and it does not authorize routine hosted inference or private-
+source egress. The one-time provider authorization is consumed. No repeat
+provider call, source retrieval, authorization refresh, scope change, routine
+hosted inference, private-data egress, or model selection for another task is
+now authorized.
 Personal Gmail and Google Drive remain deferred and unauthorized.
 
 ## Working rules
@@ -102,9 +100,10 @@ Google Calendar, Todoist, Jira project-discovery, Jira issue, and combined Work
 Gmail trial gates and the one-time Milestone 8 synthetic provider comparison
 have been exercised. Do not repeat live retrieval or provider calls, refresh
 authorization, broaden access, repeat Jira discovery, run an unrelated live
-retrieval, select a production model, enable routine hosted inference, or
-begin another connector or Milestone 9 without new explicit approval from
-Brad. Satisfy a milestone's acceptance gate before beginning dependent work.
+retrieval, enable routine hosted inference, select a model for another
+inference task, or begin another connector without new explicit approval from
+Brad. The current task explicitly authorizes deterministic Milestone 9 work
+only. Satisfy a milestone's acceptance gate before beginning dependent work.
 Record material new product or architecture decisions before implementing
 them.
 
