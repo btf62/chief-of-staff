@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import sqlite3
+from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -29,6 +31,7 @@ from chief_of_staff.domain import (
 )
 from chief_of_staff.persistence import Database, StateStore
 from chief_of_staff.pipeline import (
+    BriefingItem,
     BriefingSectionName,
     DeterministicBriefingPipeline,
     HistoricalMode,
@@ -39,6 +42,9 @@ from chief_of_staff.pipeline import (
     TemporalState,
     resolve_context,
     safe_source_title,
+)
+from chief_of_staff.pipeline.historical_evaluation import (
+    historical_invariants_match,
 )
 from chief_of_staff.web import presentation_from_plan
 
@@ -156,11 +162,12 @@ def _persist_recorded_result(
     generated_at: datetime,
     as_of: datetime,
 ) -> None:
+    context = result.plan.context
     store.add_briefing_run(
         BriefingRun(
             id=run_id,
-            briefing_date=DAY,
-            timezone=ZONE,
+            briefing_date=context.briefing_date,
+            timezone=context.timezone,
             invocation_mode="synthetic_recorded_test",
             started_at=generated_at,
             completed_at=generated_at,
@@ -198,6 +205,115 @@ def _persist_recorded_result(
         store,
         briefing_run_id=run_id,
         result=result,
+    )
+
+
+def _historical_timezone_pipeline(
+    day: date,
+    *,
+    as_of: datetime,
+    event_windows: tuple[tuple[str, int, int, int, int], ...] = (
+        ("morning", 9, 0, 10, 0),
+        ("afternoon", 14, 0, 15, 0),
+    ),
+    due_at: datetime | None = None,
+) -> PipelineResult:
+    zone = ZoneInfo(ZONE)
+    events = tuple(
+        SourceItem(
+            id=item_id,
+            source_record_id=item_id,
+            item_type="calendar_event",
+            facts={
+                "title": f"Synthetic {item_id} commitment",
+                "status": "confirmed",
+                "event_type": "default",
+                "importance": 3,
+                "explicit_commitment": True,
+                "all_day": False,
+                "start_at": datetime(
+                    day.year,
+                    day.month,
+                    day.day,
+                    start_hour,
+                    start_minute,
+                    tzinfo=zone,
+                ).isoformat(),
+                "end_at": datetime(
+                    day.year,
+                    day.month,
+                    day.day,
+                    end_hour,
+                    end_minute,
+                    tzinfo=zone,
+                ).isoformat(),
+            },
+            retrieved_at=as_of - timedelta(days=1),
+            freshness_at=as_of - timedelta(days=1),
+            display_url=f"https://example.invalid/calendar/{item_id}",
+        )
+        for (
+            item_id,
+            start_hour,
+            start_minute,
+            end_hour,
+            end_minute,
+        ) in event_windows
+    )
+    connectors = [
+        StaticConnector(
+            source_name="google_calendar",
+            approved_scope="synthetic historical timezone calendar",
+            items=events,
+            status=CoverageStatus.COMPLETE,
+        )
+    ]
+    if due_at is not None:
+        connectors.append(
+            StaticConnector(
+                source_name="todoist",
+                approved_scope="synthetic historical timezone tasks",
+                items=(
+                    SourceItem(
+                        id="due-task",
+                        source_record_id="due-task",
+                        item_type="task",
+                        facts={
+                            "title": "Complete the synthetic timezone task",
+                            "status": "open",
+                            "importance": 5,
+                            "provider_priority": 4,
+                            "explicit_commitment": True,
+                            "primary_stewardship": True,
+                            "all_day": False,
+                            "due_at": due_at.isoformat(),
+                            "effort_minutes": 60,
+                        },
+                        retrieved_at=as_of - timedelta(days=1),
+                        freshness_at=as_of - timedelta(days=1),
+                        display_url="https://example.invalid/task/due-task",
+                    ),
+                ),
+                status=CoverageStatus.COMPLETE,
+            )
+        )
+    context = resolve_context(
+        run_id=f"timezone-{day.isoformat()}-{as_of.hour}-{as_of.minute}",
+        briefing_date=day,
+        timezone=ZONE,
+        generated_at=as_of,
+        as_of=as_of,
+    )
+    return DeterministicBriefingPipeline().run(context, tuple(connectors))
+
+
+def _briefing_section(
+    result: PipelineResult,
+    name: BriefingSectionName,
+) -> tuple[BriefingItem, ...]:
+    return next(
+        (section.items for section in result.plan.sections if section.name is name),
+        (),
     )
 
 
@@ -331,6 +447,288 @@ def test_normalized_fact_archive_round_trips_without_provider_payload() -> None:
     assert "access_token" not in serialized
     assert "raw_payload" not in serialized
     assert "mime" not in serialized.casefold()
+
+
+@pytest.mark.parametrize(
+    ("day", "expected_archived_start_hour"),
+    (
+        (date(2026, 7, 30), 13),
+        (date(2026, 1, 15), 14),
+    ),
+)
+def test_recorded_replay_preserves_local_calendar_and_focus_across_dst(
+    tmp_path: Path,
+    day: date,
+    expected_archived_start_hour: int,
+) -> None:
+    zone = ZoneInfo(ZONE)
+    as_of = datetime(day.year, day.month, day.day, 8, 15, tzinfo=zone)
+    original = _historical_timezone_pipeline(
+        day,
+        as_of=as_of,
+        due_at=datetime(day.year, day.month, day.day, 16, 30, tzinfo=zone),
+    )
+    with Database.open(tmp_path / f"replay-{day}.sqlite3") as database:
+        store = StateStore(database)
+        _persist_recorded_result(
+            store,
+            original,
+            run_id="recorded-timezone",
+            generated_at=as_of,
+            as_of=as_of,
+        )
+        archived = store.get_briefing_archived_facts("recorded-timezone")
+        restored = tuple(
+            deserialize_normalized_record(item.normalized_fact_json)
+            for item in archived
+        )
+        morning = next(item for item in restored if item.id.endswith(":morning"))
+        assert morning.start_at is not None
+        assert morning.start_at.utcoffset() == timedelta(0)
+        assert morning.start_at.hour == expected_archived_start_hour
+
+        replay = HistoricalBriefingService(store).replay(
+            "recorded-timezone",
+            generated_at=as_of + timedelta(days=2),
+        )
+
+    assert replay.result is not None
+    assert "9:00 AM-10:00 AM" in original.rendered.text
+    assert "9:00 AM-10:00 AM" in replay.result.rendered.text
+    assert "2:00 PM-3:00 PM" in original.rendered.text
+    assert "2:00 PM-3:00 PM" in replay.result.rendered.text
+    assert "10:15\u201311:45 a.m. available focus window" in original.rendered.text
+    assert "10:15\u201311:45 a.m. available focus window" in (
+        replay.result.rendered.text
+    )
+    replay_morning = next(
+        item
+        for item in replay.result.deduplication.records
+        if item.id.endswith(":morning")
+    )
+    assert replay_morning.start_at is not None
+    assert getattr(replay_morning.start_at.tzinfo, "key", None) == ZONE
+    assert replay_morning.start_at.hour == 9
+    assert replay.result.plan.context.briefing_date == day
+    assert replay.result.plan.context.as_of == as_of
+
+
+def test_replay_preserves_near_midnight_date_and_due_datetime(
+    tmp_path: Path,
+) -> None:
+    day = date(2026, 7, 30)
+    zone = ZoneInfo(ZONE)
+    as_of = datetime(2026, 7, 30, 8, 0, tzinfo=zone)
+    late = datetime(2026, 7, 30, 23, 30, tzinfo=zone)
+    original = _historical_timezone_pipeline(
+        day,
+        as_of=as_of,
+        event_windows=(("late", 23, 30, 23, 50),),
+        due_at=late,
+    )
+    with Database.open(tmp_path / "midnight-replay.sqlite3") as database:
+        store = StateStore(database)
+        _persist_recorded_result(
+            store,
+            original,
+            run_id="recorded-midnight",
+            generated_at=as_of,
+            as_of=as_of,
+        )
+        archived = store.get_briefing_archived_facts("recorded-midnight")
+        restored = tuple(
+            deserialize_normalized_record(item.normalized_fact_json)
+            for item in archived
+        )
+        late_event = next(item for item in restored if item.id.endswith(":late"))
+        due_task = next(item for item in restored if item.id.endswith(":due-task"))
+        assert late_event.start_at is not None
+        assert due_task.due_at is not None
+        assert late_event.start_at.date() == date(2026, 7, 31)
+        assert due_task.due_at.date() == date(2026, 7, 31)
+        replay = HistoricalBriefingService(store).replay(
+            "recorded-midnight",
+            generated_at=as_of + timedelta(days=1),
+        )
+
+    assert replay.result is not None
+    assert replay.result.plan.context.briefing_date == day
+    assert "11:30 PM-11:50 PM" in replay.result.rendered.text
+    assert "The deadline is today at 11:30 PM." in replay.result.rendered.text
+    assert "Friday, July 31 at 11:30 PM" not in replay.result.rendered.text
+    calendar_items = _briefing_section(
+        replay.result,
+        BriefingSectionName.TODAYS_CALENDAR,
+    )
+    assert len(calendar_items) == 1
+
+
+def test_replay_temporal_states_are_calculated_in_recorded_timezone(
+    tmp_path: Path,
+) -> None:
+    day = date(2026, 7, 30)
+    zone = ZoneInfo(ZONE)
+    as_of = datetime(2026, 7, 30, 11, 30, tzinfo=zone)
+    original = _historical_timezone_pipeline(
+        day,
+        as_of=as_of,
+        event_windows=(
+            ("earlier", 9, 0, 10, 0),
+            ("current", 11, 0, 12, 0),
+            ("upcoming", 14, 0, 15, 0),
+        ),
+    )
+    with Database.open(tmp_path / "temporal-replay.sqlite3") as database:
+        store = StateStore(database)
+        _persist_recorded_result(
+            store,
+            original,
+            run_id="recorded-temporal",
+            generated_at=as_of,
+            as_of=as_of,
+        )
+        replay = HistoricalBriefingService(store).replay(
+            "recorded-temporal",
+            generated_at=as_of + timedelta(days=1),
+        )
+
+    assert replay.result is not None
+    items = _briefing_section(
+        replay.result,
+        BriefingSectionName.TODAYS_CALENDAR,
+    )
+    assert tuple(item.temporal_state for item in items) == (
+        TemporalState.EARLIER_TODAY,
+        TemporalState.IN_PROGRESS,
+        TemporalState.UPCOMING,
+    )
+    assert "Earlier today · Synthetic earlier commitment" in replay.result.rendered.text
+    assert "In progress · Synthetic current commitment" in replay.result.rendered.text
+    assert "Upcoming · Synthetic upcoming commitment" in replay.result.rendered.text
+
+
+def test_reconstruction_projects_archived_utc_facts_to_briefing_timezone(
+    tmp_path: Path,
+) -> None:
+    day = date(2026, 1, 15)
+    zone = ZoneInfo(ZONE)
+    as_of = datetime(2026, 1, 15, 8, 15, tzinfo=zone)
+    original = _historical_timezone_pipeline(
+        day,
+        as_of=as_of,
+        due_at=datetime(2026, 1, 15, 16, 30, tzinfo=zone),
+    )
+    archived_records = tuple(
+        deserialize_normalized_record(serialize_normalized_record(record))
+        for record in original.deduplication.records
+    )
+    with Database.open(tmp_path / "timezone-reconstruction.sqlite3") as database:
+        reconstruction = HistoricalBriefingService(StateStore(database)).reconstruct(
+            records=archived_records,
+            coverage=original.plan.coverage,
+            briefing_date=day,
+            timezone=ZONE,
+            generated_at=as_of + timedelta(days=2),
+            as_of=as_of.astimezone(UTC),
+        )
+
+    assert reconstruction.result is not None
+    assert "9:00 AM-10:00 AM" in reconstruction.result.rendered.text
+    assert "2:00 PM-3:00 PM" in reconstruction.result.rendered.text
+    assert "10:15\u201311:45 a.m. available focus window" in (
+        reconstruction.result.rendered.text
+    )
+    assert "The deadline is today at 4:30 PM." in reconstruction.result.rendered.text
+    assert reconstruction.result.plan.context.as_of == as_of
+    assert all(
+        getattr(record.start_at.tzinfo, "key", None) == ZONE
+        for record in reconstruction.result.deduplication.records
+        if record.start_at is not None
+    )
+
+
+def test_milestone_gate_rejects_replay_local_time_drift(
+    tmp_path: Path,
+) -> None:
+    day = date(2026, 7, 30)
+    zone = ZoneInfo(ZONE)
+    as_of = datetime(2026, 7, 30, 8, 15, tzinfo=zone)
+    original = _historical_timezone_pipeline(
+        day,
+        as_of=as_of,
+        due_at=datetime(2026, 7, 30, 16, 30, tzinfo=zone),
+    )
+    with Database.open(tmp_path / "gate-replay.sqlite3") as database:
+        store = StateStore(database)
+        _persist_recorded_result(
+            store,
+            original,
+            run_id="recorded-gate",
+            generated_at=as_of,
+            as_of=as_of,
+        )
+        replay = HistoricalBriefingService(store).replay(
+            "recorded-gate",
+            generated_at=as_of + timedelta(days=1),
+        )
+
+    assert replay.result is not None
+    assert historical_invariants_match(
+        original,
+        replay.result,
+        timezone=ZONE,
+        recorded_briefing_date=day,
+        recorded_run_id="recorded-gate",
+        replay_originating_run_id="recorded-gate",
+        persisted_replay_originating_run_id="recorded-gate",
+        recorded_mode=HistoricalMode.RECORDED.value,
+        replay_mode=HistoricalMode.REPLAY.value,
+    )
+
+    shifted_sections = tuple(
+        replace(
+            section,
+            items=tuple(
+                replace(
+                    item,
+                    starts_at=(
+                        item.starts_at + timedelta(hours=4)
+                        if item.starts_at is not None
+                        else None
+                    ),
+                    ends_at=(
+                        item.ends_at + timedelta(hours=4)
+                        if item.ends_at is not None
+                        else None
+                    ),
+                )
+                for item in section.items
+            ),
+        )
+        if section.name
+        in {
+            BriefingSectionName.TODAYS_CALENDAR,
+            BriefingSectionName.RECOMMENDED_FOCUS_BLOCK,
+        }
+        else section
+        for section in replay.result.plan.sections
+    )
+    drifted = replace(
+        replay.result,
+        plan=replace(replay.result.plan, sections=shifted_sections),
+    )
+
+    assert not historical_invariants_match(
+        original,
+        drifted,
+        timezone=ZONE,
+        recorded_briefing_date=day,
+        recorded_run_id="recorded-gate",
+        replay_originating_run_id="recorded-gate",
+        persisted_replay_originating_run_id="recorded-gate",
+        recorded_mode=HistoricalMode.RECORDED.value,
+        replay_mode=HistoricalMode.REPLAY.value,
+    )
 
 
 def test_two_recorded_runs_replay_lineage_and_synthetic_separation(

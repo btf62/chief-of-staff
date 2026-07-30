@@ -33,6 +33,13 @@ from chief_of_staff.pipeline import (
     resolve_context,
 )
 from chief_of_staff.pipeline.evaluation import run_synthetic_ranking_evaluation
+from chief_of_staff.pipeline.historical_evaluation import (
+    CalendarSignature,
+    FocusSignature,
+    calendar_signature,
+    focus_signature,
+    historical_invariants_match,
+)
 from chief_of_staff.web import presentation_from_plan
 
 OUTPUT_DIRECTORY = Path(".local/milestone-11/review")
@@ -58,6 +65,15 @@ class AcceptanceMetric:
     """One inspectable synthetic gate result."""
 
     name: str
+    passed: bool
+    observed: str
+
+
+@dataclass(frozen=True, slots=True)
+class HistoricalComparison:
+    """Rendered historical evidence plus machine-checked replay invariants."""
+
+    artifact: str
     passed: bool
     observed: str
 
@@ -95,12 +111,14 @@ def main() -> int:
         outage_outputs[unavailable_source] = result
         _write_private(OUTPUT_DIRECTORY / f"{outage.name}.md", result.rendered.text)
 
+    historical = _historical_comparison(full)
     ranking_report, _ranking_outputs = run_synthetic_ranking_evaluation()
     metrics = _metrics(
         full,
         outputs["safe-title-example"],
         outage_outputs,
         ranking_report,
+        historical,
     )
     aggregate = {
         "passed": all(metric.passed for metric in metrics),
@@ -128,7 +146,7 @@ def main() -> int:
     )
     _write_private(
         OUTPUT_DIRECTORY / "recorded-versus-reconstructed.md",
-        _historical_comparison(full),
+        historical.artifact,
     )
     _write_private(
         OUTPUT_DIRECTORY / "safe-title-example.md",
@@ -553,6 +571,7 @@ def _metrics(
     safe_title: PipelineResult,
     outage_outputs: dict[str, PipelineResult],
     ranking_report: object,
+    historical: HistoricalComparison,
 ) -> tuple[AcceptanceMetric, ...]:
     from chief_of_staff.pipeline.evaluation import RankingEvaluationReport
 
@@ -579,6 +598,7 @@ def _metrics(
         path.is_file() and path.stat().st_size > 0
         for path in expected_browser_artifacts
     )
+    responsive_review = _responsive_review()
     safe_title_text = safe_title.rendered.text
     safe_title_readable = (
         "Fix example.test subscription" in safe_title_text
@@ -650,9 +670,9 @@ def _metrics(
             "Earlier, in-progress, upcoming, and elapsed focus tests passed",
         ),
         AcceptanceMetric(
-            "Historical labeling and future leakage",
-            True,
-            "Recorded, replay, reconstructed, synthetic, and as-of tests passed",
+            "Historical timezone, labeling, lineage, and future leakage",
+            historical.passed,
+            historical.observed,
         ),
         AcceptanceMetric(
             "Safe source-title display",
@@ -661,12 +681,40 @@ def _metrics(
         ),
         AcceptanceMetric(
             "Local web and print presentation",
-            browser_artifacts_complete,
+            browser_artifacts_complete and responsive_review[0],
             (
-                "1280-pixel, 560-pixel, and PDF artifacts present"
+                responsive_review[1]
                 if browser_artifacts_complete
                 else "Required browser screenshots or PDF are missing"
             ),
+        ),
+    )
+
+
+def _responsive_review() -> tuple[bool, str]:
+    path = OUTPUT_DIRECTORY / "responsive-review.json"
+    if not path.is_file():
+        return False, "Verified responsive-review metadata is missing"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except OSError, json.JSONDecodeError:
+        return False, "Responsive-review metadata is unreadable"
+    passed = (
+        isinstance(payload, dict)
+        and payload.get("window_inner_width") == 560
+        and payload.get("visual_viewport_scale") == 1
+        and payload.get("horizontal_overflow") is False
+        and isinstance(payload.get("device_scale_factor"), int | float)
+        and payload.get("device_scale_factor", 0) > 0
+    )
+    if not passed:
+        return False, "Responsive-review metadata did not prove the 560-pixel gate"
+    return (
+        True,
+        (
+            "1280-pixel and native 560-pixel captures plus PDF present; "
+            f"560 CSS pixels at 100% zoom, device scale factor "
+            f"{payload['device_scale_factor']}, no horizontal overflow"
         ),
     )
 
@@ -735,7 +783,7 @@ def _comparison_report(
     return "\n".join(lines)
 
 
-def _historical_comparison(full: PipelineResult) -> str:
+def _historical_comparison(full: PipelineResult) -> HistoricalComparison:
     path = OUTPUT_DIRECTORY / "historical-review.sqlite3"
     with Database.open(path) as database:
         store = StateStore(database)
@@ -768,10 +816,40 @@ def _historical_comparison(full: PipelineResult) -> str:
         )
         if reconstruction.result is None:
             raise RuntimeError("synthetic reconstruction was unexpectedly unavailable")
+        replay_state = store.get_briefing_presentation(replay.run_id or "")
+        if replay_state is None:
+            raise RuntimeError("synthetic replay lineage was not persisted")
+        replay_calendar = calendar_signature(replay.result)
+        replay_focus = focus_signature(replay.result)
+        comparison_passed = historical_invariants_match(
+            full,
+            replay.result,
+            timezone=TIMEZONE,
+            recorded_briefing_date=recorded.run.briefing_date,
+            recorded_run_id=recorded_run_id,
+            replay_originating_run_id=replay.originating_recorded_run_id,
+            persisted_replay_originating_run_id=(
+                replay_state.run.originating_recorded_run_id
+            ),
+            recorded_mode=recorded.run.historical_mode,
+            replay_mode=replay_state.run.historical_mode,
+        )
+        observed = _historical_observation(
+            replay_calendar,
+            replay_focus,
+            passed=comparison_passed,
+        )
         path.chmod(0o600)
-    return "\n".join(
+    artifact = "\n".join(
         (
             "# Recorded, Reconstructed, and Replay Comparison",
+            "",
+            "## Machine-checked invariants",
+            "",
+            f"- Result: {'Pass' if comparison_passed else 'Fail'}",
+            f"- {observed}",
+            "- Recorded and replay generation timestamps and disclosures remain "
+            "intentionally different.",
             "",
             "## Recorded exactly as generated",
             "",
@@ -790,6 +868,30 @@ def _historical_comparison(full: PipelineResult) -> str:
             "overwrites the original presentation.",
             "",
         )
+    )
+    return HistoricalComparison(
+        artifact=artifact,
+        passed=comparison_passed,
+        observed=observed,
+    )
+
+
+def _historical_observation(
+    calendar: CalendarSignature,
+    focus: FocusSignature,
+    *,
+    passed: bool,
+) -> str:
+    calendar_times = "; ".join(
+        f"{source_id} {starts.split(' ', 1)[1]}-{ends.split(' ', 1)[1]}"
+        for source_id, starts, ends, _detail, _zone in calendar
+    )
+    focus_times = f"{focus[0].split(' ', 1)[1]}-{focus[1].split(' ', 1)[1]}"
+    status = "preserved" if passed else "mismatch detected"
+    return (
+        f"Recorded-to-replay local times {status} in {TIMEZONE}: "
+        f"{calendar_times}; focus {focus_times}; briefing date, source IDs, "
+        "and recorded-run lineage checked"
     )
 
 
@@ -940,8 +1042,8 @@ def _review_index(aggregate: dict[str, object], database: Path) -> str:
             "",
             "Review `comparison-report.md`, the representative and outage "
             "briefings, `recorded-versus-reconstructed.md`, "
-            "`safe-title-example.md`, the 1280- and 560-pixel screenshots, and "
-            "the print/PDF artifact.",
+            "`safe-title-example.md`, `responsive-review.json`, the 1280- and "
+            "560-pixel screenshots, and the print/PDF artifact.",
             "",
             "Brad's review remains the Milestone 11 acceptance gate.",
             "",

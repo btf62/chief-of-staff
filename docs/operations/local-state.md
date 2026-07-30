@@ -80,6 +80,13 @@ sufficient and excludes facts later than its effective `as_of`. Sources
 without an honest as-of view are partial or unavailable. Synthetic scenarios
 are evaluation artifacts and are not inserted into personal history.
 
+Archived timestamps remain normalized to UTC for storage. Before replay or
+reconstruction applies date-sensitive logic, it projects every archived
+instant into the briefing run's recorded IANA timezone. That timezone governs
+local day boundaries, temporal states, displayed times, due dates, schedule
+gaps, and focus windows; a stored UTC representation never changes the source
+event's local meaning.
+
 Later corrections remain an explicit current overlay; the original recorded
 statement remains distinguishable. A permitted local deletion removes the
 dependent presentation content and matching replay facts while retaining only

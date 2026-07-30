@@ -7,6 +7,15 @@ No strict versioning scheme is promised before a distributable product exists.
 
 ## [Unreleased]
 
+### Changed
+
+- Historical replay and reconstruction now project UTC-normalized archived
+  instants into the briefing's recorded IANA timezone before local-day
+  classification, display, ranking, schedule-gap, and focus-window logic.
+- The Milestone 11 historical gate now compares recorded and replayed local
+  Calendar times, focus boundaries, briefing dates, source identifiers, and
+  recorded-run lineage instead of passing when both outputs merely generate.
+
 ### Added
 
 - A private mode-`0600` Milestone 11 synthetic acceptance package covering

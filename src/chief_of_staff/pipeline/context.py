@@ -96,6 +96,8 @@ def resolve_context(
     effective = as_of or generated
     if generated.tzinfo is None or effective.tzinfo is None:
         raise ValueError("generated_at and as_of must be timezone-aware")
+    generated = generated.astimezone(zone)
+    effective = effective.astimezone(zone)
     if historical_mode is HistoricalMode.REPLAY and not originating_recorded_run_id:
         raise ValueError("replay mode requires an originating recorded run")
 

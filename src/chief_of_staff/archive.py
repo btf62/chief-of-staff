@@ -6,6 +6,7 @@ import json
 import uuid
 from dataclasses import asdict, dataclass, replace
 from datetime import UTC, date, datetime
+from zoneinfo import ZoneInfo
 
 from chief_of_staff.connectors import SourceCoverage
 from chief_of_staff.domain import (
@@ -223,10 +224,14 @@ class HistoricalBriefingService:
     ) -> HistoricalGeneration:
         """Create an explicitly limited later reconstruction."""
 
+        zone = ZoneInfo(timezone)
+        localized_as_of = _in_timezone(as_of, zone)
+        localized_records = _records_in_timezone(records, zone)
+        localized_coverage = _coverage_in_timezone(coverage, zone)
         filtered_records, filtered_coverage = _historical_snapshot(
-            records,
-            coverage,
-            as_of=as_of,
+            localized_records,
+            localized_coverage,
+            as_of=localized_as_of,
         )
         if not filtered_records or not any(
             item.status in {CoverageStatus.COMPLETE, CoverageStatus.PARTIAL}
@@ -245,7 +250,7 @@ class HistoricalBriefingService:
             briefing_date=briefing_date,
             timezone=timezone,
             generated_at=generated_at,
-            as_of=as_of,
+            as_of=localized_as_of,
             mode=HistoricalMode.RECONSTRUCTED,
             originating_recorded_run_id=None,
             disclosure=(
@@ -305,13 +310,16 @@ class HistoricalBriefingService:
             historical_mode=mode,
             originating_recorded_run_id=originating_recorded_run_id,
         )
+        zone = ZoneInfo(context.timezone)
+        records = _records_in_timezone(records, zone)
+        coverage = _coverage_in_timezone(coverage, zone)
         decisions = (
             {}
             if mode is HistoricalMode.SYNTHETIC
             else {
                 record.evidence_fingerprint: self.state_store.recurrence_decision(
                     record.evidence_fingerprint,
-                    effective_at=as_of,
+                    effective_at=context.as_of,
                 )
                 for record in records
                 if record.evidence_fingerprint
@@ -339,8 +347,8 @@ class HistoricalBriefingService:
             self._persist_historical_result(
                 run_id=run_id,
                 result=result,
-                generated_at=generated_at,
-                as_of=as_of,
+                generated_at=context.generated_at,
+                as_of=context.as_of,
                 mode=mode,
                 originating_recorded_run_id=originating_recorded_run_id,
             )
@@ -461,6 +469,70 @@ def _json_default(value: object) -> str:
     if isinstance(value, datetime):
         return value.astimezone(UTC).isoformat()
     raise TypeError(f"unsupported archive value: {type(value).__name__}")
+
+
+def _records_in_timezone(
+    records: tuple[NormalizedRecord, ...],
+    zone: ZoneInfo,
+) -> tuple[NormalizedRecord, ...]:
+    """Project archived instants into the briefing's authoritative timezone."""
+
+    return tuple(
+        replace(
+            record,
+            start_at=_optional_in_timezone(record.start_at, zone),
+            end_at=_optional_in_timezone(record.end_at, zone),
+            due_at=_optional_in_timezone(record.due_at, zone),
+            source_created_at=_optional_in_timezone(record.source_created_at, zone),
+            source_updated_at=_optional_in_timezone(record.source_updated_at, zone),
+            provenance=_provenance_in_timezone(record.provenance, zone),
+            associated_provenance=tuple(
+                _provenance_in_timezone(item, zone)
+                for item in record.associated_provenance
+            ),
+            associated_source_facts=tuple(
+                replace(
+                    item,
+                    provenance=_provenance_in_timezone(item.provenance, zone),
+                    due_at=_optional_in_timezone(item.due_at, zone),
+                )
+                for item in record.associated_source_facts
+            ),
+        )
+        for record in records
+    )
+
+
+def _coverage_in_timezone(
+    coverage: tuple[SourceCoverage, ...],
+    zone: ZoneInfo,
+) -> tuple[SourceCoverage, ...]:
+    return tuple(
+        replace(
+            item,
+            retrieved_at=_in_timezone(item.retrieved_at, zone),
+            freshness_at=_optional_in_timezone(item.freshness_at, zone),
+        )
+        for item in coverage
+    )
+
+
+def _provenance_in_timezone(provenance: Provenance, zone: ZoneInfo) -> Provenance:
+    return replace(
+        provenance,
+        retrieved_at=_in_timezone(provenance.retrieved_at, zone),
+        freshness_at=_optional_in_timezone(provenance.freshness_at, zone),
+    )
+
+
+def _optional_in_timezone(value: datetime | None, zone: ZoneInfo) -> datetime | None:
+    return None if value is None else _in_timezone(value, zone)
+
+
+def _in_timezone(value: datetime, zone: ZoneInfo) -> datetime:
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError("historical timestamps must be timezone-aware")
+    return value.astimezone(zone)
 
 
 def _historical_snapshot(
