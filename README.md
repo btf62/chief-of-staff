@@ -7,7 +7,7 @@ identifying priorities, commitments, and useful signals.
 
 ## Status
 
-**Phase:** Milestones 1–8 complete; Milestone 9 implementation review pending
+**Phase:** Milestones 1–9 complete; Milestone 10 not yet accepted
 
 The Python, local-state, deterministic briefing, repository connector, and
 read-only Google Calendar foundations are complete. An explicitly approved,
@@ -44,8 +44,12 @@ model is selected for ranking or synthesis. Personal Gmail and Google Drive
 remain deferred and unauthorized. Milestone 9 now has explainable
 deterministic ranking, an application-owned briefing plan, conservative
 duplicate and conflict handling, canonical composition, and a passing
-26-scenario synthetic gate. Brad's review of the private representative
-briefings remains the milestone acceptance gate.
+26-scenario synthetic gate. Brad reviewed and accepted the corrected private
+representative briefings. All scenarios passed with zero unsupported claims
+or false-positive actionable recommendations; conflicts remain
+source-attributed, duplicate suppression preserves authoritative records and
+links, and ranking factors remain inspectable and source-backed. No provider,
+connector, or external-write operation occurred.
 
 ## Repository map
 

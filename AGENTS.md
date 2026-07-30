@@ -32,10 +32,13 @@ section prose, and it does not authorize routine hosted inference or private-
 source egress. The one-time provider authorization is consumed. No repeat
 provider call, source retrieval, authorization refresh, scope change, routine
 hosted inference, private-data egress, or model selection for another task is
-now authorized. Milestone 9 deterministic ranking and composition has passed
-its 26-scenario synthetic implementation gate. Its private representative
-briefings await Brad's review, so Milestone 9 is not yet accepted as complete
-and Milestone 10 must not begin.
+now authorized. Milestone 9 deterministic ranking and composition is complete
+and accepted. Brad reviewed the corrected private representative briefings
+after all 26 scenarios passed with zero unsupported claims or false-positive
+actionable recommendations. The review also confirmed source-attributed
+conflicts, link-preserving duplicate suppression, inspectable source-backed
+ranking factors, and the accepted presentation rules. No provider, connector,
+or external-write operation occurred.
 Personal Gmail and Google Drive remain deferred and unauthorized.
 
 ## Working rules
@@ -105,10 +108,10 @@ have been exercised. Do not repeat live retrieval or provider calls, refresh
 authorization, broaden access, repeat Jira discovery, run an unrelated live
 retrieval, enable routine hosted inference, select a model for another
 inference task, or begin another connector without new explicit approval from
-Brad. Do not begin Milestone 10 before Brad accepts the Milestone 9
-representative briefings. Satisfy a milestone's acceptance gate before
-beginning dependent work. Record material new product or architecture
-decisions before implementing them.
+Brad. Milestone 9 is accepted, so explicitly authorized Milestone 10 work may
+proceed after its consequential local-web choice is documented. Satisfy a
+milestone's acceptance gate before beginning dependent work. Record material
+new product or architecture decisions before implementing them.
 
 ## Validation
 

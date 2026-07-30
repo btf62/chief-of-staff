@@ -1,9 +1,9 @@
 # Daily Briefing v1 Implementation Roadmap
 
 - **Status:** Accepted
-- **Version:** 9
+- **Version:** 10
 - **Owner:** Brad
-- **Last updated:** 2026-07-29
+- **Last updated:** 2026-07-30
 
 This roadmap sequences implementation of the accepted
 [Daily Briefing v1](product/features/daily-briefing-v1.md) design. Milestones 0
@@ -20,10 +20,10 @@ private evidence and briefing and accepted the detections and supporting
 logic, completing Milestone 7. Brad reviewed Milestone 8's synthetic, mocked,
 and bounded live comparison results and selected OpenAI `gpt-5.6-luna` with
 low reasoning for `contextual_action_classification` only, completing
-Milestone 8. Milestone 9's deterministic ranking, structured plan,
-composition, and 26-scenario synthetic evaluation are implemented. Brad's
-review of the representative briefings remains its acceptance gate. Personal
-Gmail and Google Drive are deferred until after MVP validation.
+Milestone 8. Brad reviewed and accepted Milestone 9's corrected
+representative briefings after its deterministic ranking, structured plan,
+composition, and 26-scenario synthetic evaluation passed. Personal Gmail and
+Google Drive are deferred until after MVP validation.
 Dates and estimates remain intentionally omitted until implementation
 evidence supports them.
 
@@ -402,7 +402,7 @@ inference.
 
 ## Milestone 9 — Ranking and Briefing Composition
 
-- **Status:** Implementation complete — Brad review pending
+- **Status:** Complete
 - **Intended user-visible outcome:** Brad receives a concise, explainable
   briefing that separates signal from noise and directs attention to the most
   important supported outcomes.
@@ -437,13 +437,19 @@ the structured plan preserves content roles, duplicate suppressions,
 conflicts, coverage warnings, and note inputs; and the composer retains
 canonical sections, links, focus margin, and presentation budgets.
 
-The local evaluation gate passes 26 representative synthetic scenarios with
+The local evaluation gate passed 26 representative synthetic scenarios with
 zero unsupported claims, false-positive actionable recommendations, provider
-calls, live connector calls, or external writes. Five representative
-briefings and the aggregate report are retained under ignored, private local
-state. No model is selected for `priority_comparison` or
-`briefing_section_synthesis`. Brad's review of those representative briefings
-is required before this milestone becomes complete.
+calls, live connector calls, or external writes. Conflict claims are
+source-attributed; duplicate suppression preserves authoritative records and
+links; ranking factors remain inspectable and source-backed; and the word,
+section, outcome, focus-block, and canonical-order rules passed. Five
+representative briefings and the aggregate report are retained under ignored,
+private local state.
+
+Brad reviewed the corrected representative briefings and explicitly accepted
+Milestone 9. Minor presentation refinements may continue without reopening
+this trust gate. No model is selected for `priority_comparison` or
+`briefing_section_synthesis`.
 
 ## Milestone 10 — Local Web Experience and Correction Loop
 

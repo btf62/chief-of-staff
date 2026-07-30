@@ -2,7 +2,7 @@
 
 - **Status:** Draft
 - **Owner:** Brad
-- **Last updated:** 2026-07-25
+- **Last updated:** 2026-07-30
 
 This document describes the deterministic briefing pipeline through the
 Milestone 9 synthetic gate. It supports safe development and evaluation with
@@ -109,5 +109,6 @@ Coverage. An explicit invocation override may classify that date as a workday.
 - Milestone 9 uses deterministic templates. `priority_comparison` and
   `briefing_section_synthesis` remain unselected future inference tasks.
 - Invocation is manual and output is printed to standard output.
-- The synthetic gate is not product acceptance. Brad's review of the
-  representative briefings remains the Milestone 9 acceptance gate.
+- The 26-scenario synthetic gate passed, and Brad reviewed the corrected
+  representative briefings and accepted Milestone 9. Minor presentation
+  refinements may continue without reopening that trust gate.

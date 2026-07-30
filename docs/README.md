@@ -37,8 +37,12 @@ routine hosted inference and private-data egress remain unauthorized. No
 model is selected for ranking or synthesis. Personal Gmail and Google Drive
 remain deferred and unauthorized. Milestone 9's deterministic ranking,
 structured plan, canonical composition, and 26-scenario synthetic gate are
-implemented. Brad's review of the private representative briefings remains
-the milestone acceptance gate.
+complete and accepted. Brad reviewed the corrected private representative
+briefings after all scenarios passed with zero unsupported claims or
+false-positive actionable recommendations. Conflict attribution, duplicate
+suppression, authoritative links, source-backed ranking factors, and all
+accepted presentation rules passed without a provider, connector, or
+external-write operation.
 Design acceptance authorizes implementation within the accepted scope; it does
 not mean the complete Daily Briefing has passed operational acceptance.
 

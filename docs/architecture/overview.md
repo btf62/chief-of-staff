@@ -1,9 +1,9 @@
 # Architecture Overview
 
 - **Status:** Accepted
-- **Version:** 7
+- **Version:** 8
 - **Owner:** Brad
-- **Last updated:** 2026-07-28
+- **Last updated:** 2026-07-30
 
 This document defines the technical architecture required for
 [Daily Briefing v1](../product/features/daily-briefing-v1.md). It establishes
@@ -509,6 +509,15 @@ whether recommendations reflect the structured evidence.
 If exceptional circumstances justify exceeding a normal section item limit,
 the Chief of Staff Note explains why while the overall 1,000-word maximum
 remains in force.
+
+The 26-scenario Milestone 9 evaluation and Brad's review of the corrected
+representative briefings accepted this deterministic ranking and composition
+boundary. Unsupported claims and false-positive actionable recommendations
+were zero. Conflicts retained source attribution, duplicate suppression
+preserved authoritative records and links, ranking factors remained
+inspectable and source-backed, and all accepted presentation rules passed.
+The gate used no provider, connector, or external-write operation. Minor
+presentation refinements do not reopen the accepted trust gate.
 
 ## 10. Security and Privacy
 

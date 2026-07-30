@@ -1,9 +1,9 @@
 # Feature: Ranking and Briefing Composition v1
 
 - **Status:** Accepted
-- **Version:** 2
+- **Version:** 3
 - **Owner:** Brad
-- **Last updated:** 2026-07-29
+- **Last updated:** 2026-07-30
 
 ## Responsibility
 
@@ -254,10 +254,18 @@ recommendation is the primary trust failure.
 
 ## Acceptance
 
-Automated synthetic evaluation and representative private artifacts complete
-the implementation gate. Brad must review the representative briefings before
-Milestone 9 is accepted as complete. That review does not authorize hosted
-inference, live retrieval, external writes, scheduling, or Milestone 10.
+All 26 representative scenarios passed with zero unsupported claims or
+false-positive actionable recommendations. Conflict claims are
+source-attributed; duplicate suppression preserves authoritative records and
+links; ranking factors remain inspectable and source-backed; and the word,
+section, outcome, focus-block, and canonical-order rules passed. No provider,
+connector, or external-write operation occurred.
+
+Brad reviewed the corrected representative briefings and explicitly accepted
+Milestone 9. Minor presentation refinements may continue without reopening
+this trust gate. Acceptance does not authorize hosted inference, live
+retrieval, external writes, scheduling, or work outside an explicitly
+authorized later milestone.
 
 ## Related documents
 
