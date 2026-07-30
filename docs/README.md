@@ -24,9 +24,11 @@ and explicitly judged the logic sound, completing Milestone 6. Milestone 7
 precision-first deterministic detection passed its synthetic evaluation and
 one five-source live validation. Brad reviewed the private evidence and
 briefing and accepted the detections and supporting logic, completing
-Milestone 7. Milestone 8 is active through its synthetic and mocked inference
-gate; hosted inference and private-data egress remain unauthorized. Personal
-Gmail and Google Drive remain deferred and unauthorized.
+Milestone 7. Milestone 8's provider-neutral implementation and 25-scenario
+mocked gate are complete with no false positives or false negatives. Work is
+paused at the live OpenAI authorization and data-egress gate; hosted inference
+and private-data egress remain unauthorized. Personal Gmail and Google Drive
+remain deferred and unauthorized.
 Design acceptance authorizes implementation within the accepted scope; it does
 not mean the complete Daily Briefing has passed operational acceptance.
 
@@ -44,6 +46,8 @@ not mean the complete Daily Briefing has passed operational acceptance.
   product milestone
 - [Deterministic Explicit Detection v1](product/features/deterministic-explicit-detection-v1.md)
   — precision-first Milestone 7 commitment and preparation rules
+- [Contextual Action Classification v1](product/features/contextual-action-classification-v1.md)
+  — bounded Milestone 8 contextual classification contract
 - [Future ideas](product/future-ideas.md) — valuable ideas explicitly outside
   current implementation scope
 
@@ -91,6 +95,8 @@ not mean the complete Daily Briefing has passed operational acceptance.
   procedures
 - [Run the on-demand briefing](operations/runbooks/on-demand-briefing.md) —
   supported local command and safe operating behavior
+- [Milestone 8 live-evaluation gate](operations/milestone-8-live-evaluation-gate.md)
+  — proposed OpenAI authorization, retention, cost, and data-egress decisions
 
 ### Repository guidance
 

@@ -32,6 +32,7 @@ from chief_of_staff.domain.models import (
     SourceEvidence,
     StateInspection,
 )
+from chief_of_staff.inference.models import InferenceAuditRecord
 from chief_of_staff.persistence.database import Database
 
 _SUPPRESSING_DISPOSITIONS = frozenset(
@@ -807,6 +808,69 @@ class StateStore:
                 ),
             )
 
+    def add_inference_audit(self, audit: InferenceAuditRecord) -> None:
+        """Persist provider and validation metadata without inference content."""
+
+        with self.database.transaction() as connection:
+            connection.execute(
+                """
+                INSERT INTO inference_audits(
+                    id,
+                    briefing_run_id,
+                    candidate_id_hash,
+                    task_name,
+                    task_version,
+                    prompt_version,
+                    schema_version,
+                    policy_version,
+                    model_configuration_version,
+                    provider,
+                    model_id,
+                    sensitivity_tier,
+                    status,
+                    validation_status,
+                    request_count,
+                    latency_ms,
+                    input_tokens,
+                    output_tokens,
+                    total_tokens,
+                    estimated_cost_microusd,
+                    error_category,
+                    created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                        ?, ?, ?, ?)
+                """,
+                (
+                    audit.id,
+                    audit.briefing_run_id,
+                    audit.candidate_id_hash,
+                    audit.task_name,
+                    audit.task_version,
+                    audit.prompt_version,
+                    audit.schema_version,
+                    audit.policy_version,
+                    audit.model_configuration_version,
+                    audit.provider,
+                    audit.model_id,
+                    audit.sensitivity_tier.value,
+                    audit.status.value,
+                    (
+                        None
+                        if audit.validation_status is None
+                        else audit.validation_status.value
+                    ),
+                    audit.request_count,
+                    audit.latency_ms,
+                    audit.input_tokens,
+                    audit.output_tokens,
+                    audit.total_tokens,
+                    audit.estimated_cost_microusd,
+                    audit.error_category,
+                    _serialize_datetime(audit.created_at),
+                ),
+            )
+
     def link_connector_run(self, briefing_run_id: str, connector_run_id: str) -> None:
         """Associate source coverage with a briefing run."""
 
@@ -1480,6 +1544,7 @@ class StateStore:
                 "normalized_gmail_messages",
             ),
             connector_instances=_table_count(connection, "connector_instances"),
+            inference_audits=_table_count(connection, "inference_audits"),
         )
 
     def delete_disposition_history(self, conclusion_id: str) -> int:
@@ -1543,10 +1608,22 @@ class StateStore:
             )
         return connector_cursor.rowcount, briefing_cursor.rowcount
 
+    def prune_inference_audits(self, created_before: datetime) -> int:
+        """Delete non-content inference audit metadata before a cutoff."""
+
+        cutoff = _serialize_datetime(created_before)
+        with self.database.transaction() as connection:
+            cursor = connection.execute(
+                "DELETE FROM inference_audits WHERE created_at < ?",
+                (cutoff,),
+            )
+        return cursor.rowcount
+
     def reset(self) -> StateInspection:
         """Delete all application state while preserving schema history."""
 
         with self.database.transaction() as connection:
+            connection.execute("DELETE FROM inference_audits")
             connection.execute("DELETE FROM disposition_events")
             connection.execute("DELETE FROM conclusion_evidence")
             connection.execute("DELETE FROM conclusions")
@@ -1712,6 +1789,7 @@ def _table_count(connection: sqlite3.Connection, table: str) -> int:
         "normalized_gmail_messages": (
             "SELECT COUNT(*) AS count FROM normalized_gmail_messages"
         ),
+        "inference_audits": "SELECT COUNT(*) AS count FROM inference_audits",
     }
     query = queries.get(table)
     if query is None:

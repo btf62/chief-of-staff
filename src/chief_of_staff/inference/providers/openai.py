@@ -1,0 +1,427 @@
+"""Disabled-by-default OpenAI Responses API adapter."""
+
+from __future__ import annotations
+
+import json
+import time
+from collections.abc import Mapping
+from dataclasses import dataclass
+from enum import StrEnum
+from typing import Final, Protocol, cast
+
+from chief_of_staff.auth import KeychainSecretReference
+from chief_of_staff.inference.models import (
+    MAX_EXPLANATION_CHARACTERS,
+    ContextualClassification,
+    InclusionRecommendation,
+    InferenceRequest,
+    InferenceResult,
+    InferenceStatus,
+    ProviderAuditMetadata,
+    Uncertainty,
+    UsageMetadata,
+)
+from chief_of_staff.inference.providers.base import (
+    InferenceConfigurationError,
+    InferenceCredentialError,
+    InferenceDisabledError,
+    InferenceModelMismatchError,
+    InferenceRateLimitError,
+    InferenceRefusalError,
+    InferenceSchemaError,
+    InferenceTimeoutError,
+    InferenceUnavailableError,
+)
+
+OPENAI_RESPONSES_ENDPOINT: Final = "https://api.openai.com/v1/responses"
+OPENAI_PROVIDER_NAME: Final = "openai"
+CONTEXTUAL_ACTION_RESULT_SCHEMA: Final[dict[str, object]] = {
+    "type": "object",
+    "properties": {
+        "classification": {
+            "type": "string",
+            "enum": [item.value for item in ContextualClassification],
+        },
+        "evidence_reference_ids": {
+            "type": "array",
+            "items": {"type": "string"},
+            "maxItems": 3,
+        },
+        "explanation": {"type": "string"},
+        "uncertainty": {
+            "type": "string",
+            "enum": [item.value for item in Uncertainty],
+        },
+        "recommendation": {
+            "type": "string",
+            "enum": [item.value for item in InclusionRecommendation],
+        },
+    },
+    "required": [
+        "classification",
+        "evidence_reference_ids",
+        "explanation",
+        "uncertainty",
+        "recommendation",
+    ],
+    "additionalProperties": False,
+}
+
+_EXPECTED_RESULT_FIELDS: Final = frozenset(
+    {
+        "classification",
+        "evidence_reference_ids",
+        "explanation",
+        "uncertainty",
+        "recommendation",
+    }
+)
+
+
+@dataclass(frozen=True, slots=True)
+class _ParsedStructuredResult:
+    classification: ContextualClassification
+    evidence_reference_ids: tuple[str, ...]
+    explanation: str
+    uncertainty: Uncertainty
+    recommendation: InclusionRecommendation
+
+
+class OpenAIRetentionStatus(StrEnum):
+    """Explicitly reviewed provider retention state."""
+
+    UNREVIEWED = "unreviewed"
+    STANDARD = "standard"
+    MODIFIED_ABUSE_MONITORING = "modified_abuse_monitoring"
+    ZERO_DATA_RETENTION = "zero_data_retention"
+
+
+@dataclass(frozen=True, slots=True)
+class OpenAIAdapterConfiguration:
+    """Non-secret configuration that never selects a model automatically."""
+
+    enabled: bool = False
+    live_use_approved: bool = False
+    endpoint: str = OPENAI_RESPONSES_ENDPOINT
+    organization_id: str | None = None
+    project_id: str | None = None
+    model_id: str | None = None
+    model_configuration_version: str | None = None
+    retention_status: OpenAIRetentionStatus = OpenAIRetentionStatus.UNREVIEWED
+    provider_policy_review_owner: str | None = None
+    prompt_cache_policy_reviewed: bool = False
+    api_key_reference: KeychainSecretReference | None = None
+    max_requests_per_run: int = 0
+    timeout_seconds: float = 20.0
+    max_output_tokens: int = 500
+
+
+class KeychainReader(Protocol):
+    """Narrow Keychain methods required by the provider adapter."""
+
+    def exists(self, reference: KeychainSecretReference) -> bool:
+        """Return whether the exact Keychain item exists."""
+
+    def read(self, reference: KeychainSecretReference) -> str:
+        """Read the exact secret without displaying it."""
+
+
+class OpenAIResponsesTransport(Protocol):
+    """Injectable transport so mocked evaluation never uses the network."""
+
+    def create_response(
+        self,
+        *,
+        endpoint: str,
+        payload: Mapping[str, object],
+        api_key: str,
+        organization_id: str,
+        project_id: str,
+        timeout_seconds: float,
+    ) -> Mapping[str, object]:
+        """Return one raw Responses API-shaped mapping."""
+
+
+class OpenAIResponsesAdapter:
+    """Translate one provider-neutral task to strict Responses API JSON."""
+
+    provider_name = OPENAI_PROVIDER_NAME
+
+    def __init__(
+        self,
+        configuration: OpenAIAdapterConfiguration,
+        *,
+        keychain: KeychainReader,
+        transport: OpenAIResponsesTransport,
+    ) -> None:
+        self.configuration = configuration
+        self._keychain = keychain
+        self._transport = transport
+        self._request_count = 0
+
+    @property
+    def request_count(self) -> int:
+        """Return calls attempted by this bounded adapter instance."""
+
+        return self._request_count
+
+    def infer(self, request: InferenceRequest) -> InferenceResult:
+        """Make one approved request or fail closed before transport."""
+
+        self._validate_configuration(request)
+        reference = self.configuration.api_key_reference
+        if reference is None or not self._keychain.exists(reference):
+            raise InferenceCredentialError("required Keychain item is unavailable")
+        api_key = self._keychain.read(reference)
+        if not api_key:
+            raise InferenceCredentialError("required Keychain item is unavailable")
+
+        self._request_count += 1
+        started = time.monotonic()
+        try:
+            raw = self._transport.create_response(
+                endpoint=self.configuration.endpoint,
+                payload=self.build_payload(request),
+                api_key=api_key,
+                organization_id=cast(str, self.configuration.organization_id),
+                project_id=cast(str, self.configuration.project_id),
+                timeout_seconds=self.configuration.timeout_seconds,
+            )
+        except TimeoutError as error:
+            raise InferenceTimeoutError("provider request timed out") from error
+        except InferenceRateLimitError:
+            raise
+        except InferenceUnavailableError:
+            raise
+        except OSError as error:
+            raise InferenceUnavailableError(
+                "provider transport is unavailable"
+            ) from error
+        latency_ms = max(0, int((time.monotonic() - started) * 1000))
+
+        returned_model = _required_string(raw, "model")
+        if returned_model != self.configuration.model_id:
+            raise InferenceModelMismatchError(
+                "provider returned an unapproved model identifier"
+            )
+        if _contains_refusal(raw):
+            raise InferenceRefusalError("provider refused the bounded task")
+        output = _parse_output_json(raw)
+        parsed = _validate_structured_result(output)
+        usage = _parse_usage(raw.get("usage"))
+        return InferenceResult(
+            status=InferenceStatus.COMPLETED,
+            classification=parsed.classification,
+            evidence_reference_ids=parsed.evidence_reference_ids,
+            explanation=parsed.explanation,
+            uncertainty=parsed.uncertainty,
+            recommendation=parsed.recommendation,
+            task_version=request.task_version,
+            prompt_version=request.prompt_version,
+            schema_version=request.schema_version,
+            policy_version=request.policy_version,
+            model_configuration_version=request.model_configuration_version,
+            provider_audit=ProviderAuditMetadata(
+                provider=self.provider_name,
+                model_id=returned_model,
+                request_count=1,
+                latency_ms=latency_ms,
+            ),
+            usage=usage,
+        )
+
+    def build_payload(self, request: InferenceRequest) -> dict[str, object]:
+        """Build strict, stateless, tool-free Responses API input."""
+
+        evidence = [
+            {
+                "reference_id": item.reference_id,
+                "source": item.source,
+                "content": item.content,
+            }
+            for item in request.packet.evidence
+        ]
+        task_input = {
+            "task": request.task_name,
+            "candidate_id": request.packet.candidate_id,
+            "allowed_classifications": [
+                item.value for item in request.packet.allowed_classifications
+            ],
+            "evidence": evidence,
+        }
+        return {
+            "model": self.configuration.model_id or "",
+            "instructions": (
+                "Classify only the supplied unresolved candidate. Use only the "
+                "supplied evidence references. Prefer not_actionable or "
+                "insufficient_evidence over an unsupported actionable claim. "
+                "Do not create facts, claim explicit evidence, use tools, rank "
+                "the day, or propose external action."
+            ),
+            "input": json.dumps(task_input, separators=(",", ":"), sort_keys=True),
+            "store": False,
+            "background": False,
+            "tools": [],
+            "tool_choice": "none",
+            "max_output_tokens": self.configuration.max_output_tokens,
+            "truncation": "disabled",
+            "text": {
+                "format": {
+                    "type": "json_schema",
+                    "name": "contextual_action_classification",
+                    "strict": True,
+                    "schema": CONTEXTUAL_ACTION_RESULT_SCHEMA,
+                }
+            },
+        }
+
+    def _validate_configuration(self, request: InferenceRequest) -> None:
+        if not self.configuration.enabled:
+            raise InferenceDisabledError("hosted inference is disabled")
+        if not self.configuration.live_use_approved:
+            raise InferenceConfigurationError("live provider use is not approved")
+        if self.configuration.endpoint != OPENAI_RESPONSES_ENDPOINT:
+            raise InferenceConfigurationError(
+                "only the approved Responses endpoint is valid"
+            )
+        required = (
+            self.configuration.organization_id,
+            self.configuration.project_id,
+            self.configuration.model_id,
+            self.configuration.model_configuration_version,
+            self.configuration.provider_policy_review_owner,
+        )
+        if any(value is None or not value.strip() for value in required):
+            raise InferenceConfigurationError(
+                "approved organization, project, model, policy owner, and version are required"
+            )
+        if (
+            self.configuration.retention_status is OpenAIRetentionStatus.UNREVIEWED
+            or not self.configuration.prompt_cache_policy_reviewed
+        ):
+            raise InferenceConfigurationError(
+                "retention and prompt-cache policy must be reviewed"
+            )
+        if (
+            self.configuration.model_configuration_version
+            != request.model_configuration_version
+        ):
+            raise InferenceConfigurationError(
+                "request and approved model-configuration versions differ"
+            )
+        if self.configuration.max_requests_per_run <= 0:
+            raise InferenceConfigurationError("a positive request cap is required")
+        if self._request_count >= self.configuration.max_requests_per_run:
+            raise InferenceConfigurationError("bounded request cap is exhausted")
+        if self.configuration.timeout_seconds <= 0:
+            raise InferenceConfigurationError("a positive timeout is required")
+        if not 1 <= self.configuration.max_output_tokens <= 1000:
+            raise InferenceConfigurationError("max output tokens are outside policy")
+
+
+def _required_string(value: Mapping[str, object], field: str) -> str:
+    selected = value.get(field)
+    if not isinstance(selected, str) or not selected:
+        raise InferenceSchemaError("provider response is missing a required field")
+    return selected
+
+
+def _contains_refusal(raw: Mapping[str, object]) -> bool:
+    output = raw.get("output")
+    if not isinstance(output, list):
+        return False
+    for item in output:
+        if not isinstance(item, Mapping):
+            continue
+        content = item.get("content")
+        if not isinstance(content, list):
+            continue
+        if any(
+            isinstance(part, Mapping) and part.get("type") == "refusal"
+            for part in content
+        ):
+            return True
+    return False
+
+
+def _parse_output_json(raw: Mapping[str, object]) -> object:
+    output = raw.get("output")
+    if not isinstance(output, list):
+        raise InferenceSchemaError("provider response has no structured output")
+    for item in output:
+        if not isinstance(item, Mapping) or item.get("type") != "message":
+            continue
+        content = item.get("content")
+        if not isinstance(content, list):
+            continue
+        for part in content:
+            if not isinstance(part, Mapping) or part.get("type") != "output_text":
+                continue
+            text = part.get("text")
+            if not isinstance(text, str):
+                continue
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError as error:
+                raise InferenceSchemaError(
+                    "provider output is not valid structured JSON"
+                ) from error
+    raise InferenceSchemaError("provider response has no structured output")
+
+
+def _validate_structured_result(value: object) -> _ParsedStructuredResult:
+    if not isinstance(value, dict) or set(value) != _EXPECTED_RESULT_FIELDS:
+        raise InferenceSchemaError("provider output does not match the owned schema")
+    classification = value.get("classification")
+    references = value.get("evidence_reference_ids")
+    explanation = value.get("explanation")
+    uncertainty = value.get("uncertainty")
+    recommendation = value.get("recommendation")
+    if not all(
+        isinstance(item, str) for item in (classification, uncertainty, recommendation)
+    ):
+        raise InferenceSchemaError("provider output contains an invalid enum type")
+    try:
+        parsed_classification = ContextualClassification(cast(str, classification))
+        parsed_uncertainty = Uncertainty(cast(str, uncertainty))
+        parsed_recommendation = InclusionRecommendation(cast(str, recommendation))
+    except (TypeError, ValueError) as error:
+        raise InferenceSchemaError(
+            "provider output contains an unsupported enum value"
+        ) from error
+    if (
+        not isinstance(references, list)
+        or len(references) > 3
+        or any(not isinstance(item, str) or not item for item in references)
+    ):
+        raise InferenceSchemaError("provider evidence references are invalid")
+    if (
+        not isinstance(explanation, str)
+        or not explanation.strip()
+        or len(explanation) > MAX_EXPLANATION_CHARACTERS
+    ):
+        raise InferenceSchemaError("provider explanation is invalid")
+    return _ParsedStructuredResult(
+        classification=parsed_classification,
+        evidence_reference_ids=tuple(cast(list[str], references)),
+        explanation=explanation.strip(),
+        uncertainty=parsed_uncertainty,
+        recommendation=parsed_recommendation,
+    )
+
+
+def _parse_usage(value: object) -> UsageMetadata:
+    if not isinstance(value, Mapping):
+        return UsageMetadata(input_tokens=0, output_tokens=0, total_tokens=0)
+    input_tokens = _nonnegative_int(value.get("input_tokens"))
+    output_tokens = _nonnegative_int(value.get("output_tokens"))
+    total_tokens = _nonnegative_int(value.get("total_tokens"))
+    return UsageMetadata(
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=total_tokens,
+    )
+
+
+def _nonnegative_int(value: object) -> int:
+    return value if isinstance(value, int) and value >= 0 else 0

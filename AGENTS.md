@@ -23,7 +23,11 @@ the logic sound, completing Milestone 6. Milestone 7 deterministic explicit
 detection has passed its synthetic evaluation and one five-source live
 validation. Brad reviewed the private evidence and briefing and judged the
 detections and supporting logic sound, completing and accepting Milestone 7.
-Milestone 8 is now active only through its synthetic and mocked inference gate.
+Milestone 8's provider-neutral boundary, deterministic sensitivity and
+evidence controls, disabled OpenAI Responses adapter, persistence metadata,
+and synthetic evaluation are implemented. Its 25-scenario mocked gate passes
+with no false positives or false negatives. Milestone 8 is paused at its live
+OpenAI authorization and data-egress gate; no production model is selected.
 The temporary live-validation authorization ended when the Milestone 7
 artifact was produced. No repeat source retrieval, authorization refresh,
 scope change, hosted inference, private-data egress, or broader live access is

@@ -117,6 +117,21 @@ No strict versioning scheme is promised before a distributable product exists.
   stream, window, configured boundary, observed count, and lifecycle progress,
   plus private mode-`0600` per-attempt aggregate reporting without failed-run
   application-data persistence or briefing artifacts.
+- The accepted `contextual_action_classification` specification and a
+  provider-neutral inference boundary for unresolved candidates, with stable
+  evidence references, minimized evidence packets, conservative sensitivity
+  exclusion, deterministic validation, correction-state enforcement, and
+  honest reduced-mode outcomes.
+- A disabled-by-default, injected-transport OpenAI Responses adapter with
+  strict application-owned Structured Outputs, `store=false`, no background
+  mode or tools, explicit organization/project/model/retention controls,
+  Keychain-only future credentials, bounded calls, and no silent fallback.
+- Non-content inference audit persistence and lifecycle pruning, plus a
+  25-scenario mocked evaluation reporting zero false positives, false
+  negatives, or correction regressions.
+- A proposed Milestone 8 live-evaluation gate that keeps synthetic Tier 1
+  evaluation, API-key creation, billing, retention, model comparison, and any
+  private-data egress behind separate explicit approval.
 
 ### Changed
 

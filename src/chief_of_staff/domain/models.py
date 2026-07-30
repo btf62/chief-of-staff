@@ -227,6 +227,7 @@ class StateInspection:
     normalized_jira_issue_links: int
     normalized_gmail_messages: int
     connector_instances: int
+    inference_audits: int
 
 
 @dataclass(frozen=True, slots=True)

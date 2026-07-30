@@ -1,7 +1,7 @@
 # Daily Briefing v1 Implementation Roadmap
 
 - **Status:** Accepted
-- **Version:** 5
+- **Version:** 6
 - **Owner:** Brad
 - **Last updated:** 2026-07-29
 
@@ -17,9 +17,10 @@ and is complete. Milestone 6 completed the Work Gmail input gate and Brad's
 human trust review. Milestone 7 deterministic explicit detection passed its
 synthetic evaluation and one five-source live validation. Brad reviewed the
 private evidence and briefing and accepted the detections and supporting
-logic, completing Milestone 7. Milestone 8 is active through its synthetic and
-mocked inference gate. Personal Gmail and Google Drive are deferred until
-after MVP validation.
+logic, completing Milestone 7. Milestone 8's synthetic and mocked
+implementation gate is complete; it is paused at the live OpenAI authorization
+and data-egress gate. Personal Gmail and Google Drive are deferred until after
+MVP validation.
 Dates and estimates remain intentionally omitted until implementation
 evidence supports them.
 
@@ -334,7 +335,7 @@ unchanged evidence.
 
 ## Milestone 8 — Provider-Neutral Inference
 
-- **Status:** In progress — synthetic and mocked inference gate
+- **Status:** In progress — synthetic gate complete; paused at live gate
 - **Intended user-visible outcome:** Where permitted and demonstrably useful,
   Brad receives bounded contextual inference and synthesis with evidence,
   explanations, sensitivity controls, and a clear reduced-mode fallback.
@@ -364,6 +365,17 @@ unchanged evidence.
 Milestone 7 acceptance does not authorize hosted inference, private-data
 egress, an OpenAI API key, a production model, or live provider evaluation.
 Those actions remain behind Milestone 8's explicit live authorization gate.
+
+The application-owned `contextual_action_classification` boundary now accepts
+only unresolved contextual candidates, enforces conservative sensitivity and
+evidence limits, validates strict structured results, preserves local
+correction authority, and records non-content audit metadata. The disabled
+OpenAI Responses adapter has no live transport or configured credential. The
+25-scenario mocked evaluation reports three true positives, five correct
+exclusions, three insufficient-evidence results, four sensitivity or secret
+exclusions, and zero false positives, false negatives, or correction
+regressions. No API key was created or retrieved, no API call occurred, no
+private source content left the host, and no production model was selected.
 
 ## Milestone 9 — Ranking and Briefing Composition
 

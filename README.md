@@ -7,7 +7,7 @@ identifying priorities, commitments, and useful signals.
 
 ## Status
 
-**Phase:** Milestones 1–7 complete; Milestone 8 synthetic implementation active
+**Phase:** Milestones 1–7 complete; Milestone 8 paused at its live gate
 
 The Python, local-state, deterministic briefing, repository connector, and
 read-only Google Calendar foundations are complete. An explicitly approved,
@@ -30,9 +30,11 @@ deadline, preparation, and insufficient-evidence behavior. Its synthetic
 evaluation passed, and a 2026-07-29 five-source live validation produced a
 private review artifact and a 635-word briefing without external writes or
 hosted inference. Brad reviewed that evidence and briefing and accepted the
-detections and supporting logic. Milestone 8 is active through its synthetic
-and mocked provider-neutral inference gate only. Personal Gmail and Google
-Drive remain deferred and unauthorized.
+detections and supporting logic. Milestone 8's provider-neutral boundary and
+25-scenario mocked evaluation are complete with zero false positives or false
+negatives. The OpenAI adapter remains disabled, no production model is
+selected, and hosted inference and private-data egress remain unauthorized.
+Personal Gmail and Google Drive remain deferred and unauthorized.
 
 ## Repository map
 

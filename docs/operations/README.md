@@ -37,3 +37,6 @@ because the system is not deployed or approved for operational use.
 - [First safe connector operations](first-safe-connectors.md) — approved
   repository reads, OAuth and Keychain boundaries, bounded Calendar trial,
   validation, and mandatory stop
+- [Milestone 8 live-evaluation gate](milestone-8-live-evaluation-gate.md) —
+  proposed OpenAI authorization, retention, cost, and data-egress decisions;
+  no live use is authorized

@@ -47,10 +47,15 @@ The implemented schema stores:
 - Minimized normalized Work Gmail message and thread facts for explicit
   detections, including direction, timestamp, classification, processing
   version, and only necessary local evidence.
+- Non-content inference audit metadata: task, prompt, schema, policy, model
+  configuration, provider and model identifiers, sensitivity and validation
+  categories, request count, latency, token counts, estimated cost, and safe
+  error category.
 
 It does not define tables for credentials, tokens, raw response pages,
 continuation cursors, full source payloads, complete message bodies, raw HTML,
-attachments, or connector caches.
+attachments, connector caches, inference prompts, provider responses, or
+inference evidence excerpts.
 
 ## Inspection and recurrence
 
@@ -78,6 +83,7 @@ The store supports:
 - Deleting source evidence and any conclusion left without evidence.
 - Deleting a briefing-run record.
 - Pruning bounded connector- and briefing-run metadata.
+- Pruning non-content inference audit metadata by creation time.
 - Resetting all application-owned state while preserving migration history.
 
 Deleting old run metadata does not delete still-useful correction evidence.
