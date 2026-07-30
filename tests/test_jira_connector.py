@@ -601,7 +601,7 @@ def test_jira_todoist_association_preserves_conflicting_records_and_links() -> N
         "todoist:todo-1",
     )
     assert association.basis == "explicit cross-source reference"
-    assert association.conflicting_fields == ("status", "due_at")
+    assert association.conflicting_fields == ("status", "due_at", "priority")
     assert {
         record.provenance.display_url for record in result.deduplication.records
     } == {
@@ -687,7 +687,11 @@ def test_jira_todoist_association_requires_an_explicit_key_and_combines_display(
         "jira",
         "todoist",
     }
-    assert "disagree on due date, status" in outcome.items[0].detail
+    assert "Jira reports the due date as" in outcome.items[0].detail
+    assert "Todoist reports the due date as" in outcome.items[0].detail
+    assert "Jira reports the status as" in outcome.items[0].detail
+    assert "Todoist reports the status as" in outcome.items[0].detail
+    assert "verify the conflict before planning the work" in outcome.items[0].detail
 
 
 def test_synthetic_jira_records_support_bounded_briefing_sections_and_funnel() -> None:

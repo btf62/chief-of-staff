@@ -38,6 +38,21 @@ class Provenance:
 
 
 @dataclass(frozen=True, slots=True)
+class AssociatedSourceFacts:
+    """Source-owned facts retained for a non-destructive association."""
+
+    provenance: Provenance
+    status: str | None
+    status_category: str | None
+    assignee_reference: str | None
+    due_at: datetime | None
+    all_day: bool
+    source_priority: str | None
+    provider_priority: int | None
+    completion_state: bool | None
+
+
+@dataclass(frozen=True, slots=True)
 class NormalizedRecord:
     """Typed, source-authoritative facts without recommendation state."""
 
@@ -88,6 +103,7 @@ class NormalizedRecord:
     inference_explanation: str | None = None
     evidence_fingerprint: str | None = None
     associated_provenance: tuple[Provenance, ...] = ()
+    associated_source_facts: tuple[AssociatedSourceFacts, ...] = ()
     association_conflicts: tuple[str, ...] = ()
 
 
@@ -294,3 +310,33 @@ def _aware(value: datetime, zone: ZoneInfo) -> datetime:
     if value.tzinfo is None or value.utcoffset() is None:
         raise ValueError("source timestamps must be timezone-aware")
     return value.astimezone(zone)
+
+
+def record_completion_state(record: NormalizedRecord) -> bool | None:
+    """Return only an explicit source-supported completion state."""
+
+    status_category = (record.status_category or "").casefold()
+    status = (record.status or "").casefold()
+    if status_category in {"done", "complete", "completed"}:
+        return True
+    if status_category in {"new", "open", "to do", "todo", "in progress"}:
+        return False
+    if status in {"complete", "completed", "closed", "done"}:
+        return True
+    if status in {"new", "open", "pending", "in progress"}:
+        return False
+    return None
+
+
+def record_priority_fact(record: NormalizedRecord) -> str | int | None:
+    """Return a source-owned priority value without interpreting importance."""
+
+    if record.source_priority is not None:
+        return record.source_priority
+    return record.provider_priority
+
+
+def record_status_fact(record: NormalizedRecord) -> str | None:
+    """Return the most structured source-owned status value available."""
+
+    return record.status_category or record.status

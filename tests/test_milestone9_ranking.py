@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from datetime import date, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest
 
-from chief_of_staff.connectors import ReadOnlyConnector, StaticConnector
+from chief_of_staff.connectors import ReadOnlyConnector, SourceItem, StaticConnector
+from chief_of_staff.domain import CoverageStatus
 from chief_of_staff.inference.providers.openai import OpenAISDKResponsesTransport
 from chief_of_staff.pipeline import (
     BriefingContentKind,
@@ -15,13 +18,14 @@ from chief_of_staff.pipeline import (
     PriorityBand,
     RankingFactorKind,
 )
+from chief_of_staff.pipeline.context import resolve_context
 from chief_of_staff.pipeline.evaluation import (
     RankingEvaluationReport,
     run_synthetic_ranking_evaluation,
     synthetic_ranking_scenarios,
 )
 from chief_of_staff.pipeline.ranking import RankedCandidate
-from chief_of_staff.pipeline.runner import PipelineResult
+from chief_of_staff.pipeline.runner import DeterministicBriefingPipeline, PipelineResult
 
 
 @lru_cache(maxsize=1)
@@ -218,9 +222,109 @@ def test_duplicate_suppression_preserves_all_links_and_conflicts() -> None:
         "todoist/todoist-duplicate" in outputs["cross-source-duplicate"].rendered.text
     )
     assert conflict.unresolved_conflicts
-    assert (
-        "both remain authoritative" in outputs["conflicting-source-dates"].rendered.text
+    text = outputs["conflicting-source-dates"].rendered.text
+    assert "Jira reports the due date as today" in text
+    assert "Todoist reports the due date as Thursday, July 30" in text
+    assert "Each source remains authoritative for its own record" in text
+
+
+def test_unconflicted_due_date_is_direct_but_conflicting_dates_are_qualified() -> None:
+    outputs = _outputs()
+    direct = outputs["normal-full-workday"].rendered.text
+    conflicting = outputs["conflicting-source-dates"]
+    conflict_text = conflicting.rendered.text
+
+    assert "The deadline is today at 5:00 PM." in direct
+    assert "The deadline is today" not in conflict_text
+    assert "The due date is today" not in conflict_text
+    assert "one authoritative source reports an immediate deadline" in conflict_text
+    assert "verify the conflict before planning the work" in conflict_text
+    assert "newer source fact" not in conflict_text
+
+    due_factors = tuple(
+        factor
+        for candidate in conflicting.plan.ordered_eligible_candidates
+        for factor in candidate.factors
+        if factor.kind is RankingFactorKind.DUE_DATE
     )
+    assert due_factors
+    assert all(len(factor.sources) == 2 for factor in due_factors)
+    assert all(
+        "One authoritative source reports" in factor.rationale for factor in due_factors
+    )
+    outcome = next(
+        section
+        for section in conflicting.plan.sections
+        if section.name is BriefingSectionName.TODAYS_OUTCOMES
+    )
+    assert len(outcome.items[0].sources) == 2
+
+
+def test_owner_status_priority_and_completion_conflicts_are_source_attributed() -> None:
+    result = _multi_field_conflict_result()
+    text = result.rendered.text
+
+    assert "Jira reports the owner as team-a" in text
+    assert "Todoist reports the owner as team-b" in text
+    assert "Jira reports the status as in progress" in text
+    assert "Todoist reports the status as done" in text
+    assert "Jira reports the priority as High" in text
+    assert "Todoist reports the priority as Low" in text
+    assert "Jira reports the item as not completed" in text
+    assert "Todoist reports the item as completed" in text
+    assert "Jira provides the newer source fact" in text
+    assert "more authoritative" not in text
+    assert all(
+        len(conflict.sources) == 2 and conflict.claims
+        for conflict in result.plan.unresolved_conflicts
+    )
+
+
+def test_ranking_prose_is_natural_for_one_two_and_multiple_visible_factors() -> None:
+    outputs = _outputs()
+    one_factor = outputs["long-candidate-set-with-budgets"].rendered.text
+    two_factors = outputs["normal-full-workday"].rendered.text
+    multiple_factors = outputs["open-deep-work-morning"].rendered.text
+    combined = "\n".join((one_factor, two_factors, multiple_factors))
+
+    assert "This deserves attention today because it has a hard deadline." in one_factor
+    assert (
+        "This deserves attention today because it has a hard deadline and it falls "
+        "within Brad's primary stewardship."
+    ) in two_factors
+    assert "the source supplies an effort estimate" in multiple_factors
+    assert "fits the available Calendar window" in multiple_factors
+    assert "fits the morning" in multiple_factors
+    assert "source-marked" not in combined
+    assert "current source due date" not in combined
+    assert "Critical priority" not in combined
+    assert "freshness" not in one_factor
+    assert "provider priority" not in one_factor
+
+
+def test_calendar_and_count_prose_preserves_blocks_and_grammar() -> None:
+    outputs = _outputs()
+    meeting_note = outputs["meeting-heavy-day"].plan.sections[0].summary or ""
+    normal_note = outputs["normal-full-workday"].plan.sections[0].summary or ""
+    single_coverage = (
+        outputs["only-one-supported-outcome"].plan.sections[-1].summary or ""
+    )
+
+    assert (
+        "3 separate Calendar commitments occupy 7 hours 15 minutes between "
+        "8:00 a.m. and 4:30 p.m."
+    ) in meeting_note
+    assert "2 gaps totaling 1 hour 15 minutes" in meeting_note
+    assert "1 tight transition has 15 minutes or less" in meeting_note
+    assert "across" not in meeting_note
+    assert "through" not in meeting_note
+    assert (
+        "1 Calendar commitment occupies 1 hour from 1:00\N{EN DASH}2:00 p.m."
+        in normal_note
+    )
+    assert "p.m.." not in normal_note
+    assert "1 candidate" in single_coverage
+    assert "1 candidates" not in single_coverage
 
 
 def test_word_note_and_focus_budgets_remain_enforced() -> None:
@@ -313,6 +417,66 @@ def test_qualitative_ties_use_a_documented_deterministic_fallback() -> None:
 
     assert tied
     assert all("Deterministic fallback" in candidate.tie_breaker for candidate in tied)
+
+
+def _multi_field_conflict_result() -> PipelineResult:
+    zone = ZoneInfo("America/New_York")
+    now = datetime(2026, 7, 29, 8, 0, tzinfo=zone)
+    due_at = datetime(2026, 7, 29, 17, 0, tzinfo=zone).isoformat()
+    jira = SourceItem(
+        id="jira-multi-conflict",
+        source_record_id="NRC-303",
+        item_type="task",
+        facts={
+            "title": "Resolve the delivery record",
+            "status": "open",
+            "status_category": "in progress",
+            "assignee_reference": "team-a",
+            "source_priority": "High",
+            "due_at": due_at,
+            "explicit_commitment": True,
+        },
+        display_url="https://example.invalid/tasks/jira-multi-conflict",
+        retrieved_at=now,
+        freshness_at=now,
+    )
+    todoist = SourceItem(
+        id="todoist-multi-conflict",
+        source_record_id="todoist-multi-conflict",
+        item_type="task",
+        facts={
+            "title": "Resolve NRC-303 delivery record",
+            "status": "completed",
+            "status_category": "done",
+            "assignee_reference": "team-b",
+            "source_priority": "Low",
+            "due_at": due_at,
+            "explicit_commitment": True,
+        },
+        display_url="https://example.invalid/tasks/todoist-multi-conflict",
+        retrieved_at=now,
+        freshness_at=now - timedelta(days=1),
+    )
+    connectors = (
+        StaticConnector(
+            source_name="jira",
+            approved_scope="synthetic conflict regression",
+            items=(jira,),
+            status=CoverageStatus.COMPLETE,
+        ),
+        StaticConnector(
+            source_name="todoist",
+            approved_scope="synthetic conflict regression",
+            items=(todoist,),
+            status=CoverageStatus.COMPLETE,
+        ),
+    )
+    context = resolve_context(
+        run_id="m9-multi-field-conflict",
+        briefing_date=date(2026, 7, 29),
+        timezone="America/New_York",
+    )
+    return DeterministicBriefingPipeline().run(context, connectors)
 
 
 def _factor_kinds(candidate: RankedCandidate) -> set[RankingFactorKind]:

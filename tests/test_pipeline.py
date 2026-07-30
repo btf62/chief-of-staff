@@ -474,7 +474,7 @@ def test_source_coverage_distinguishes_funnel_and_context_resource_counts() -> N
     coverage = result.plan.sections[-1].summary or ""
     assert (
         "`todoist`: complete; 12 retrieved; 1 selected; 1 persisted; "
-        "1 candidates; 1 displayed" in coverage
+        "1 candidate; 1 displayed" in coverage
     )
     assert "projects 5/1" in coverage
     assert "sections 2/1" in coverage
@@ -810,8 +810,8 @@ def test_obvious_schedule_implications_are_synthesized_deterministically() -> No
     note = first.plan.sections[0].summary or ""
 
     assert first.rendered == second.rendered
-    assert "Calendar anchors the day across" in note
-    assert "2 hours 50 minutes scheduled" in note
+    assert "4 separate Calendar commitments occupy 2 hours 50 minutes" in note
+    assert "1 gap lasting 10 minutes" in note
     assert "1 schedule overlap requires attention" in note
     assert "1 back-to-back transition leaves no calendar margin" in note
     assert "1 tight transition has 15 minutes or less" in note
@@ -1506,7 +1506,7 @@ def test_task_rendering_cleans_control_tokens_and_all_day_due_time() -> None:
     assert "Draft the launch plan" in result.rendered.text
     assert "@high_impact" not in result.rendered.text
     assert "Complete Draft" not in result.rendered.text
-    assert "source due date is today" in result.rendered.text
+    assert "due date is today" in result.rendered.text
     assert "12:00 AM" not in result.rendered.text
     assert "source importance" not in result.rendered.text
 
@@ -1550,10 +1550,9 @@ def test_july_27_calendar_shape_and_focus_window_are_accurate() -> None:
     result = DeterministicBriefingPipeline().run(context, (calendar, todoist))
     note = result.plan.sections[0].summary or ""
 
-    assert f"9:00 a.m.{TIME_RANGE_SEPARATOR}12:00 p.m." in note
-    assert f"1:00{TIME_RANGE_SEPARATOR}3:00 p.m." in note
-    assert "5 hours scheduled" in note
-    assert "a one-hour gap" in note
+    assert "2 separate Calendar commitments occupy 5 hours" in note
+    assert "between 9:00 a.m. and 3:00 p.m." in note
+    assert "1 gap lasting 1 hour" in note
     assert "Open Calendar time remains before 9:00 a.m. and after 3:00 p.m." in note
     assert "transition and margin rather than a deep-work block" in note
     assert "one continuous" not in note

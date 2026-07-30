@@ -7,7 +7,12 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from chief_of_staff.connectors import connector_instance_key
-from chief_of_staff.pipeline.normalization import NormalizedRecord
+from chief_of_staff.pipeline.normalization import (
+    NormalizedRecord,
+    record_completion_state,
+    record_priority_fact,
+    record_status_fact,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,6 +139,7 @@ def _semantic_signature(record: NormalizedRecord) -> tuple[object, ...]:
         record.inference_explanation,
         record.evidence_fingerprint,
         record.associated_provenance,
+        record.associated_source_facts,
         record.association_conflicts,
     )
 
@@ -184,9 +190,15 @@ def _conflicting_fields(
 ) -> tuple[str, ...]:
     comparisons = (
         ("title", first.title, second.title),
-        ("status", first.status, second.status),
+        ("status", record_status_fact(first), record_status_fact(second)),
         ("due_at", first.due_at, second.due_at),
-        ("source_priority", first.source_priority, second.source_priority),
+        ("owner", first.assignee_reference, second.assignee_reference),
+        ("priority", record_priority_fact(first), record_priority_fact(second)),
+        (
+            "completion",
+            record_completion_state(first),
+            record_completion_state(second),
+        ),
     )
     return tuple(
         field

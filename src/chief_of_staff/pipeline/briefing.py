@@ -17,7 +17,13 @@ from chief_of_staff.domain import (
     RecurrenceDecision,
 )
 from chief_of_staff.pipeline.context import InvocationContext, WorkdayType
-from chief_of_staff.pipeline.normalization import NormalizedRecord, RecordKind
+from chief_of_staff.pipeline.normalization import (
+    AssociatedSourceFacts,
+    NormalizedRecord,
+    Provenance,
+    RecordKind,
+    record_completion_state,
+)
 from chief_of_staff.pipeline.ranking import (
     PriorityBand,
     RankedCandidate,
@@ -270,6 +276,17 @@ class PlanConflict:
     record_id: str
     conflicting_fields: tuple[str, ...]
     sources: tuple[SourceLink, ...]
+    claims: tuple[ConflictClaim, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ConflictClaim:
+    """One attributed source value participating in a material conflict."""
+
+    field: str
+    source: SourceLink
+    value: str
+    freshness_at: datetime | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -662,6 +679,7 @@ def build_reduced_plan(
             record_id=record.id,
             conflicting_fields=record.association_conflicts,
             sources=_source_links(record),
+            claims=_conflict_claims(record, today),
         )
         for record in records
         if record.association_conflicts
@@ -819,6 +837,12 @@ def validate_briefing(
 
     if any(len(item.sources) < 2 for item in plan.suppressed_duplicates):
         errors.append("duplicate suppression must preserve every source link")
+    for conflict in plan.unresolved_conflicts:
+        if len(conflict.sources) < 2:
+            errors.append(f"{conflict.record_id} conflict lacks source links")
+        claimed_fields = {claim.field for claim in conflict.claims}
+        if not set(conflict.conflicting_fields).issubset(claimed_fields):
+            errors.append(f"{conflict.record_id} conflict lacks attributed values")
 
     coverage_sections = tuple(
         section
@@ -920,7 +944,7 @@ def _coverage_summary(
         if report.persisted_count is not None:
             detail_parts.append(f"{report.persisted_count} persisted")
         if report.candidate_count is not None:
-            detail_parts.append(f"{report.candidate_count} candidates")
+            detail_parts.append(_count_phrase(report.candidate_count, "candidate"))
         if report.displayed_count is not None:
             detail_parts.append(f"{report.displayed_count} displayed")
         if report.page_count is not None:
@@ -1030,16 +1054,27 @@ def _normal_workday_note(
         _calendar_shape_summary(todays_calendar_context),
     ]
     if primary_outcome is not None:
-        parts.append(
-            f"The strongest supported outcome is {_display_title(primary_outcome)}, "
-            f"{_brief_due_phrase(primary_outcome, context.briefing_date)}."
-        )
         if primary_outcome.association_conflicts:
+            fields = _natural_join(primary_outcome.association_conflicts)
             parts.append(
-                "The central priority tension is an unresolved cross-source "
-                "disagreement about "
-                + ", ".join(primary_outcome.association_conflicts)
-                + "; preserve both facts and verify the conflict before acting."
+                f"Strongest supported outcome: {_display_title(primary_outcome)}. "
+                f"The associated sources disagree about {fields}"
+                + (
+                    ", and one authoritative source reports an immediate deadline."
+                    if _has_immediate_conflicting_due_date(
+                        primary_outcome,
+                        context.briefing_date,
+                    )
+                    else "."
+                )
+            )
+            parts.append(
+                "Verify the source records before relying on a disputed value."
+            )
+        else:
+            parts.append(
+                f"Strongest supported outcome: {_display_title(primary_outcome)}, "
+                f"{_brief_due_phrase(primary_outcome, context.briefing_date)}."
             )
     else:
         parts.append("No task has enough current evidence to become a primary outcome.")
@@ -1176,33 +1211,25 @@ def _schedule_summary(todays_calendar: tuple[NormalizedRecord, ...]) -> str:
 
     parts: list[str] = []
     if fixed:
-        first_start = min(
-            record.start_at for record in fixed if record.start_at is not None
-        )
-        fixed_ends = tuple(
-            record.end_at for record in fixed if record.end_at is not None
-        )
-        time_span = (
-            f" from {first_start:%-I:%M %p} to {max(fixed_ends):%-I:%M %p}"
-            if fixed_ends
-            else ""
-        )
-        noun = "commitment" if len(fixed) == 1 else "commitments"
-        parts.append(f"Calendar shows {len(fixed)} fixed {noun}{time_span}.")
+        parts.append(_fixed_schedule_summary(fixed))
         parts.extend(_schedule_implications(fixed))
     if tentative_count:
-        noun = "hold remains" if tentative_count == 1 else "holds remain"
-        parts.append(f"{tentative_count} tentative {noun} non-fixed.")
-    if unclassified_count:
-        noun = "event lacks" if unclassified_count == 1 else "events lack"
+        verb = "remains" if tentative_count == 1 else "remain"
         parts.append(
-            f"{unclassified_count} scheduled {noun} enough status evidence "
+            f"{_count_phrase(tentative_count, 'tentative hold')} {verb} non-fixed."
+        )
+    if unclassified_count:
+        verb = "lacks" if unclassified_count == 1 else "lack"
+        parts.append(
+            f"{_count_phrase(unclassified_count, 'scheduled event')} {verb} "
+            "enough status evidence "
             "to call fixed."
         )
     if all_day_count:
-        noun = "item is" if all_day_count == 1 else "items are"
+        verb = "is" if all_day_count == 1 else "are"
         parts.append(
-            f"{all_day_count} all-day {noun} treated as context, not full-day "
+            f"{_count_phrase(all_day_count, 'all-day item')} {verb} "
+            "treated as context, not full-day "
             "occupancy."
         )
     if material_status:
@@ -1240,31 +1267,8 @@ def _calendar_shape_summary(
             return "An explicit Calendar status affects availability today."
         return "No fixed Calendar commitment shapes the day."
 
-    spans = tuple(
-        _natural_time_span(record.start_at, record.end_at)
-        for record in fixed
-        if record.start_at is not None
-    )
-    total_minutes = _scheduled_union_minutes(fixed)
     gap_minutes = _positive_gap_minutes(fixed)
-    if len(spans) == 1:
-        shape = f"The Calendar anchors the day from {spans[0]}"
-    elif len(spans) == 2:
-        shape = (
-            f"The Calendar anchors the day with commitments from {spans[0]} "
-            f"and {spans[1]}"
-        )
-    else:
-        shape = f"The Calendar anchors the day across {spans[0]} through {spans[-1]}"
-    shape += f"—{_duration_phrase(total_minutes)} scheduled"
-    if len(gap_minutes) == 1:
-        shape += f", separated by {_gap_phrase(gap_minutes[0])}"
-    elif gap_minutes:
-        shape += (
-            f", with {len(gap_minutes)} gaps totaling "
-            f"{_duration_phrase(sum(gap_minutes))}"
-        )
-    shape += "."
+    shape = _fixed_schedule_summary(fixed)
 
     first_start = fixed[0].start_at
     last_end = max(record.end_at for record in fixed if record.end_at is not None)
@@ -1280,6 +1284,57 @@ def _calendar_shape_summary(
         )
     implications = " ".join(_schedule_implications(fixed))
     return " ".join(part for part in (shape, implications, open_time) if part)
+
+
+def _fixed_schedule_summary(
+    fixed_events: tuple[NormalizedRecord, ...],
+) -> str:
+    """Describe separate fixed blocks without implying continuous occupancy."""
+
+    fixed = tuple(
+        sorted(
+            (
+                record
+                for record in fixed_events
+                if record.start_at is not None and record.end_at is not None
+            ),
+            key=lambda record: record.start_at or datetime.max,
+        )
+    )
+    if not fixed:
+        return "No timed fixed Calendar commitment requires attention today."
+
+    total_minutes = _scheduled_union_minutes(fixed)
+    if len(fixed) == 1:
+        record = fixed[0]
+        if record.start_at is None or record.end_at is None:
+            raise ValueError("fixed Calendar summary requires complete timing")
+        return _terminate_sentence(
+            f"{_count_phrase(1, 'Calendar commitment')} occupies "
+            f"{_duration_phrase(total_minutes)} from "
+            f"{_natural_time_span(record.start_at, record.end_at)}"
+        )
+
+    first_start = fixed[0].start_at
+    last_end = max(record.end_at for record in fixed if record.end_at is not None)
+    if first_start is None:
+        raise ValueError("fixed Calendar summary requires a start time")
+    gaps = _positive_gap_minutes(fixed)
+    summary = (
+        f"{_count_phrase(len(fixed), 'separate Calendar commitment')} occupy "
+        f"{_duration_phrase(total_minutes)} between "
+        f"{_natural_clock_text(first_start)} and {_natural_clock_text(last_end)}"
+    )
+    if len(gaps) == 1:
+        summary += (
+            f", with {_count_phrase(1, 'gap')} lasting {_duration_phrase(gaps[0])}"
+        )
+    elif gaps:
+        summary += (
+            f", with {_count_phrase(len(gaps), 'gap')} totaling "
+            f"{_duration_phrase(sum(gaps))}"
+        )
+    return _terminate_sentence(summary)
 
 
 def _scheduled_union_minutes(
@@ -1329,6 +1384,17 @@ def _duration_phrase(minutes: int) -> str:
         hours, remainder = divmod(minutes, 60)
         return f"{hours} {'hour' if hours == 1 else 'hours'} {remainder} minutes"
     return f"{minutes} {'minute' if minutes == 1 else 'minutes'}"
+
+
+def _count_phrase(count: int, singular: str, plural: str | None = None) -> str:
+    """Format a count with reusable singular and plural grammar."""
+
+    noun = singular if count == 1 else (plural or f"{singular}s")
+    return f"{count} {noun}"
+
+
+def _terminate_sentence(value: str) -> str:
+    return value if value.endswith(".") else value + "."
 
 
 def _gap_phrase(minutes: int) -> str:
@@ -1435,7 +1501,12 @@ def _is_up_next_candidate(record: NormalizedRecord, today: date) -> bool:
 def _up_next_detail(record: NormalizedRecord, today: date) -> str:
     if record.due_at is None:
         raise ValueError("Up Next requires a source due date")
-    due_detail = _source_due_sentence(record, today)
+    due_detail = (
+        "Associated sources report different due dates; verify them before "
+        "scheduling this work."
+        if "due date" in record.association_conflicts
+        else _source_due_sentence(record, today)
+    )
     if record.due_at.date() > today + UP_NEXT_MAX_HORIZON:
         return f"Preparation is explicitly required now. {due_detail}"
     return due_detail
@@ -2093,12 +2164,19 @@ def _outcome_item(
     ranked: RankedCandidate,
 ) -> BriefingItem:
     inputs = _priority_inputs(record, today)
-    deadline = _source_due_sentence(record, today)
+    deadline = (
+        _conflict_detail(record, today)
+        if record.association_conflicts
+        else _source_due_sentence(record, today)
+    )
     ranking_reason = _visible_ranking_reason(ranked)
     return BriefingItem(
         key=f"outcome:{record.id}",
         headline=_display_title(record),
-        detail=f"{ranking_reason} {deadline}{_association_detail(record)}",
+        detail=(
+            f"{ranking_reason} {deadline}"
+            + (_association_detail(record) if not record.association_conflicts else "")
+        ),
         sources=_source_links(record),
         priority_inputs=inputs,
         content_kind=BriefingContentKind.RECOMMENDATION,
@@ -2108,34 +2186,60 @@ def _outcome_item(
 
 
 def _visible_ranking_reason(candidate: RankedCandidate) -> str:
-    band_label = {
-        PriorityBand.CRITICAL: "Critical",
-        PriorityBand.TODAY: "Today's",
-        PriorityBand.APPROACHING: "Approaching",
-        PriorityBand.STRATEGIC: "Strategic",
-        PriorityBand.BACKGROUND: "Background",
-    }[candidate.band]
+    conflict_fields = set(candidate.record.association_conflicts)
+    factor_kinds = {factor.kind for factor in candidate.factors}
     labels = {
-        RankingFactorKind.HARD_DEADLINE: "a source-marked hard deadline",
-        RankingFactorKind.DUE_DATE: "the current source due date",
-        RankingFactorKind.CALENDAR_OBLIGATION: "a Calendar-bound obligation",
-        RankingFactorKind.PREPARATION_DEPENDENCY: "required preparation",
-        RankingFactorKind.PERSON_OR_TEAM_BLOCKED: "a person or team is blocked",
-        RankingFactorKind.PRIMARY_STEWARDSHIP: "primary stewardship",
-        RankingFactorKind.MINISTRY_OR_RELATIONSHIP_CONSEQUENCE: (
-            "a ministry or relationship consequence"
+        RankingFactorKind.CALENDAR_OBLIGATION: "it is tied to today's Calendar",
+        RankingFactorKind.PREPARATION_DEPENDENCY: (
+            "it is required preparation for another commitment"
         ),
-        RankingFactorKind.SIX_MONTH_GOAL: "an official six-month goal",
-        RankingFactorKind.SEASONAL_INITIATIVE: "a current seasonal initiative",
-        RankingFactorKind.BLOCKER_OR_DEPENDENCY: "a blocker or dependency",
-        RankingFactorKind.CORRECTION_OR_DISPOSITION: "accepted local correction state",
+        RankingFactorKind.PERSON_OR_TEAM_BLOCKED: ("another person or team is blocked"),
+        RankingFactorKind.PRIMARY_STEWARDSHIP: (
+            "it falls within Brad's primary stewardship"
+        ),
+        RankingFactorKind.MINISTRY_OR_RELATIONSHIP_CONSEQUENCE: (
+            "it carries a ministry or relationship consequence"
+        ),
+        RankingFactorKind.SIX_MONTH_GOAL: "it advances an official six-month goal",
+        RankingFactorKind.SEASONAL_INITIATIVE: (
+            "it advances a current seasonal initiative"
+        ),
+        RankingFactorKind.BLOCKER_OR_DEPENDENCY: (
+            "it has a documented blocker or dependency"
+        ),
+        RankingFactorKind.DELEGATION: "the source identifies a delegation opportunity",
+        RankingFactorKind.SUPPORTED_EFFORT: ("the source supplies an effort estimate"),
+        RankingFactorKind.AVAILABLE_CALENDAR_WINDOW: (
+            "its supported effort fits the available Calendar window"
+        ),
+        RankingFactorKind.ENERGY_PATTERN: (
+            "its documented energy need fits the morning"
+        ),
+        RankingFactorKind.OPPORTUNITY_COST: (
+            "the source identifies a meaningful opportunity cost"
+        ),
     }
-    reasons = tuple(
-        labels[factor.kind] for factor in candidate.factors if factor.kind in labels
-    )
+    reasons: list[str] = []
+    for factor in candidate.factors:
+        if factor.kind is RankingFactorKind.HARD_DEADLINE:
+            reasons.append(
+                "one authoritative source marks its reported deadline as hard"
+                if "due date" in conflict_fields
+                else "it has a hard deadline"
+            )
+        elif factor.kind is RankingFactorKind.DUE_DATE:
+            if RankingFactorKind.HARD_DEADLINE not in factor_kinds:
+                reasons.append(
+                    "one authoritative source reports an immediate deadline"
+                    if "due date" in conflict_fields
+                    else "its deadline makes it time-sensitive"
+                )
+        elif label := labels.get(factor.kind):
+            reasons.append(label)
+    reasons = list(dict.fromkeys(reasons))
     if not reasons:
-        return f"{band_label} priority from supported current source evidence."
-    return f"{band_label} priority because of {', '.join(reasons)}."
+        return "Current source evidence supports attention today."
+    return f"This deserves attention today because {_natural_join(tuple(reasons))}."
 
 
 def _calendar_item(record: NormalizedRecord) -> BriefingItem:
@@ -2298,46 +2402,42 @@ def _brief_due_phrase(record: NormalizedRecord, today: date) -> str:
 
 
 def _source_due_sentence(record: NormalizedRecord, today: date) -> str:
+    if "due date" in record.association_conflicts:
+        return _conflict_detail(record, today)
     if record.due_at is None:
         return "No source deadline is recorded."
     due_date = record.due_at.date()
     if due_date == today:
         if record.all_day:
-            return "The source due date is today."
-        return f"The source deadline is today at {record.due_at:%-I:%M %p}."
+            return "The due date is today."
+        return f"The deadline is today at {record.due_at:%-I:%M %p}."
     if due_date < today:
         if record.all_day:
-            return f"The source due date was {record.due_at:%A, %B %-d}."
-        return f"The source deadline was {record.due_at:%A, %B %-d at %-I:%M %p}."
+            return f"The due date was {record.due_at:%A, %B %-d}."
+        return f"The deadline was {record.due_at:%A, %B %-d at %-I:%M %p}."
     if record.all_day:
-        return f"The source due date is {record.due_at:%A, %B %-d}."
-    return f"The source deadline is {record.due_at:%A, %B %-d at %-I:%M %p}."
+        return f"The due date is {record.due_at:%A, %B %-d}."
+    return f"The deadline is {record.due_at:%A, %B %-d at %-I:%M %p}."
 
 
 def _source_link(record: NormalizedRecord) -> SourceLink:
+    return _provenance_link(record.provenance)
+
+
+def _provenance_link(provenance: Provenance) -> SourceLink:
     return SourceLink(
-        source=record.provenance.source,
-        source_record_id=record.provenance.source_record_id,
-        display_url=record.provenance.display_url,
-        connector_instance_id=record.provenance.connector_instance_id,
-        account_alias=record.provenance.account_alias,
-        domain_classification=record.provenance.domain_classification,
+        source=provenance.source,
+        source_record_id=provenance.source_record_id,
+        display_url=provenance.display_url,
+        connector_instance_id=provenance.connector_instance_id,
+        account_alias=provenance.account_alias,
+        domain_classification=provenance.domain_classification,
     )
 
 
 def _source_links(record: NormalizedRecord) -> tuple[SourceLink, ...]:
     links = [_source_link(record)]
-    links.extend(
-        SourceLink(
-            source=provenance.source,
-            source_record_id=provenance.source_record_id,
-            display_url=provenance.display_url,
-            connector_instance_id=provenance.connector_instance_id,
-            account_alias=provenance.account_alias,
-            domain_classification=provenance.domain_classification,
-        )
-        for provenance in record.associated_provenance
-    )
+    links.extend(_provenance_link(item) for item in record.associated_provenance)
     return tuple(links)
 
 
@@ -2345,12 +2445,173 @@ def _association_detail(record: NormalizedRecord) -> str:
     if not record.associated_provenance:
         return ""
     if record.association_conflicts:
-        return (
-            " Explicitly associated source records disagree on "
-            + ", ".join(record.association_conflicts)
-            + "; both remain authoritative."
-        )
+        return " " + _conflict_detail(record, None)
     return " Explicitly associated source records support one combined item."
+
+
+def _conflict_detail(record: NormalizedRecord, today: date | None) -> str:
+    """Attribute each conflicting value and recommend safe reconciliation."""
+
+    claims = _conflict_claims(record, today)
+    statements: list[str] = []
+    for field in record.association_conflicts:
+        field_claims = tuple(claim for claim in claims if claim.field == field)
+        if len(field_claims) < 2:
+            continue
+        reports = tuple(
+            f"{_source_label(claim.source)} reports {claim.value}"
+            for claim in field_claims
+        )
+        statements.append(_natural_join(reports, conjunction="while") + ".")
+
+    freshness = _supported_freshness_sentence(record)
+    if freshness is not None:
+        statements.append(freshness)
+    statements.append(
+        "Each source remains authoritative for its own record; "
+        + (
+            "verify the conflict before planning the work."
+            if today is not None and _has_immediate_conflicting_due_date(record, today)
+            else "verify the conflicting values before relying on them."
+        )
+    )
+    return " ".join(statements)
+
+
+def _conflict_claims(
+    record: NormalizedRecord,
+    today: date | None,
+) -> tuple[ConflictClaim, ...]:
+    snapshots = (_record_source_facts(record), *record.associated_source_facts)
+    claims: list[ConflictClaim] = []
+    for field in record.association_conflicts:
+        for snapshot in snapshots:
+            value = _conflict_value(snapshot, field, today)
+            if value is None:
+                continue
+            claims.append(
+                ConflictClaim(
+                    field=field,
+                    source=_provenance_link(snapshot.provenance),
+                    value=value,
+                    freshness_at=snapshot.provenance.freshness_at,
+                )
+            )
+    return tuple(claims)
+
+
+def _record_source_facts(record: NormalizedRecord) -> AssociatedSourceFacts:
+    return AssociatedSourceFacts(
+        provenance=record.provenance,
+        status=record.status,
+        status_category=record.status_category,
+        assignee_reference=record.assignee_reference,
+        due_at=record.due_at,
+        all_day=record.all_day,
+        source_priority=record.source_priority,
+        provider_priority=record.provider_priority,
+        completion_state=record_completion_state(record),
+    )
+
+
+def _conflict_value(
+    facts: AssociatedSourceFacts,
+    field: str,
+    today: date | None,
+) -> str | None:
+    if field == "due date" and facts.due_at is not None:
+        return "the due date as " + _attributed_due_text(
+            facts.due_at,
+            all_day=facts.all_day,
+            today=today,
+        )
+    if field == "owner" and facts.assignee_reference is not None:
+        return f"the owner as {facts.assignee_reference}"
+    if field == "status":
+        status = facts.status_category or facts.status
+        return None if status is None else f"the status as {status}"
+    if field == "priority":
+        priority = (
+            facts.source_priority
+            if facts.source_priority is not None
+            else facts.provider_priority
+        )
+        return None if priority is None else f"the priority as {priority}"
+    if field == "completion" and facts.completion_state is not None:
+        completion = "completed" if facts.completion_state else "not completed"
+        return f"the item as {completion}"
+    return None
+
+
+def _attributed_due_text(
+    due_at: datetime,
+    *,
+    all_day: bool,
+    today: date | None,
+) -> str:
+    if today is not None and due_at.date() == today:
+        return "today" if all_day else f"today at {due_at:%-I:%M %p}"
+    if all_day:
+        return f"{due_at:%A, %B %-d}"
+    return f"{due_at:%A, %B %-d at %-I:%M %p}"
+
+
+def _has_immediate_conflicting_due_date(
+    record: NormalizedRecord,
+    today: date,
+) -> bool:
+    if "due date" not in record.association_conflicts:
+        return False
+    due_dates = tuple(
+        facts.due_at.date()
+        for facts in (_record_source_facts(record), *record.associated_source_facts)
+        if facts.due_at is not None
+    )
+    return any(due_date <= today for due_date in due_dates)
+
+
+def _supported_freshness_sentence(record: NormalizedRecord) -> str | None:
+    snapshots = (_record_source_facts(record), *record.associated_source_facts)
+    if len(snapshots) < 2 or any(
+        facts.provenance.freshness_at is None for facts in snapshots
+    ):
+        return None
+    newest_at = max(
+        facts.provenance.freshness_at
+        for facts in snapshots
+        if facts.provenance.freshness_at is not None
+    )
+    newest = tuple(
+        facts for facts in snapshots if facts.provenance.freshness_at == newest_at
+    )
+    if len(newest) != 1 or all(
+        facts.provenance.freshness_at == newest_at for facts in snapshots
+    ):
+        return None
+    return (
+        f"{_source_label(_provenance_link(newest[0].provenance))} provides "
+        "the newer source fact."
+    )
+
+
+def _source_label(source: SourceLink) -> str:
+    return source.account_alias or source.source.replace("_", " ").capitalize()
+
+
+def _natural_join(
+    values: tuple[str, ...],
+    *,
+    conjunction: str = "and",
+) -> str:
+    if not values:
+        return ""
+    if len(values) == 1:
+        return values[0]
+    if len(values) == 2:
+        if conjunction == "while":
+            return f"{values[0]}, while {values[1]}"
+        return f"{values[0]} {conjunction} {values[1]}"
+    return f"{', '.join(values[:-1])}, {conjunction} {values[-1]}"
 
 
 def _render_source(source: SourceLink) -> str:

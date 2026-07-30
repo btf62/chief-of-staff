@@ -389,7 +389,15 @@ def synthetic_ranking_scenarios() -> tuple[RankingScenario, ...]:
             ),
         ),
         expectation=ScenarioExpectation(
-            present=("both remain authoritative",),
+            present=(
+                "Jira reports the due date as today",
+                "Todoist reports the due date as Thursday, July 30",
+                "verify the conflict before planning the work",
+            ),
+            absent=(
+                "The deadline is today",
+                "The due date is today",
+            ),
             minimum_conflicts=1,
             minimum_duplicate_suppressions=1,
         ),

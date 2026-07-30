@@ -33,9 +33,13 @@ from chief_of_staff.pipeline.deduplication import (
     deduplicate_records,
 )
 from chief_of_staff.pipeline.normalization import (
+    AssociatedSourceFacts,
     NormalizedRecord,
     RecordKind,
     normalize_item,
+    record_completion_state,
+    record_priority_fact,
+    record_status_fact,
 )
 
 
@@ -347,12 +351,26 @@ def _associate_explicit_cross_source_records(
             field
             for related in linked
             for field, first, second in (
-                ("status", record.status, related.status),
                 ("due date", record.due_at, related.due_at),
                 (
-                    "source priority",
-                    record.source_priority,
-                    related.source_priority,
+                    "owner",
+                    record.assignee_reference,
+                    related.assignee_reference,
+                ),
+                (
+                    "status",
+                    record_status_fact(record),
+                    record_status_fact(related),
+                ),
+                (
+                    "priority",
+                    record_priority_fact(record),
+                    record_priority_fact(related),
+                ),
+                (
+                    "completion",
+                    record_completion_state(record),
+                    record_completion_state(related),
                 ),
             )
             if first is not None and second is not None and first != second
@@ -362,6 +380,20 @@ def _associate_explicit_cross_source_records(
                 record,
                 related_source_ids=tuple(sorted(related_ids[record.id])),
                 associated_provenance=tuple(related.provenance for related in linked),
+                associated_source_facts=tuple(
+                    AssociatedSourceFacts(
+                        provenance=related.provenance,
+                        status=related.status,
+                        status_category=related.status_category,
+                        assignee_reference=related.assignee_reference,
+                        due_at=related.due_at,
+                        all_day=related.all_day,
+                        source_priority=related.source_priority,
+                        provider_priority=related.provider_priority,
+                        completion_state=record_completion_state(related),
+                    )
+                    for related in linked
+                ),
                 association_conflicts=tuple(sorted(conflicts)),
             )
         )

@@ -151,6 +151,12 @@ No strict versioning scheme is promised before a distributable product exists.
 
 ### Changed
 
+- Qualified cross-source deadline, owner, status, priority, and completion
+  conflicts with source-attributed values instead of presenting one
+  representative value as canonical.
+- Replaced internal ranking labels and mechanical Calendar-span prose with
+  natural factor explanations, separate-block schedule summaries, and
+  reusable singular/plural count formatting.
 - Brad selected OpenAI `gpt-5.6-luna` with low reasoning and the exact
   evaluated Responses configuration for
   `contextual_action_classification` only, completing Milestone 8. The adapter

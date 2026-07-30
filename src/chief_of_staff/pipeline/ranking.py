@@ -175,36 +175,24 @@ def _factors(
 ) -> tuple[RankingFactor, ...]:
     factors: list[RankingFactor] = []
     due_at = record.due_at
-    due_date = None if due_at is None else due_at.date()
     if record.hard_deadline and due_at is not None:
+        rationale = (
+            "This source marks its reported due date as a hard deadline; "
+            "associated sources disagree on the date."
+            if "due date" in record.association_conflicts
+            else "The source marks this due date as a hard deadline."
+        )
         factors.append(
             _factor(
                 record,
                 RankingFactorKind.HARD_DEADLINE,
-                "The source marks this due date as a hard deadline.",
+                rationale,
                 "hard_deadline",
                 due_at.isoformat(),
             )
         )
     if due_at is not None:
-        due_date = due_at.date()
-        if due_date < briefing_date:
-            due_rationale = "The source due date is overdue."
-        elif due_date == briefing_date:
-            due_rationale = "The source due date is today."
-        elif due_date <= briefing_date + APPROACHING_HORIZON:
-            due_rationale = "The source due date is approaching within seven days."
-        else:
-            due_rationale = "The source provides a future due date."
-        factors.append(
-            _factor(
-                record,
-                RankingFactorKind.DUE_DATE,
-                due_rationale,
-                "due_at",
-                due_at.isoformat(),
-            )
-        )
+        factors.append(_due_date_factor(record, briefing_date))
     if record.calendar_dependency or (
         record.start_at is not None and record.start_at.date() == briefing_date
     ):
@@ -424,6 +412,72 @@ def _factor(
                 fact_value=fact_value,
             ),
         ),
+    )
+
+
+def _due_date_factor(
+    record: NormalizedRecord,
+    briefing_date: date,
+) -> RankingFactor:
+    """Retain every associated due claim and qualify unresolved disagreement."""
+
+    if record.due_at is None:
+        raise ValueError("due-date ranking factor requires a due date")
+
+    sources = [
+        FactorSource(
+            source=record.provenance.source,
+            source_record_id=record.provenance.source_record_id,
+            display_url=record.provenance.display_url,
+            fact_name="due_at",
+            fact_value=record.due_at.isoformat(),
+        )
+    ]
+    sources.extend(
+        FactorSource(
+            source=associated.provenance.source,
+            source_record_id=associated.provenance.source_record_id,
+            display_url=associated.provenance.display_url,
+            fact_name="due_at",
+            fact_value=associated.due_at.isoformat(),
+        )
+        for associated in record.associated_source_facts
+        if associated.due_at is not None
+    )
+    due_dates = tuple(
+        datetime.fromisoformat(source.fact_value).date() for source in sources
+    )
+    if "due date" in record.association_conflicts:
+        if any(due_date <= briefing_date for due_date in due_dates):
+            rationale = (
+                "One authoritative source reports an immediate or overdue deadline; "
+                "associated sources disagree on the date."
+            )
+        elif any(
+            due_date <= briefing_date + APPROACHING_HORIZON for due_date in due_dates
+        ):
+            rationale = (
+                "One authoritative source reports an approaching deadline; "
+                "associated sources disagree on the date."
+            )
+        else:
+            rationale = (
+                "Associated authoritative sources report different future dates."
+            )
+    else:
+        due_date = record.due_at.date()
+        if due_date < briefing_date:
+            rationale = "The source due date is overdue."
+        elif due_date == briefing_date:
+            rationale = "The source due date is today."
+        elif due_date <= briefing_date + APPROACHING_HORIZON:
+            rationale = "The source due date is approaching within seven days."
+        else:
+            rationale = "The source provides a future due date."
+    return RankingFactor(
+        kind=RankingFactorKind.DUE_DATE,
+        rationale=rationale,
+        sources=tuple(sources),
     )
 
 

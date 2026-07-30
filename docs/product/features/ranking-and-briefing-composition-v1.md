@@ -1,7 +1,7 @@
 # Feature: Ranking and Briefing Composition v1
 
 - **Status:** Accepted
-- **Version:** 1
+- **Version:** 2
 - **Owner:** Brad
 - **Last updated:** 2026-07-29
 
@@ -154,8 +154,13 @@ plan retains:
 - the reason presentation suppression was safe.
 
 Conflicting dates, owners, status, or priority remain attached to the plan.
-The briefing discloses a material conflict rather than silently choosing one
-source.
+The briefing attributes each conflicting value to its source rather than
+silently choosing one value as canonical. An urgent value may keep conflict
+resolution eligible for attention, but the prose qualifies that urgency and
+recommends verification. Source freshness or authority may influence the
+explanation only when retained evidence supports the comparison. Completion
+conflicts receive the same treatment as date, owner, status, and priority
+conflicts.
 
 ## Structured briefing plan
 
@@ -198,6 +203,12 @@ The Chief of Staff Note is composed only from structured workday, schedule,
 outcome, focus-window, conflict, and ranking-confidence inputs. It does not
 introduce connector counts, a new fact, shame, divine guidance, or an
 implication of complete knowledge.
+
+Visible ranking rationale uses complete natural sentences rather than
+priority-band names or internal factor labels. Calendar synthesis preserves
+separate commitment blocks and describes total scheduled time, gaps, tight
+transitions, and open windows without treating the first-to-last span as
+continuous occupancy.
 
 ## Focus and capacity
 

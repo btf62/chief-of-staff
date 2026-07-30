@@ -9,6 +9,7 @@ from chief_of_staff.pipeline.briefing import (
     BriefingValidationError,
     CalendarEventClassification,
     ChiefOfStaffNoteInputs,
+    ConflictClaim,
     PlanConflict,
     PriorityInputs,
     RenderedBriefing,
@@ -34,6 +35,7 @@ from chief_of_staff.pipeline.deduplication import (
     deduplicate_records,
 )
 from chief_of_staff.pipeline.normalization import (
+    AssociatedSourceFacts,
     NormalizedRecord,
     Provenance,
     RecordKind,
@@ -56,6 +58,7 @@ from chief_of_staff.pipeline.runner import (
 )
 
 __all__ = (
+    "AssociatedSourceFacts",
     "BriefingContentKind",
     "BriefingItem",
     "BriefingPlan",
@@ -64,6 +67,7 @@ __all__ = (
     "BriefingValidationError",
     "CalendarEventClassification",
     "ChiefOfStaffNoteInputs",
+    "ConflictClaim",
     "CrossSourceAssociation",
     "DeduplicationResult",
     "DeterministicBriefingPipeline",
