@@ -1,7 +1,7 @@
 # Daily Briefing v1 Implementation Roadmap
 
 - **Status:** Accepted
-- **Version:** 4
+- **Version:** 5
 - **Owner:** Brad
 - **Last updated:** 2026-07-29
 
@@ -14,11 +14,12 @@ complete-retrieval and normal-workday quality validation. Jira has completed
 its mocked phase, project discovery, and one exact-project live issue trial.
 Milestone 5 now covers only the accepted Todoist and Jira task-system sources
 and is complete. Milestone 6 completed the Work Gmail input gate and Brad's
-human trust review. Milestone 7 deterministic explicit detection has passed
-its synthetic evaluation and one five-source live validation. Its
-implementation is complete; Brad's review of the private evidence remains the
-acceptance gate. Personal Gmail and Google Drive are deferred until after MVP
-validation.
+human trust review. Milestone 7 deterministic explicit detection passed its
+synthetic evaluation and one five-source live validation. Brad reviewed the
+private evidence and briefing and accepted the detections and supporting
+logic, completing Milestone 7. Milestone 8 is active through its synthetic and
+mocked inference gate. Personal Gmail and Google Drive are deferred until
+after MVP validation.
 Dates and estimates remain intentionally omitted until implementation
 evidence supports them.
 
@@ -296,7 +297,7 @@ another connector remain unauthorized.
 
 ## Milestone 7 — Explicit Commitment and Preparation Detection
 
-- **Status:** Implementation complete — Brad review pending
+- **Status:** Complete
 - **Intended user-visible outcome:** Brad receives conservative, explainable
   source-backed notice of directly stated commitments, preparation needs, and
   people explicitly waiting.
@@ -325,11 +326,15 @@ five-source live run generated a private mode-`0600` evidence review and a
 candidates, produced 105 usable bodies, and disclosed partial coverage for 13
 unavailable or unsupported bodies. Repository, Calendar, Todoist, and Jira
 retrieval completed. The run remained read-only and did not use hosted
-inference. Milestone 7 is not accepted until Brad reviews the private evidence.
+inference. Brad reviewed the private evidence and briefing and accepted the
+detections and supporting logic. Every displayed conclusion remains
+evidence-linked; unsupported candidates return `insufficient_evidence`; and
+local corrections and dismissals remain authoritative for materially
+unchanged evidence.
 
 ## Milestone 8 — Provider-Neutral Inference
 
-- **Status:** Planned
+- **Status:** In progress — synthetic and mocked inference gate
 - **Intended user-visible outcome:** Where permitted and demonstrably useful,
   Brad receives bounded contextual inference and synthesis with evidence,
   explanations, sensitivity controls, and a clear reduced-mode fallback.
@@ -355,6 +360,10 @@ inference. Milestone 7 is not accepted until Brad reviews the private evidence.
   comparative evaluation, direct model access to sources or SQLite, provider
   memory, Tier 3 use under standard retention, silent provider fallback,
   fine-tuning on private data, and external-action tools.
+
+Milestone 7 acceptance does not authorize hosted inference, private-data
+egress, an OpenAI API key, a production model, or live provider evaluation.
+Those actions remain behind Milestone 8's explicit live authorization gate.
 
 ## Milestone 9 — Ranking and Briefing Composition
 

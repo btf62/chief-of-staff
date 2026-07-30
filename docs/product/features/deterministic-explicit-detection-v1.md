@@ -138,8 +138,10 @@ when aggregate accuracy would otherwise appear high.
 
 ## Open questions
 
-- None for implementation. Brad's review of the private Milestone 7 evidence
-  remains the acceptance gate.
+- None for this milestone. Brad reviewed the private Milestone 7 evidence and
+  briefing and accepted the detections and supporting logic. This acceptance
+  does not authorize hosted inference, private-data egress, or a production
+  model.
 
 ## Related documents
 

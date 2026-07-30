@@ -21,10 +21,12 @@ retrieval, and produced 106 usable bodies. Gmail coverage was partial as
 required while the other four inputs were complete. The trial created the
 private review and a 929-word combined briefing. Brad reviewed the evidence
 and explicitly judged the logic sound, completing Milestone 6. Milestone 7
-precision-first deterministic detection has passed its synthetic evaluation
-and one five-source live validation. Its implementation is complete; Brad's
-review of the private Milestone 7 evidence remains the acceptance gate.
-Personal Gmail and Google Drive remain deferred and unauthorized.
+precision-first deterministic detection passed its synthetic evaluation and
+one five-source live validation. Brad reviewed the private evidence and
+briefing and accepted the detections and supporting logic, completing
+Milestone 7. Milestone 8 is active through its synthetic and mocked inference
+gate; hosted inference and private-data egress remain unauthorized. Personal
+Gmail and Google Drive remain deferred and unauthorized.
 Design acceptance authorizes implementation within the accepted scope; it does
 not mean the complete Daily Briefing has passed operational acceptance.
 

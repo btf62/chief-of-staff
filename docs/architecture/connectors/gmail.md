@@ -494,8 +494,8 @@ Gmail selected all 118 eligible bounded body candidates, produced 105 usable
 bodies, and disclosed partial coverage for 13 unavailable or unsupported
 bodies. The other approved sources completed, and the run produced a private
 deterministic-review artifact plus a 635-word briefing without hosted inference
-or external writes. Milestone 7 implementation is complete; Brad's review of
-that private evidence remains the acceptance gate.
+or external writes. Brad reviewed that private evidence and briefing and
+accepted the detections and supporting logic, completing Milestone 7.
 
 Another Gmail or supporting-source retrieval requires explicit current-task
 authorization within the accepted boundary. Personal Gmail and Google Drive

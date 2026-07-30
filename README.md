@@ -7,8 +7,7 @@ identifying priorities, commitments, and useful signals.
 
 ## Status
 
-**Phase:** Milestones 1–6 complete; Milestone 7 implementation complete —
-Brad review pending
+**Phase:** Milestones 1–7 complete; Milestone 8 synthetic implementation active
 
 The Python, local-state, deterministic briefing, repository connector, and
 read-only Google Calendar foundations are complete. An explicitly approved,
@@ -26,12 +25,14 @@ produced 106 usable bodies. Gmail coverage was partial as required while the
 other four inputs were complete. The trial created the private review and a
 929-word combined briefing. Brad reviewed the private evidence and combined
 briefing and explicitly judged the logic sound, completing Milestone 6.
-Milestone 7 adds precision-first deterministic commitment, acknowledgment,
+Milestone 7 added precision-first deterministic commitment, acknowledgment,
 deadline, preparation, and insufficient-evidence behavior. Its synthetic
-evaluation passes, and a 2026-07-29 five-source live validation produced a
-private review artifact and a 635-word briefing without external writes. Brad's
-review of that new evidence remains the acceptance gate. Personal Gmail and
-Google Drive remain deferred and unauthorized.
+evaluation passed, and a 2026-07-29 five-source live validation produced a
+private review artifact and a 635-word briefing without external writes or
+hosted inference. Brad reviewed that evidence and briefing and accepted the
+detections and supporting logic. Milestone 8 is active through its synthetic
+and mocked provider-neutral inference gate only. Personal Gmail and Google
+Drive remain deferred and unauthorized.
 
 ## Repository map
 

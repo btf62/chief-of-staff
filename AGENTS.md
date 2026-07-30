@@ -21,11 +21,14 @@ and produced a private candidate review plus a 929-word combined briefing.
 Brad reviewed the private Work Gmail evidence and combined briefing and judged
 the logic sound, completing Milestone 6. Milestone 7 deterministic explicit
 detection has passed its synthetic evaluation and one five-source live
-validation. Its implementation is complete; Brad's review of the new private
-evidence remains the acceptance gate. The temporary live-validation
-authorization ended when that artifact was produced. No repeat source
-retrieval, authorization refresh, scope change, or broader live access is now
-authorized. Personal Gmail and Google Drive remain deferred and unauthorized.
+validation. Brad reviewed the private evidence and briefing and judged the
+detections and supporting logic sound, completing and accepting Milestone 7.
+Milestone 8 is now active only through its synthetic and mocked inference gate.
+The temporary live-validation authorization ended when the Milestone 7
+artifact was produced. No repeat source retrieval, authorization refresh,
+scope change, hosted inference, private-data egress, or broader live access is
+now authorized. Personal Gmail and Google Drive remain deferred and
+unauthorized.
 
 ## Working rules
 

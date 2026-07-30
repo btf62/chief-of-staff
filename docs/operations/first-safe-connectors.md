@@ -20,8 +20,10 @@ its synthetic evaluation and one five-source live validation. That validation
 selected all 118 eligible Work Gmail body candidates, produced 105 usable
 bodies, and disclosed partial coverage for 13 unavailable or unsupported
 bodies. It created a private review and a 635-word combined briefing without
-external writes. Brad's review of the new evidence remains the Milestone 7
-acceptance gate.
+external writes or hosted inference. Brad reviewed the private evidence and
+briefing and accepted the detections and supporting logic, completing
+Milestone 7. That acceptance does not authorize another live retrieval or
+hosted inference.
 
 ## Run the safe connector demonstration
 
