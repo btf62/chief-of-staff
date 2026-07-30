@@ -3,7 +3,7 @@
 {% block content %}
   {% if status == "deleted" %}
     <p class="status-message" role="status">
-      The local conclusion was deleted. Its authoritative source was unchanged.
+      The local item was deleted. Its authoritative source was unchanged.
     </p>
   {% endif %}
 
@@ -12,7 +12,7 @@
       <p class="eyebrow">Daily Briefing</p>
       <h1>{{ briefing.run.briefing_date.strftime("%A, %B %-d") }}</h1>
       <p class="briefing-meta">
-        {{ generation_mode }} briefing
+        {{ generation_mode }}
       </p>
     </header>
 
@@ -58,7 +58,7 @@
               {% endif %}
               {% if item.handle %}
                 <a class="text-link" href="{{ url_for('conclusion_detail', handle=item.handle) }}">
-                  Inspect evidence or change local interpretation
+                  Review why this appeared or update it
                 </a>
               {% endif %}
             </article>

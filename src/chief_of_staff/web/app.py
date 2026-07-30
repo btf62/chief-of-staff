@@ -622,31 +622,31 @@ def _coverage_view(
 
 def _generation_mode_display(value: str) -> str:
     labels = {
-        "deterministic": "Deterministic",
-        "deterministic_full": "Deterministic",
-        "deterministic_reduced": "Deterministic with reduced coverage",
-        "degraded": "Deterministic with reduced coverage",
+        "deterministic": "Deterministic briefing",
+        "deterministic_full": "Deterministic briefing",
+        "deterministic_reduced": ("Deterministic briefing · reduced source coverage"),
+        "degraded": "Deterministic briefing · reduced source coverage",
     }
-    return labels.get(value, "Deterministic")
+    return labels.get(value, "Deterministic briefing")
 
 
 def _content_role(item: BriefingPresentationItem) -> str:
     labels = {
-        "authoritative_source_fact": "Source fact",
-        "explicit_detection": "Explicit detection",
-        "inferred_conclusion": "Inference",
-        "recommendation": "Recommendation",
-        "presentation_only_synthesis": "Schedule synthesis",
+        "authoritative_source_fact": "Source record",
+        "explicit_detection": "Directly supported",
+        "inferred_conclusion": "Inferred",
+        "recommendation": "Suggested action",
+        "presentation_only_synthesis": "Schedule context",
     }
     return labels.get(item.content_kind, "Briefing item")
 
 
 def _conclusion_role(state: ConclusionState) -> str:
     if state.conclusion.kind.value == "recommendation":
-        return "Recommendation"
+        return "Suggested action"
     if state.conclusion.classification.value == "inferred":
-        return "Inference"
-    return "Explicit detection"
+        return "Inferred"
+    return "Directly supported"
 
 
 def _confidence_display(confidence: float | None) -> str | None:
@@ -699,7 +699,7 @@ def _source_display_name(value: str) -> str:
 
 def _state_display_name(value: str) -> str:
     names = {
-        "active": "No local disposition",
+        "active": "Not reviewed",
         "confirmed": "Confirmed",
         "corrected": "Corrected",
         "dismissed": "Dismissed",

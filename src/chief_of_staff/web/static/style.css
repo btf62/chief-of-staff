@@ -282,10 +282,24 @@ summary {
   margin-block: 3rem;
 }
 
+.action-group {
+  margin-top: 2rem;
+}
+
+.action-group > h3 {
+  margin-bottom: 0.65rem;
+  font-size: 1.15rem;
+}
+
+.action-group-danger {
+  margin-top: 2.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--line);
+}
+
 .action-grid {
   display: grid;
   gap: 0.7rem;
-  margin-top: 1.25rem;
 }
 
 .action-grid form {
@@ -356,6 +370,39 @@ button {
 .history > article {
   padding-block: 1rem;
   border-top: 1px solid var(--line);
+}
+
+.technical-details {
+  margin-top: 3rem;
+  color: var(--muted);
+}
+
+.technical-details[open] {
+  padding-bottom: 1rem;
+}
+
+.technical-details > :not(summary) {
+  margin-inline: 1rem;
+}
+
+.technical-details h2 {
+  margin-top: 1.5rem;
+  color: var(--ink);
+  font-size: 1.05rem;
+}
+
+.diagnostic-list {
+  padding-left: 1.25rem;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.82rem;
+}
+
+.diagnostic-list li + li {
+  margin-top: 0.75rem;
+}
+
+.diagnostic-list small {
+  display: block;
 }
 
 .status-message {

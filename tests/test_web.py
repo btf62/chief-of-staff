@@ -35,6 +35,8 @@ from chief_of_staff.persistence import (
 from chief_of_staff.web.app import (
     DEFAULT_HOST,
     DEFAULT_PORT,
+    _content_role,
+    _generation_mode_display,
     close_application,
     create_app,
 )
@@ -263,7 +265,7 @@ def _seed_database(
                             id="waiting-item",
                             conclusion_id="waiting-conclusion",
                             headline=waiting_statement,
-                            detail="A high-precision inferred waiting item.",
+                            detail="A direct request appears unanswered.",
                             content_kind="inferred_conclusion",
                             uncertainty="Moderate uncertainty",
                             explanation="A direct request has no observed reply.",
@@ -288,10 +290,16 @@ def _seed_database(
                             id="conflict-item",
                             conclusion_id="conflict-conclusion",
                             headline="Verify the conflicting deadline before acting.",
-                            detail="The application did not silently reconcile it.",
+                            detail=(
+                                "The sources disagree, so no deadline was chosen "
+                                "automatically."
+                            ),
                             content_kind="recommendation",
-                            uncertainty="Sources conflict; verify before acting.",
-                            explanation="Conflicting values remain source-attributed.",
+                            uncertainty="Verify the source deadline before acting.",
+                            explanation=(
+                                "Google Calendar and Work Gmail show different "
+                                "deadlines."
+                            ),
                             sources=(
                                 BriefingPresentationSource(
                                     source="google_calendar",
@@ -470,6 +478,110 @@ def test_security_headers_cookie_settings_and_no_external_assets(
     assert b"localStorage" not in detail.data
     assert b"sessionStorage" not in detail.data
     assert b"serviceWorker" not in detail.data
+
+
+def test_interface_language_actions_and_diagnostics_are_user_facing(
+    web_app: Flask,
+) -> None:
+    client = web_app.test_client()
+    home = _get(client, "/").get_data(as_text=True)
+    assert "Deterministic briefing · reduced source coverage" in home
+    assert "Directly supported" in home
+    assert "Inferred" in home
+    assert "Suggested action" in home
+    assert "Not reviewed" in home
+    assert "Review why this appeared or update it" in home
+    assert "A direct request appears unanswered." in home
+    assert "The sources disagree, so no deadline was chosen automatically." in home
+    assert "Verify the source deadline before acting." in home
+    assert "Google Calendar and Work Gmail show different deadlines." in home
+    assert "No local disposition" not in home
+    assert "high-precision inferred" not in home
+    assert "silently reconcile" not in home
+    assert "source-attributed" not in home
+
+    detail = _get(client, _first_conclusion_path(client)).get_data(as_text=True)
+    assert "Update this item" in detail
+    assert (
+        "These choices change only how Chief of Staff treats this item. Gmail,"
+        in detail
+    )
+    assert "Common choices" in detail
+    assert "Plan or hand off" in detail
+    assert "Delete local data" in detail
+    assert detail.index("Common choices") < detail.index("Plan or hand off")
+    assert detail.index("Plan or hand off") < detail.index("Delete local data")
+    for button_text in (
+        "Confirm this",
+        "Save correction",
+        "Dismiss this",
+        "Record delegation",
+        "Save new date",
+        "Mark complete",
+        "Intentionally abandon",
+        "Delete local item",
+    ):
+        assert button_text in detail
+    assert "What should this say?" in detail
+    assert "Who will handle it?" in detail
+    assert "New date and time" in detail
+    assert "disposition" not in detail.lower()
+    assert '<details class="technical-details">' in detail
+    assert '<details class="technical-details" open>' not in detail
+    assert "Technical details" in detail
+    evidence_item = re.search(
+        r'<article class="evidence-item">(.*?)</article>',
+        detail,
+        flags=re.DOTALL,
+    )
+    assert evidence_item is not None
+    assert "Evidence version" not in evidence_item.group(1)
+
+    action_path, form = _form(client, _first_conclusion_path(client), "correct")
+    form["replacement_text"] = "Prepare the agenda for the morning commitment."
+    response = _post(client, action_path, form)
+    assert response.status_code == 303
+    updated = _get(client, response.headers["Location"]).get_data(as_text=True)
+    assert "Chief of Staff updated this item." in updated
+
+
+@pytest.mark.parametrize(
+    ("content_kind", "expected"),
+    [
+        ("authoritative_source_fact", "Source record"),
+        ("explicit_detection", "Directly supported"),
+        ("inferred_conclusion", "Inferred"),
+        ("recommendation", "Suggested action"),
+        ("presentation_only_synthesis", "Schedule context"),
+    ],
+)
+def test_content_roles_use_plain_language(
+    content_kind: str,
+    expected: str,
+) -> None:
+    item = BriefingPresentationItem(
+        id="plain-language-role",
+        headline="Synthetic item",
+        detail="",
+        content_kind=content_kind,
+        sources=(),
+    )
+    assert _content_role(item) == expected
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected"),
+    [
+        ("deterministic", "Deterministic briefing"),
+        (
+            "deterministic_reduced",
+            "Deterministic briefing · reduced source coverage",
+        ),
+        ("degraded", "Deterministic briefing · reduced source coverage"),
+    ],
+)
+def test_generation_modes_read_naturally(mode: str, expected: str) -> None:
+    assert _generation_mode_display(mode) == expected
 
 
 def test_request_size_limit_rejects_oversized_form(web_app: Flask) -> None:
@@ -706,8 +818,18 @@ def test_every_local_disposition_is_supported_and_history_is_inspectable(
         assert event.briefing_run_id == "briefing-run"
 
         html = _get(client, detail_path).get_data(as_text=True)
-        assert "Local history" in html
+        assert "Your changes" in html
+        assert "Not reviewed" in html
         assert "Originating briefing 2026-07-30" in html
+        history = re.search(
+            r'<section class="history".*?</section>',
+            html,
+            flags=re.DOTALL,
+        )
+        assert history is not None
+        assert "synthetic-rules-v1" not in history.group(0)
+        assert "Evidence version" not in history.group(0)
+        assert '<details class="technical-details">' in html
         assert "synthetic-rules-v1" in html
     finally:
         close_application(app)
@@ -976,7 +1098,7 @@ def test_no_briefing_empty_history_long_content_and_private_fields_are_safe(
         assert len(home.data) < 100_000
         detail = _get(client, _first_conclusion_path(client))
         html = detail.get_data(as_text=True)
-        assert "No local corrections or dispositions have been recorded." in html
+        assert "No changes have been recorded." in html
         assert "raw Gmail body" not in html
         assert "MIME" not in html
         assert "provider response" not in html
