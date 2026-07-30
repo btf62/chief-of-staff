@@ -103,6 +103,7 @@ def test_reduced_coverage_archives_only_after_one_source_completes(
         inspection = store.inspect_state()
         assert inspection.briefing_runs == 1
         assert inspection.connector_runs == 5
+        assert inspection.briefing_archived_facts == 1
 
 
 def test_insufficient_evidence_creates_no_run_or_archive(tmp_path: Path) -> None:

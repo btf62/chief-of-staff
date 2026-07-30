@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import uuid
 from collections.abc import Callable
@@ -105,6 +106,8 @@ class LiveCalendarTrialRunner:
             timezone=self.timezone,
             invocation_mode="bounded_live_trial",
             lookahead_days=7,
+            generated_at=started_at,
+            as_of=started_at,
         )
         repository_connector = RepositoryContextConnector(
             root=self.repository_root,
@@ -214,6 +217,17 @@ class LiveCalendarTrialRunner:
                 started_at=started_at,
                 completed_at=completed_at,
                 status=BriefingStatus.SUCCEEDED,
+                generated_at=context.generated_at,
+                as_of=context.as_of,
+                historical_mode=context.historical_mode.value,
+                originating_recorded_run_id=(context.originating_recorded_run_id),
+                processing_versions_json=json.dumps(
+                    {
+                        "briefing_rules": "milestone-11",
+                        "ranking_rules": "milestone-9",
+                    },
+                    sort_keys=True,
+                ),
             )
         )
         connector_run_ids: dict[tuple[str, str | None], str] = {}
@@ -241,6 +255,7 @@ class LiveCalendarTrialRunner:
                     error_category=coverage.error_category,
                     page_count=coverage.page_count,
                     connector_instance_id=connector_instance_id,
+                    record_count=coverage.record_count,
                 )
             )
             self.state_store.link_connector_run(run_id, connector_run_id)
@@ -443,6 +458,8 @@ class LiveTodoistTrialRunner:
             timezone=self.timezone,
             invocation_mode="bounded_todoist_live_trial",
             lookahead_days=7,
+            generated_at=started_at,
+            as_of=started_at,
         )
         repository_connector = RepositoryContextConnector(
             root=self.repository_root,
@@ -524,6 +541,8 @@ class LiveTodoistTrialRunner:
                 timezone=self.timezone,
                 invocation_mode="bounded_todoist_live_validation",
                 lookahead_days=7,
+                generated_at=started_at,
+                as_of=started_at,
             )
             results_by_date.append(
                 (
@@ -836,6 +855,8 @@ class LiveJiraIssueTrialRunner:
             timezone=self.timezone,
             invocation_mode="bounded_jira_issue_live_trial",
             lookahead_days=7,
+            generated_at=started_at,
+            as_of=started_at,
         )
         result = DeterministicBriefingPipeline().run(
             context,

@@ -20,6 +20,16 @@ class WorkdayType(StrEnum):
     MINISTRY_WORKDAY = "ministry workday"
 
 
+class HistoricalMode(StrEnum):
+    """How a briefing relates to the day and evidence it describes."""
+
+    CURRENT = "current"
+    RECORDED = "recorded"
+    REPLAY = "replay"
+    RECONSTRUCTED = "reconstructed"
+    SYNTHETIC = "synthetic"
+
+
 DEFAULT_WEEKLY_WORKDAYS: Mapping[int, WorkdayType] = {
     0: WorkdayType.FULL_WORKDAY,
     1: WorkdayType.FULL_WORKDAY,
@@ -44,6 +54,10 @@ class InvocationContext:
     workday_reason: str
     workday_diagnostics: tuple[str, ...]
     retrieval_window: RetrievalWindow
+    generated_at: datetime
+    as_of: datetime
+    historical_mode: HistoricalMode
+    originating_recorded_run_id: str | None = None
 
 
 def resolve_context(
@@ -58,6 +72,10 @@ def resolve_context(
     operating_overrides: Mapping[date, WorkdayType] | None = None,
     weekly_workdays: Mapping[int, WorkdayType] = DEFAULT_WEEKLY_WORKDAYS,
     lookahead_days: int = 7,
+    generated_at: datetime | None = None,
+    as_of: datetime | None = None,
+    historical_mode: HistoricalMode = HistoricalMode.CURRENT,
+    originating_recorded_run_id: str | None = None,
 ) -> InvocationContext:
     """Resolve deterministic workday and bounded retrieval context."""
 
@@ -74,6 +92,12 @@ def resolve_context(
         zone = ZoneInfo(timezone)
     except ZoneInfoNotFoundError:
         raise ValueError("timezone must be a recognized IANA name") from None
+    generated = generated_at or datetime.now(tz=zone)
+    effective = as_of or generated
+    if generated.tzinfo is None or effective.tzinfo is None:
+        raise ValueError("generated_at and as_of must be timezone-aware")
+    if historical_mode is HistoricalMode.REPLAY and not originating_recorded_run_id:
+        raise ValueError("replay mode requires an originating recorded run")
 
     if workday_type_override is not None:
         workday_type = workday_type_override
@@ -105,6 +129,10 @@ def resolve_context(
         workday_reason=workday_reason,
         workday_diagnostics=(),
         retrieval_window=RetrievalWindow(starts_at=starts_at, ends_at=ends_at),
+        generated_at=generated,
+        as_of=effective,
+        historical_mode=historical_mode,
+        originating_recorded_run_id=originating_recorded_run_id,
     )
 
 

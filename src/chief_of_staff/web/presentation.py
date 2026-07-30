@@ -72,6 +72,13 @@ def presentation_from_plan(
                         )
                         for source in item.sources
                     ),
+                    temporal_state=(
+                        None
+                        if item.temporal_state is None
+                        else item.temporal_state.value
+                    ),
+                    starts_at=item.starts_at,
+                    ends_at=item.ends_at,
                 )
             )
         if items or section.summary:

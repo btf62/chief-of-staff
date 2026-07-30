@@ -158,6 +158,33 @@ h3 {
   border-bottom: 1px solid var(--line);
 }
 
+.temporal-earlier-today {
+  color: var(--muted);
+}
+
+.temporal-earlier-today h3 {
+  font-weight: 600;
+}
+
+.temporal-in-progress {
+  padding-inline-start: 0.9rem;
+  border-left: 3px solid var(--accent);
+}
+
+.label-temporal {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.historical-disclosure {
+  padding: 0.7rem 0.9rem;
+  border-left: 3px solid var(--warning);
+  color: var(--warning);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.88rem;
+}
+
 .briefing-item p {
   margin: 0.35rem 0;
 }
@@ -186,8 +213,13 @@ h3 {
 
 .uncertainty,
 .explanation,
+.original-statement,
 .boundary-notice {
   color: var(--muted);
+}
+
+.original-statement {
+  font-size: 0.9rem;
 }
 
 .sources {
@@ -447,5 +479,72 @@ button {
   .metadata div {
     grid-template-columns: 1fr;
     gap: 0;
+  }
+}
+
+@media print {
+  @page {
+    margin: 0.65in;
+  }
+
+  :root {
+    --paper: white;
+    --surface: white;
+    --ink: black;
+    --muted: #444;
+    --line: #bbb;
+    --shadow: none;
+  }
+
+  body {
+    font-size: 10.5pt;
+    line-height: 1.45;
+  }
+
+  .site-header,
+  footer {
+    display: none;
+  }
+
+  main {
+    width: auto;
+    padding: 0;
+  }
+
+  .chief-note,
+  .briefing-item,
+  .coverage,
+  details {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .briefing-section h2,
+  .briefing-item h3 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .chief-note {
+    margin-block: 1rem 1.5rem;
+    box-shadow: none;
+  }
+
+  .briefing-section {
+    margin-block: 1.35rem;
+  }
+
+  .text-link {
+    color: var(--muted);
+    font-size: 8.5pt;
+    font-weight: 400;
+  }
+
+  details {
+    border: 0;
+  }
+
+  details > summary {
+    padding-inline: 0;
   }
 }

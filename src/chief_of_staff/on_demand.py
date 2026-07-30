@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import cast
 from zoneinfo import ZoneInfo
 
+from chief_of_staff.archive import archive_pipeline_facts
 from chief_of_staff.connector_health import (
     ApprovedConnector,
     ConnectorHealth,
@@ -102,6 +103,8 @@ class OnDemandBriefingRunner:
             timezone=self.timezone,
             invocation_mode="on_demand",
             lookahead_days=7,
+            generated_at=started_at,
+            as_of=started_at,
         )
         connectors = (
             RepositoryContextConnector(
@@ -274,6 +277,11 @@ class OnDemandBriefingRunner:
                 created_at=completed_at,
                 state_store=self.state_store,
             )
+        )
+        archive_pipeline_facts(
+            self.state_store,
+            briefing_run_id=run_id,
+            result=result,
         )
         briefing_path = helper._write_briefing(
             briefing_date=briefing_date.isoformat(),

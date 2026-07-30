@@ -10,6 +10,7 @@ from datetime import UTC, date, datetime
 
 from chief_of_staff.domain.models import (
     AuthorizationStatus,
+    BriefingArchivedFact,
     BriefingCoverage,
     BriefingPresentation,
     BriefingPresentationItem,
@@ -215,9 +216,10 @@ class StateStore:
                     freshness_at,
                     error_category,
                     page_count,
-                    connector_instance_id
+                    connector_instance_id,
+                    record_count
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     run.id,
@@ -233,6 +235,7 @@ class StateStore:
                     run.error_category,
                     run.page_count,
                     run.connector_instance_id,
+                    run.record_count,
                 ),
             )
 
@@ -812,9 +815,14 @@ class StateStore:
                     invocation_mode,
                     started_at,
                     completed_at,
-                    status
+                    status,
+                    generated_at,
+                    as_of,
+                    historical_mode,
+                    originating_recorded_run_id,
+                    processing_versions_json
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     run.id,
@@ -824,6 +832,11 @@ class StateStore:
                     _serialize_datetime(run.started_at),
                     _serialize_optional_datetime(run.completed_at),
                     run.status.value,
+                    _serialize_optional_datetime(run.generated_at),
+                    _serialize_optional_datetime(run.as_of),
+                    run.historical_mode,
+                    run.originating_recorded_run_id,
+                    run.processing_versions_json,
                 ),
             )
 
@@ -1745,17 +1758,26 @@ class StateStore:
         evidence_fingerprint: str,
         *,
         source_records: tuple[tuple[str, str], ...] = (),
+        effective_at: datetime | None = None,
     ) -> RecurrenceDecision:
         """Project prior local state for materially unchanged evidence."""
 
         connection = self.database.connection
+        if effective_at is not None:
+            _require_aware(effective_at)
+        effective_timestamp = _serialize_optional_datetime(effective_at)
         tombstone_row = connection.execute(
             """
             SELECT evidence_fingerprint
             FROM conclusion_tombstones
             WHERE evidence_fingerprint = ?
+              AND (? IS NULL OR deleted_at <= ?)
             """,
-            (evidence_fingerprint,),
+            (
+                evidence_fingerprint,
+                effective_timestamp,
+                effective_timestamp,
+            ),
         ).fetchone()
         if tombstone_row is not None:
             return RecurrenceDecision(
@@ -1768,10 +1790,15 @@ class StateStore:
             SELECT id
             FROM conclusions
             WHERE evidence_fingerprint = ?
+              AND (? IS NULL OR created_at <= ?)
             ORDER BY created_at DESC, id DESC
             LIMIT 1
             """,
-            (evidence_fingerprint,),
+            (
+                evidence_fingerprint,
+                effective_timestamp,
+                effective_timestamp,
+            ),
         ).fetchone()
         if conclusion_row is None:
             if source_records:
@@ -1787,10 +1814,11 @@ class StateStore:
             SELECT disposition, replacement_text
             FROM disposition_events
             WHERE conclusion_id = ?
+              AND (? IS NULL OR created_at <= ?)
             ORDER BY created_at DESC, id DESC
             LIMIT 1
             """,
-            (conclusion_id,),
+            (conclusion_id, effective_timestamp, effective_timestamp),
         ).fetchone()
         if event_row is None:
             exact = RecurrenceDecision(
@@ -1918,10 +1946,6 @@ class StateStore:
                     created_at
                 )
                 VALUES (?, ?, ?, ?)
-                ON CONFLICT(briefing_run_id) DO UPDATE SET
-                    generation_mode = excluded.generation_mode,
-                    chief_of_staff_note = excluded.chief_of_staff_note,
-                    created_at = excluded.created_at
                 """,
                 (
                     presentation.briefing_run_id,
@@ -1991,9 +2015,12 @@ class StateStore:
                             detail,
                             content_kind,
                             uncertainty,
-                            explanation
+                            explanation,
+                            temporal_state,
+                            starts_at,
+                            ends_at
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             item.id,
@@ -2023,6 +2050,9 @@ class StateStore:
                                 field="item explanation",
                                 maximum=2000,
                             ),
+                            item.temporal_state,
+                            _serialize_optional_datetime(item.starts_at),
+                            _serialize_optional_datetime(item.ends_at),
                         ),
                     )
                     for source_ordinal, source in enumerate(item.sources):
@@ -2049,6 +2079,102 @@ class StateStore:
                                 _serialize_optional_datetime(source.freshness_at),
                             ),
                         )
+
+    def save_briefing_archived_facts(
+        self,
+        briefing_run_id: str,
+        facts: tuple[BriefingArchivedFact, ...],
+    ) -> None:
+        """Persist minimized normalized facts for replay lineage."""
+
+        if any(fact.briefing_run_id != briefing_run_id for fact in facts):
+            raise ValueError("archived fact run identity is inconsistent")
+        with self.database.transaction() as connection:
+            run = connection.execute(
+                "SELECT status FROM briefing_runs WHERE id = ?",
+                (briefing_run_id,),
+            ).fetchone()
+            if run is None or str(run["status"]) != BriefingStatus.SUCCEEDED.value:
+                raise ValueError("only a successful briefing may archive facts")
+            existing = connection.execute(
+                """
+                SELECT COUNT(*) AS count
+                FROM briefing_archived_facts
+                WHERE briefing_run_id = ?
+                """,
+                (briefing_run_id,),
+            ).fetchone()
+            if existing is not None and int(existing["count"]) > 0:
+                raise ValueError("archived briefing facts cannot be overwritten")
+            for fact in facts:
+                parsed = json.loads(fact.normalized_fact_json)
+                if not isinstance(parsed, dict):
+                    raise ValueError("archived normalized fact must be a JSON object")
+                connection.execute(
+                    """
+                    INSERT INTO briefing_archived_facts(
+                        briefing_run_id,
+                        ordinal,
+                        source,
+                        source_record_id,
+                        normalized_fact_json
+                    )
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        fact.briefing_run_id,
+                        fact.ordinal,
+                        fact.source,
+                        fact.source_record_id,
+                        fact.normalized_fact_json,
+                    ),
+                )
+
+    def get_briefing_archived_facts(
+        self,
+        briefing_run_id: str,
+    ) -> tuple[BriefingArchivedFact, ...]:
+        """Load minimized replay facts without provider payloads."""
+
+        rows = self.database.connection.execute(
+            """
+            SELECT *
+            FROM briefing_archived_facts
+            WHERE briefing_run_id = ?
+            ORDER BY ordinal
+            """,
+            (briefing_run_id,),
+        ).fetchall()
+        return tuple(
+            BriefingArchivedFact(
+                briefing_run_id=str(row["briefing_run_id"]),
+                ordinal=int(row["ordinal"]),
+                source=str(row["source"]),
+                source_record_id=str(row["source_record_id"]),
+                normalized_fact_json=str(row["normalized_fact_json"]),
+            )
+            for row in rows
+        )
+
+    def list_briefing_presentations_for_date(
+        self,
+        briefing_date: date,
+    ) -> tuple[BriefingPresentationState, ...]:
+        """Return every recorded run for one day in generation order."""
+
+        rows = self.database.connection.execute(
+            """
+            SELECT run.id
+            FROM briefing_runs AS run
+            JOIN briefing_presentations AS presentation
+                ON presentation.briefing_run_id = run.id
+            WHERE run.status = 'succeeded' AND run.briefing_date = ?
+            ORDER BY run.generated_at, run.completed_at, run.started_at, run.id
+            """,
+            (briefing_date.isoformat(),),
+        ).fetchall()
+        loaded = tuple(self.get_briefing_presentation(str(row["id"])) for row in rows)
+        return tuple(item for item in loaded if item is not None)
 
     def latest_briefing_presentation(
         self,
@@ -2164,6 +2290,21 @@ class StateStore:
                             else str(item_row["explanation"])
                         ),
                         sources=sources,
+                        temporal_state=(
+                            None
+                            if item_row["temporal_state"] is None
+                            else str(item_row["temporal_state"])
+                        ),
+                        starts_at=_parse_optional_datetime(
+                            None
+                            if item_row["starts_at"] is None
+                            else str(item_row["starts_at"])
+                        ),
+                        ends_at=_parse_optional_datetime(
+                            None
+                            if item_row["ends_at"] is None
+                            else str(item_row["ends_at"])
+                        ),
                     )
                 )
             sections.append(
@@ -2181,7 +2322,7 @@ class StateStore:
         coverage_rows = connection.execute(
             """
             SELECT run.source, run.coverage_status, run.freshness_at,
-                   run.error_category
+                   run.error_category, run.approved_scope, run.record_count
             FROM connector_runs AS run
             JOIN briefing_connector_runs AS link
                 ON link.connector_run_id = run.id
@@ -2202,6 +2343,10 @@ class StateStore:
                     if row["error_category"] is None
                     else str(row["error_category"])
                 ),
+                approved_scope=str(row["approved_scope"]),
+                record_count=(
+                    0 if row["record_count"] is None else int(row["record_count"])
+                ),
             )
             for row in coverage_rows
         )
@@ -2217,6 +2362,21 @@ class StateStore:
                 else str(run_row["completed_at"])
             ),
             status=BriefingStatus(str(run_row["status"])),
+            generated_at=_parse_optional_datetime(
+                None
+                if run_row["generated_at"] is None
+                else str(run_row["generated_at"])
+            ),
+            as_of=_parse_optional_datetime(
+                None if run_row["as_of"] is None else str(run_row["as_of"])
+            ),
+            historical_mode=str(run_row["historical_mode"]),
+            originating_recorded_run_id=(
+                None
+                if run_row["originating_recorded_run_id"] is None
+                else str(run_row["originating_recorded_run_id"])
+            ),
+            processing_versions_json=str(run_row["processing_versions_json"]),
         )
         return BriefingPresentationState(
             run=run,
@@ -2277,12 +2437,26 @@ class StateStore:
                 )
             evidence_rows = connection.execute(
                 """
-                SELECT evidence_id
-                FROM conclusion_evidence
+                SELECT link.evidence_id, evidence.source,
+                       evidence.source_record_id
+                FROM conclusion_evidence AS link
+                JOIN source_evidence AS evidence
+                    ON evidence.id = link.evidence_id
                 WHERE conclusion_id = ?
                 """,
                 (conclusion_id,),
             ).fetchall()
+            for evidence_row in evidence_rows:
+                connection.execute(
+                    """
+                    DELETE FROM briefing_archived_facts
+                    WHERE source = ? AND source_record_id = ?
+                    """,
+                    (
+                        str(evidence_row["source"]),
+                        str(evidence_row["source_record_id"]),
+                    ),
+                )
             presentation_section_rows = connection.execute(
                 """
                 SELECT DISTINCT section_id
@@ -2420,6 +2594,10 @@ class StateStore:
                 "briefing_presentations",
             ),
             briefing_items=_table_count(connection, "briefing_items"),
+            briefing_archived_facts=_table_count(
+                connection,
+                "briefing_archived_facts",
+            ),
         )
 
     def delete_disposition_history(self, conclusion_id: str) -> int:
@@ -2760,6 +2938,9 @@ def _table_count(connection: sqlite3.Connection, table: str) -> int:
             "SELECT COUNT(*) AS count FROM briefing_presentations"
         ),
         "briefing_items": "SELECT COUNT(*) AS count FROM briefing_items",
+        "briefing_archived_facts": (
+            "SELECT COUNT(*) AS count FROM briefing_archived_facts"
+        ),
     }
     query = queries.get(table)
     if query is None:

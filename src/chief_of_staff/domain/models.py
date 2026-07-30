@@ -123,6 +123,7 @@ class ConnectorRun:
     error_category: str | None = None
     page_count: int | None = None
     connector_instance_id: str | None = None
+    record_count: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,6 +137,11 @@ class BriefingRun:
     started_at: datetime
     status: BriefingStatus
     completed_at: datetime | None = None
+    generated_at: datetime | None = None
+    as_of: datetime | None = None
+    historical_mode: str = "current"
+    originating_recorded_run_id: str | None = None
+    processing_versions_json: str = "{}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -266,6 +272,9 @@ class BriefingPresentationItem:
     conclusion_id: str | None = None
     uncertainty: str | None = None
     explanation: str | None = None
+    temporal_state: str | None = None
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -296,6 +305,8 @@ class BriefingCoverage:
     coverage_status: CoverageStatus
     freshness_at: datetime | None
     error_category: str | None = None
+    approved_scope: str = "archived approved scope"
+    record_count: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -332,6 +343,18 @@ class StateInspection:
     conclusion_tombstones: int
     briefing_presentations: int
     briefing_items: int
+    briefing_archived_facts: int
+
+
+@dataclass(frozen=True, slots=True)
+class BriefingArchivedFact:
+    """One minimized normalized fact retained for historical lineage."""
+
+    briefing_run_id: str
+    ordinal: int
+    source: str
+    source_record_id: str
+    normalized_fact_json: str
 
 
 @dataclass(frozen=True, slots=True)

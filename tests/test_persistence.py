@@ -142,7 +142,7 @@ def test_fresh_database_applies_all_migrations_and_enforces_foreign_keys(
     with Database.open(tmp_path / "state.sqlite3") as database:
         inspection = StateStore(database).inspect_state()
 
-        assert inspection.schema_versions == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+        assert inspection.schema_versions == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
         assert database.connection.execute("PRAGMA foreign_keys").fetchone()[0] == 1
 
 
@@ -170,11 +170,11 @@ def test_database_upgrades_from_first_migration_and_is_idempotent(
             "SELECT version FROM schema_migrations ORDER BY version"
         )
     ]
-    assert upgraded_versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    assert upgraded_versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
     connection.close()
 
 
-@pytest.mark.parametrize("existing_version", range(1, 10))
+@pytest.mark.parametrize("existing_version", range(1, 11))
 def test_database_upgrades_from_every_supported_existing_schema(
     tmp_path: Path,
     existing_version: int,
@@ -194,7 +194,7 @@ def test_database_upgrades_from_every_supported_existing_schema(
             "SELECT version FROM schema_migrations ORDER BY version"
         )
     )
-    assert versions == tuple(range(1, 11))
+    assert versions == tuple(range(1, 12))
     assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
     connection.close()
 
@@ -661,6 +661,29 @@ def test_terminal_dispositions_prevent_recurrence(
         assert decision.disposition is disposition
 
 
+def test_historical_recurrence_excludes_corrections_made_after_as_of(
+    tmp_path: Path,
+) -> None:
+    with Database.open(tmp_path / "historical-recurrence.sqlite3") as database:
+        store = StateStore(database)
+        _populate_graph(store)
+        store.append_disposition(
+            _disposition(
+                DispositionKind.DISMISSED,
+                created_at=NOW + timedelta(hours=2),
+            )
+        )
+
+        historical = store.recurrence_decision(
+            "fingerprint-v1",
+            effective_at=NOW + timedelta(hours=1),
+        )
+        current = store.recurrence_decision("fingerprint-v1")
+
+        assert historical.action is RecurrenceAction.SHOW
+        assert current.action is RecurrenceAction.SUPPRESS
+
+
 def test_history_conclusions_evidence_and_briefings_can_be_deleted(
     tmp_path: Path,
 ) -> None:
@@ -764,6 +787,7 @@ def test_reset_removes_product_state_but_preserves_migrations(tmp_path: Path) ->
             8,
             9,
             10,
+            11,
         )
         assert inspection.connector_runs == 0
         assert inspection.briefing_runs == 0

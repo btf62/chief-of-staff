@@ -85,6 +85,19 @@ background service, login item, worker, or scheduled process.
 The local interface never invokes a connector. When no completed briefing
 exists, it directs Brad to run `make briefing` in Terminal and refresh.
 
+## Time and print presentation
+
+The briefing heading shows when the selected-day briefing was generated.
+Timed items use written `Earlier today`, `In progress`, and `Upcoming` labels
+as well as visual treatment. Earlier items remain visible and secondary;
+generation time never removes the earlier shape of the day.
+
+Print styles keep the Chief of Staff Note and individual items together when
+practical, avoid isolated headings, reduce interactive review links, and use
+clean page margins. Browser-added print headers and footers are controlled by
+the browser print dialog, not by Chief of Staff; disable them there when a
+clean PDF is needed.
+
 ## Local data
 
 The default database is:

@@ -102,6 +102,37 @@ within the overall reading budget.
 Never add filler, low-confidence claims, or a manufactured priority merely to
 populate a section.
 
+## Selected-Day and Historical Semantics
+
+A Daily Briefing describes the shape of the entire selected day. Generation
+time adds context but must not erase earlier events, elapsed focus
+opportunities, or completed portions of the day. Persist and distinguish:
+
+- `briefing_date` — the day described;
+- `generated_at` — when the briefing was produced;
+- `as_of` — the effective evidence time; and
+- `historical_mode` — current, recorded, replay, reconstructed, or synthetic.
+
+Classify selected-day timed items in writing and visually as `Earlier today`,
+`In progress`, or `Upcoming`. Color alone is not sufficient. Preserve the best
+whole-day focus window even after it has elapsed; describe whether it was
+upcoming, in progress with approximate remaining time, or an earlier
+opportunity.
+
+Every successful personal briefing is a separate local recorded artifact,
+including multiple runs on one date and reduced-coverage runs. A recorded
+briefing is never silently recomputed or overwritten. A replay uses current
+logic against archived normalized facts and identifies its originating run.
+A reconstruction prominently discloses that later source changes and
+unavailable historical state may affect accuracy. Synthetic evaluations never
+enter the personal briefing archive.
+
+Archive only the minimized structured presentation, coverage, provenance,
+applicable correction state, processing versions, lineage, and normalized
+facts required for explanation or replay. Do not retain raw Gmail bodies,
+MIME structures, attachments, provider payloads, credentials, or hidden
+reasoning for this purpose.
+
 ## Canonical Briefing Structure
 
 The briefing uses the following sections when they contain material
@@ -316,6 +347,11 @@ authoritative source title and link internally. Do not mechanically prepend
 with source terminology such as `Todoist P1` or `Todoist P2`, and only when it
 materially explains inclusion. Render an all-day Todoist due value as a date or
 relative date, never as a midnight deadline.
+
+Source titles that resemble Markdown links must display as ordinary readable
+text. Preserve meaningful visible text and the separate authoritative
+source-system link, but do not interpret source HTML or create links from
+untrusted title text.
 
 Source selection and local persistence maintain a bounded background pool.
 A separate date-specific daily-candidate gate determines which records

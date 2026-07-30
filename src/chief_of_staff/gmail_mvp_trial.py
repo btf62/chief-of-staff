@@ -12,6 +12,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from chief_of_staff.archive import archive_pipeline_facts
 from chief_of_staff.connectors import (
     GMAIL_PROCESSING_VERSION,
     GMAIL_READONLY_SCOPE,
@@ -195,6 +196,8 @@ class GmailMvpTrialRunner:
             timezone=self.timezone,
             invocation_mode="bounded_work_gmail_mvp_trial",
             lookahead_days=7,
+            generated_at=started_at,
+            as_of=started_at,
         )
         failure_report_paths: list[Path] = []
 
@@ -398,6 +401,11 @@ class GmailMvpTrialRunner:
                 created_at=completed_at,
                 state_store=self.state_store,
             )
+        )
+        archive_pipeline_facts(
+            self.state_store,
+            briefing_run_id=run_id,
+            result=result,
         )
         displayed_gmail_source_ids = {
             source.source_record_id

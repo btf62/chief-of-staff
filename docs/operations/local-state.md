@@ -44,6 +44,10 @@ The implemented schema stores:
 - Append-oriented correction and disposition events.
 - Derived current-state projections with optimistic version protection.
 - Structured local briefing presentations and minimized source links.
+- Per-run generation time, effective `as_of` time, historical mode, processing
+  versions, and originating-run lineage.
+- Schema-versioned normalized facts needed for bounded replay, linked to the
+  exact successful briefing run.
 - Minimal conclusion-deletion tombstones containing only an evidence
   fingerprint, processing version, opaque idempotency key, and deletion time.
 - Selected normalized Todoist task facts and only their referenced project,
@@ -61,6 +65,25 @@ It does not define tables for credentials, tokens, raw response pages,
 continuation cursors, full source payloads, complete message bodies, raw HTML,
 attachments, connector caches, inference prompts, provider responses, or
 inference evidence excerpts.
+
+## Briefing archive and historical lineage
+
+Every successfully completed current, reduced-coverage, replayed, or
+reconstructed briefing has a unique run identity. Multiple runs for one date
+remain separate and are ordered by generation time. Failed or incomplete
+attempts create neither a presentation nor archived facts.
+
+Recorded presentations are immutable. Replay creates another run with current
+processing versions and an explicit link to the originating recorded run.
+Reconstruction is available only when approved historical evidence is
+sufficient and excludes facts later than its effective `as_of`. Sources
+without an honest as-of view are partial or unavailable. Synthetic scenarios
+are evaluation artifacts and are not inserted into personal history.
+
+Later corrections remain an explicit current overlay; the original recorded
+statement remains distinguishable. A permitted local deletion removes the
+dependent presentation content and matching replay facts while retaining only
+the approved minimal recurrence tombstone.
 
 ## Inspection and recurrence
 

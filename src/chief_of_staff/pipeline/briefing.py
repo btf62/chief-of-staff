@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
 from enum import StrEnum
 from itertools import pairwise
@@ -16,7 +16,11 @@ from chief_of_staff.domain import (
     CoverageStatus,
     RecurrenceDecision,
 )
-from chief_of_staff.pipeline.context import InvocationContext, WorkdayType
+from chief_of_staff.pipeline.context import (
+    HistoricalMode,
+    InvocationContext,
+    WorkdayType,
+)
 from chief_of_staff.pipeline.normalization import (
     AssociatedSourceFacts,
     NormalizedRecord,
@@ -49,6 +53,7 @@ FOCUS_WINDOW_END = time(17)
 FOCUS_BLOCK_DURATION = timedelta(minutes=90)
 FOCUS_TRANSITION_MARGIN = timedelta(minutes=15)
 CONTROL_TOKEN = re.compile(r"(?<!\S)@[A-Za-z0-9_-]+")
+MAX_SAFE_SOURCE_TITLE_CHARACTERS = 500
 UNTRUSTED_PRIORITY_INSTRUCTION = re.compile(
     r"\b(?:ignore (?:policy|instructions)|"
     r"make (?:this|me) (?:the )?(?:top|highest) priority|"
@@ -94,6 +99,14 @@ class BriefingContentKind(StrEnum):
     INFERRED_CONCLUSION = "inferred_conclusion"
     RECOMMENDATION = "recommendation"
     PRESENTATION_SYNTHESIS = "presentation_only_synthesis"
+
+
+class TemporalState(StrEnum):
+    """Written and visual state for one selected-day time-bound item."""
+
+    EARLIER_TODAY = "Earlier today"
+    IN_PROGRESS = "In progress"
+    UPCOMING = "Upcoming"
 
 
 @dataclass(frozen=True, slots=True)
@@ -180,6 +193,10 @@ class BriefingItem:
     inference_explanation: str | None = None
     uncertainty: str | None = None
     sort_at: datetime | None = None
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    all_day: bool = False
+    temporal_state: TemporalState | None = None
     priority_band: PriorityBand | None = None
     ranking_factor_kinds: tuple[str, ...] = ()
 
@@ -713,7 +730,9 @@ def build_reduced_plan(
     return BriefingPlan(
         context=context,
         coverage=coverage,
-        sections=tuple(sections),
+        sections=tuple(
+            _with_temporal_states(section, context=context) for section in sections
+        ),
         ordered_eligible_candidates=ranking.ordered,
         selected_outcome_ids=tuple(record.id for record in outcome_candidates),
         note_inputs=note_inputs,
@@ -738,24 +757,115 @@ def render_briefing(plan: BriefingPlan) -> RenderedBriefing:
     lines = [
         f"# Daily Briefing — {plan.context.briefing_date.isoformat()}",
         "",
+        _generated_at_line(plan.context),
+        "",
         f"_Deterministic reduced mode · {workday_label} "
         f"({plan.context.workday_reason})_",
     ]
+    historical_disclosure = _historical_disclosure(plan.context)
+    if historical_disclosure is not None:
+        lines.extend(("", historical_disclosure))
     for section in plan.sections:
         lines.extend(("", f"## {section.name}"))
         if section.summary:
             lines.extend(("", section.summary))
         for item in section.items:
             sources = "; ".join(_render_source(source) for source in item.sources)
+            state = (
+                "" if item.temporal_state is None else f"{item.temporal_state.value} · "
+            )
             lines.extend(
                 (
                     "",
-                    f"- **{item.headline}** — {item.detail} Source: {sources}",
+                    f"- **{state}{item.headline}** — {item.detail} Source: {sources}",
                 )
             )
 
     text = "\n".join(lines).rstrip() + "\n"
     return RenderedBriefing(text=text, word_count=_word_count(text))
+
+
+def _with_temporal_states(
+    section: BriefingSection,
+    *,
+    context: InvocationContext,
+) -> BriefingSection:
+    items: list[BriefingItem] = []
+    for item in section.items:
+        state = _temporal_state(item, context=context)
+        detail = item.detail
+        if (
+            section.name is BriefingSectionName.RECOMMENDED_FOCUS_BLOCK
+            and state is not None
+            and item.ends_at is not None
+        ):
+            if state is TemporalState.IN_PROGRESS:
+                remaining = max(
+                    0,
+                    int(
+                        (
+                            item.ends_at - context.as_of.astimezone(item.ends_at.tzinfo)
+                        ).total_seconds()
+                        // 60
+                    ),
+                )
+                timing = (
+                    "In progress when generated"
+                    f" · approximately {remaining} minutes remained."
+                )
+            elif state is TemporalState.EARLIER_TODAY:
+                timing = (
+                    "Earlier opportunity · elapsed before this briefing was generated."
+                )
+            else:
+                timing = "Upcoming when generated."
+            detail = f"{timing} {detail}"
+        items.append(replace(item, detail=detail, temporal_state=state))
+    return replace(section, items=tuple(items))
+
+
+def _temporal_state(
+    item: BriefingItem,
+    *,
+    context: InvocationContext,
+) -> TemporalState | None:
+    if item.starts_at is None or item.all_day:
+        return None
+    starts_at = item.starts_at
+    if starts_at.date() != context.briefing_date:
+        return None
+    effective = context.as_of.astimezone(starts_at.tzinfo)
+    if item.ends_at is not None and item.ends_at <= effective:
+        return TemporalState.EARLIER_TODAY
+    if starts_at <= effective and (item.ends_at is None or effective < item.ends_at):
+        return TemporalState.IN_PROGRESS
+    return TemporalState.UPCOMING
+
+
+def _generated_at_line(context: InvocationContext) -> str:
+    generated = context.generated_at.astimezone(ZoneInfo(context.timezone))
+    clock, period = _natural_clock(generated)
+    return f"_Generated {generated:%A, %B %-d} at {clock} {period}_"
+
+
+def _historical_disclosure(context: InvocationContext) -> str | None:
+    generated = context.generated_at.astimezone(ZoneInfo(context.timezone))
+    if context.historical_mode is HistoricalMode.RECORDED:
+        return "_Recorded briefing · shown exactly as originally generated._"
+    if context.historical_mode is HistoricalMode.REPLAY:
+        return (
+            "_Replay using current product logic and archived normalized facts. "
+            "This is not the briefing originally shown._"
+        )
+    if context.historical_mode is HistoricalMode.RECONSTRUCTED:
+        return (
+            f"_Reconstructed on {generated:%A, %B %-d} from available source "
+            "history. Later source changes and unavailable historical state may "
+            "affect accuracy._"
+        )
+    if context.historical_mode is HistoricalMode.SYNTHETIC:
+        return "_Synthetic evaluation scenario · no live personal data._"
+    return None
 
 
 def validate_briefing(
@@ -1947,6 +2057,8 @@ def _recommended_focus_section(
                 detail=detail,
                 sources=sources,
                 content_kind=BriefingContentKind.RECOMMENDATION,
+                starts_at=focus_window.starts_at,
+                ends_at=focus_window.ends_at,
             ),
         ),
     )
@@ -2377,15 +2489,82 @@ def _record_item(
         inference_explanation=record.inference_explanation,
         uncertainty=record.uncertainty,
         sort_at=record.start_at,
+        starts_at=record.start_at,
+        ends_at=record.end_at,
+        all_day=record.all_day,
     )
 
 
 def _display_title(record: NormalizedRecord) -> str:
-    if record.kind is not RecordKind.TASK:
-        return record.title
-    cleaned = CONTROL_TOKEN.sub("", record.title)
+    cleaned = (
+        CONTROL_TOKEN.sub("", record.title)
+        if record.kind is RecordKind.TASK
+        else record.title
+    )
     cleaned = re.sub(r"\s{2,}", " ", cleaned).strip(" \t-:;")
-    return cleaned or f"{record.provenance.source} task"
+    cleaned = safe_source_title(cleaned)
+    return cleaned or f"{record.provenance.source} item"
+
+
+def safe_source_title(value: str) -> str:
+    """Present link-like untrusted text without interpreting markup or URLs."""
+
+    bounded = "".join(
+        character
+        for character in value
+        if character in {"\n", "\t"} or ord(character) >= 32
+    )
+    output: list[str] = []
+    index = 0
+    while index < len(bounded):
+        if bounded[index] != "[":
+            output.append(bounded[index])
+            index += 1
+            continue
+        label_end = _balanced_closing(bounded, index, "[", "]")
+        if (
+            label_end is None
+            or label_end + 1 >= len(bounded)
+            or bounded[label_end + 1] != "("
+        ):
+            output.append("[")
+            index += 1
+            continue
+        url_end = _balanced_closing(bounded, label_end + 1, "(", ")")
+        if url_end is None:
+            output.append("[")
+            index += 1
+            continue
+        label = bounded[index + 1 : label_end]
+        output.append(safe_source_title(label))
+        index = url_end + 1
+    safe = (
+        "".join(output)
+        .replace("<", "\N{FULLWIDTH LESS-THAN SIGN}")
+        .replace(">", "\N{FULLWIDTH GREATER-THAN SIGN}")
+    )
+    safe = re.sub(r"\s+", " ", safe).strip()
+    if len(safe) <= MAX_SAFE_SOURCE_TITLE_CHARACTERS:
+        return safe
+    return safe[: MAX_SAFE_SOURCE_TITLE_CHARACTERS - 1].rstrip() + "…"
+
+
+def _balanced_closing(
+    value: str,
+    start: int,
+    opening: str,
+    closing: str,
+) -> int | None:
+    depth = 0
+    for index in range(start, len(value)):
+        character = value[index]
+        if character == opening:
+            depth += 1
+        elif character == closing:
+            depth -= 1
+            if depth == 0:
+                return index
+    return None
 
 
 def _brief_due_phrase(record: NormalizedRecord, today: date) -> str:

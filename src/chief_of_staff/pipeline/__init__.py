@@ -17,12 +17,15 @@ from chief_of_staff.pipeline.briefing import (
     SuppressedDuplicate,
     TaskCandidateAudit,
     TaskPlanningConfidence,
+    TemporalState,
     build_reduced_plan,
     classify_calendar_event,
     render_briefing,
+    safe_source_title,
     validate_briefing,
 )
 from chief_of_staff.pipeline.context import (
+    HistoricalMode,
     InvocationContext,
     WorkdayType,
     reconcile_calendar_workday_context,
@@ -72,6 +75,7 @@ __all__ = (
     "DeduplicationResult",
     "DeterministicBriefingPipeline",
     "FactorSource",
+    "HistoricalMode",
     "InvocationContext",
     "NormalizedRecord",
     "PipelineResult",
@@ -91,6 +95,7 @@ __all__ = (
     "SuppressedDuplicate",
     "TaskCandidateAudit",
     "TaskPlanningConfidence",
+    "TemporalState",
     "WorkdayType",
     "build_reduced_plan",
     "classify_calendar_event",
@@ -101,5 +106,6 @@ __all__ = (
     "reconcile_calendar_workday_context",
     "render_briefing",
     "resolve_context",
+    "safe_source_title",
     "validate_briefing",
 )

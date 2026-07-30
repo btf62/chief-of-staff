@@ -12,8 +12,11 @@
       <p class="eyebrow">Daily Briefing</p>
       <h1>{{ briefing.run.briefing_date.strftime("%A, %B %-d") }}</h1>
       <p class="briefing-meta">
-        {{ generation_mode }}
+        {{ generated_at }} · {{ generation_mode }}
       </p>
+      {% if historical_disclosure %}
+        <p class="historical-disclosure">{{ historical_disclosure }}</p>
+      {% endif %}
     </header>
 
     <section class="chief-note" aria-labelledby="chief-note-heading">
@@ -28,14 +31,22 @@
         {% if section.summary %}<p class="section-summary">{{ section.summary }}</p>{% endif %}
         <div class="briefing-items">
           {% for item in section["items"] %}
-            <article class="briefing-item">
+            <article class="briefing-item{% if item.temporal_class %} temporal-{{ item.temporal_class }}{% endif %}">
               <div class="item-labels">
                 <span class="label">{{ item.role }}</span>
+                {% if item.temporal_state %}
+                  <span class="label label-temporal">{{ item.temporal_state }}</span>
+                {% endif %}
                 {% if item.local_state %}
                   <span class="label label-muted">{{ item.local_state }}</span>
                 {% endif %}
               </div>
               <h3>{{ item.headline }}</h3>
+              {% if item.original_headline %}
+                <p class="original-statement">
+                  Originally recorded as: {{ item.original_headline }}
+                </p>
+              {% endif %}
               {% if item.detail %}<p>{{ item.detail }}</p>{% endif %}
               {% if item.uncertainty %}
                 <p class="uncertainty">{{ item.uncertainty }}</p>

@@ -2,6 +2,7 @@
 
 from chief_of_staff.domain.models import (
     AuthorizationStatus,
+    BriefingArchivedFact,
     BriefingCoverage,
     BriefingPresentation,
     BriefingPresentationItem,
@@ -40,6 +41,7 @@ from chief_of_staff.domain.models import (
 
 __all__ = (
     "AuthorizationStatus",
+    "BriefingArchivedFact",
     "BriefingCoverage",
     "BriefingPresentation",
     "BriefingPresentationItem",

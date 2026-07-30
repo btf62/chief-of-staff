@@ -221,6 +221,11 @@ def create_app(
             generation_mode=_generation_mode_display(
                 briefing.presentation.generation_mode
             ),
+            generated_at=_format_generated_at(
+                briefing.run.generated_at or briefing.presentation.created_at,
+                timezone=briefing.run.timezone,
+            ),
+            historical_disclosure=_web_historical_disclosure(briefing),
             coverage=_coverage_view(briefing),
             status=request.args.get("status"),
         )
@@ -484,7 +489,8 @@ def _presentation_sections(
                 if item.conclusion_id is None
                 else state_store.inspect_conclusion(item.conclusion_id)
             )
-            headline = item.headline
+            original_headline = item.headline
+            headline = original_headline
             handle = None
             local_state = None
             if conclusion is not None and conclusion.projection is not None:
@@ -499,6 +505,9 @@ def _presentation_sections(
             items.append(
                 {
                     "headline": headline,
+                    "original_headline": (
+                        original_headline if headline != original_headline else None
+                    ),
                     "detail": item.detail,
                     "role": _content_role(item),
                     "uncertainty": item.uncertainty,
@@ -513,6 +522,12 @@ def _presentation_sections(
                     ),
                     "handle": handle,
                     "local_state": local_state,
+                    "temporal_state": item.temporal_state,
+                    "temporal_class": (
+                        None
+                        if item.temporal_state is None
+                        else item.temporal_state.casefold().replace(" ", "-")
+                    ),
                 }
             )
         if items or section.summary:
@@ -716,6 +731,33 @@ def _format_datetime(value: datetime | None) -> str | None:
     if value is None:
         return None
     return value.astimezone().strftime("%b %-d, %Y at %-I:%M %p")
+
+
+def _format_generated_at(value: datetime, *, timezone: str) -> str:
+    local = value.astimezone(ZoneInfo(timezone))
+    period = "a.m." if local.hour < 12 else "p.m."
+    return f"Generated {local:%A, %B %-d} at {local:%-I:%M} {period}"
+
+
+def _web_historical_disclosure(
+    briefing: BriefingPresentationState,
+) -> str | None:
+    mode = briefing.run.historical_mode
+    if mode == "recorded":
+        return "Recorded briefing shown exactly as originally generated."
+    if mode == "replay":
+        return (
+            "Replay using current product logic and archived normalized facts. "
+            "This is not the briefing originally shown."
+        )
+    if mode == "reconstructed":
+        return (
+            "Reconstructed from available source history. Later source changes "
+            "and unavailable historical state may affect accuracy."
+        )
+    if mode == "synthetic":
+        return "Synthetic evaluation scenario; no live personal data."
+    return None
 
 
 def _short_fingerprint(value: str) -> str:

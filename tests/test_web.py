@@ -543,6 +543,9 @@ def test_interface_language_actions_and_diagnostics_are_user_facing(
     assert response.status_code == 303
     updated = _get(client, response.headers["Location"]).get_data(as_text=True)
     assert "Chief of Staff updated this item." in updated
+    corrected_home = _get(client, "/").get_data(as_text=True)
+    assert "Prepare the agenda for the morning commitment." in corrected_home
+    assert "Originally recorded as:" in corrected_home
 
 
 @pytest.mark.parametrize(
@@ -1108,3 +1111,14 @@ def test_no_briefing_empty_history_long_content_and_private_fields_are_safe(
         assert "commitment-evidence" not in html
     finally:
         close_application(long_app)
+
+
+def test_print_and_temporal_styles_preserve_written_structure() -> None:
+    root = Path(__file__).resolve().parents[1]
+    css = (root / "src/chief_of_staff/web/static/style.css").read_text(encoding="utf-8")
+
+    assert "@media print" in css
+    assert "break-inside: avoid" in css
+    assert "break-after: avoid" in css
+    assert ".temporal-earlier-today" in css
+    assert ".temporal-in-progress" in css
