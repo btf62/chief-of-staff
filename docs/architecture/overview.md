@@ -349,6 +349,14 @@ deterministic application code and return application-owned, schema-validated
 results. Models receive no connector, SQLite, local-state, or external-action
 tools.
 
+The first bounded provider comparison used a dedicated Northridge-controlled
+OpenAI project, an exact Responses-only service role, Keychain-only
+credentials, and explicit application controls for models, retention, prompt
+caching, cost, retries, timeout, and provider state. The official-SDK
+transport remains disabled by default outside separately authorized
+evaluation. The comparison did not select a production model or authorize
+private-source evidence or routine hosted inference.
+
 Evidence packets remain within one work or personal domain by default.
 Combining domains requires an explicit, reviewable inference need and separate
 approval; configuring two accounts for one provider does not authorize mixed
@@ -557,8 +565,8 @@ versioning, logging, fallback, and evaluation boundaries are defined in
 - Detailed backup tooling, rotation, restoration, and deletion procedures
 - Application-level encryption if a future threat model, backup method, or
   remote-access design requires it
-- Exact OpenAI organization, project, retention setting, endpoint and feature
-  eligibility, evaluated model, and provider-policy review owner
+- Production OpenAI model selection, future provider-policy reverification,
+  and any private-source hosted-inference category
 
 Connector specifications must identify when records may be referenced without
 persisting source content. Any cache exception must justify its content,
@@ -720,7 +728,7 @@ schema-validated, and hosted failure degrades explicitly.
 | --- | --- | --- |
 | Connector-specific accounts and scopes | Determines the exact authority, sensitivity, registration, refresh, and revocation behavior for each source | In each connector specification before authorization is enabled |
 | Connector-specific cache exceptions | Determines whether a source needs narrowly bounded persistence beyond the transient default | In each connector specification before its cache is enabled |
-| OpenAI model and request configuration | Determines evaluated quality, cost, latency, endpoint eligibility, and exact provider behavior within the accepted inference boundary | Before probabilistic inference |
+| Production OpenAI model selection | Determines accepted quality, cost, latency, and exact provider behavior within the evaluated inference boundary | Before routine probabilistic inference |
 | Local web framework and interaction design | Determines presentation and the required correction loop within the accepted local web direction | Before completing the usable v1 experience |
 | Scheduling mechanism | Determines morning reliability and host requirements | Before scheduled delivery |
 
@@ -760,9 +768,8 @@ documents. The following dependencies remain unresolved:
   and representative evaluation data.
 - The product requires precision-first inference evaluation, but its minimum
   acceptance thresholds remain a product decision.
-- The exact OpenAI model and request configuration require representative
-  evaluation and verification of the project's current provider-retention
-  controls before probabilistic inference begins.
+- Brad's category-specific review and explicit production-model selection
+  remain required after the bounded Terra–Luna comparison.
 - Scheduled morning delivery depends on the selected host being awake and a
   scheduler that has not been selected.
 

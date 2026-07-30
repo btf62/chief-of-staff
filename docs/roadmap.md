@@ -1,7 +1,7 @@
 # Daily Briefing v1 Implementation Roadmap
 
 - **Status:** Accepted
-- **Version:** 6
+- **Version:** 7
 - **Owner:** Brad
 - **Last updated:** 2026-07-29
 
@@ -17,10 +17,10 @@ and is complete. Milestone 6 completed the Work Gmail input gate and Brad's
 human trust review. Milestone 7 deterministic explicit detection passed its
 synthetic evaluation and one five-source live validation. Brad reviewed the
 private evidence and briefing and accepted the detections and supporting
-logic, completing Milestone 7. Milestone 8's synthetic and mocked
-implementation gate is complete; it is paused at the live OpenAI authorization
-and data-egress gate. Personal Gmail and Google Drive are deferred until after
-MVP validation.
+logic, completing Milestone 7. Milestone 8's synthetic, mocked, and bounded
+live comparison gates are complete. It is paused for Brad's category-specific
+review and production-model decision. Personal Gmail and Google Drive are
+deferred until after MVP validation.
 Dates and estimates remain intentionally omitted until implementation
 evidence supports them.
 
@@ -335,7 +335,8 @@ unchanged evidence.
 
 ## Milestone 8 — Provider-Neutral Inference
 
-- **Status:** In progress — synthetic gate complete; paused at live gate
+- **Status:** In progress — bounded live comparison complete; human selection
+  pending
 - **Intended user-visible outcome:** Where permitted and demonstrably useful,
   Brad receives bounded contextual inference and synthesis with evidence,
   explanations, sensitivity controls, and a clear reduced-mode fallback.
@@ -362,20 +363,31 @@ unchanged evidence.
   memory, Tier 3 use under standard retention, silent provider fallback,
   fine-tuning on private data, and external-action tools.
 
-Milestone 7 acceptance does not authorize hosted inference, private-data
-egress, an OpenAI API key, a production model, or live provider evaluation.
-Those actions remain behind Milestone 8's explicit live authorization gate.
-
 The application-owned `contextual_action_classification` boundary now accepts
 only unresolved contextual candidates, enforces conservative sensitivity and
 evidence limits, validates strict structured results, preserves local
-correction authority, and records non-content audit metadata. The disabled
-OpenAI Responses adapter has no live transport or configured credential. The
-25-scenario mocked evaluation reports three true positives, five correct
-exclusions, three insufficient-evidence results, four sensitivity or secret
-exclusions, and zero false positives, false negatives, or correction
-regressions. No API key was created or retrieved, no API call occurred, no
-private source content left the host, and no production model was selected.
+correction authority, and records non-content audit metadata. The OpenAI
+Responses adapter remains disabled by default and now has an official-SDK
+transport with explicit project, model, retention, caching, timeout, retry, and
+state controls. The 25-scenario mocked evaluation reports three true positives,
+five correct exclusions, three insufficient-evidence results, four sensitivity
+or secret exclusions, and zero false positives, false negatives, or correction
+regressions.
+
+One explicitly approved 2026-07-29 comparison used a dedicated
+Northridge-controlled project, a Responses-only service account, Keychain-only
+credentials, a $1 provider hard limit, and an independent $1 application cap.
+It sent ten synthetic Tier 1 scenarios once to Terra and once to Luna. All
+twenty calls completed with zero false-positive actionable claims, schema
+failures, provenance failures, provider failures, cache reads, cache writes,
+or correction regressions. The application safely rejected three
+moderate-uncertainty actionable suggestions. Total estimated cost was
+$0.030177.
+
+The one-time authorization is consumed. The private comparison now awaits
+Brad's category-specific review and explicit production-model decision. Do not
+repeat provider calls, send private-source evidence, enable routine hosted
+inference, or begin Milestone 9 without a new explicit instruction.
 
 ## Milestone 9 — Ranking and Briefing Composition
 

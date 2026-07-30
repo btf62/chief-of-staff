@@ -6,8 +6,12 @@ import json
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
+from decimal import ROUND_CEILING, Decimal
 from enum import StrEnum
-from typing import Final, Protocol, cast
+from typing import Any, Final, Protocol, cast
+
+import openai
+from openai import OpenAI
 
 from chief_of_staff.auth import KeychainSecretReference
 from chief_of_staff.inference.models import (
@@ -26,6 +30,7 @@ from chief_of_staff.inference.providers.base import (
     InferenceCredentialError,
     InferenceDisabledError,
     InferenceModelMismatchError,
+    InferenceProviderPolicyError,
     InferenceRateLimitError,
     InferenceRefusalError,
     InferenceSchemaError,
@@ -35,6 +40,44 @@ from chief_of_staff.inference.providers.base import (
 
 OPENAI_RESPONSES_ENDPOINT: Final = "https://api.openai.com/v1/responses"
 OPENAI_PROVIDER_NAME: Final = "openai"
+OPENAI_EVALUATION_MODELS: Final = (
+    "gpt-5.6-terra",
+    "gpt-5.6-luna",
+)
+OPENAI_API_KEY_REFERENCE: Final = KeychainSecretReference(
+    service="chief-of-staff/openai",
+    account="milestone-8-evaluation-api-key",
+)
+OPENAI_REASONING_EFFORT: Final = "low"
+OPENAI_SERVICE_TIER: Final = "default"
+OPENAI_PROMPT_CACHE_MODE: Final = "explicit"
+OPENAI_MAX_OUTPUT_TOKENS: Final = 500
+
+
+@dataclass(frozen=True, slots=True)
+class OpenAIModelPricing:
+    """Standard short-context prices expressed as micro-USD per token."""
+
+    input_microusd_per_token: Decimal
+    cached_input_microusd_per_token: Decimal
+    cache_write_microusd_per_token: Decimal
+    output_microusd_per_token: Decimal
+
+
+OPENAI_EVALUATION_PRICING: Final[dict[str, OpenAIModelPricing]] = {
+    "gpt-5.6-terra": OpenAIModelPricing(
+        input_microusd_per_token=Decimal("2.50"),
+        cached_input_microusd_per_token=Decimal("0.25"),
+        cache_write_microusd_per_token=Decimal("3.125"),
+        output_microusd_per_token=Decimal("15.00"),
+    ),
+    "gpt-5.6-luna": OpenAIModelPricing(
+        input_microusd_per_token=Decimal("1.00"),
+        cached_input_microusd_per_token=Decimal("0.10"),
+        cache_write_microusd_per_token=Decimal("1.25"),
+        output_microusd_per_token=Decimal("6.00"),
+    ),
+}
 CONTEXTUAL_ACTION_RESULT_SCHEMA: Final[dict[str, object]] = {
     "type": "object",
     "properties": {
@@ -113,7 +156,7 @@ class OpenAIAdapterConfiguration:
     api_key_reference: KeychainSecretReference | None = None
     max_requests_per_run: int = 0
     timeout_seconds: float = 20.0
-    max_output_tokens: int = 500
+    max_output_tokens: int = OPENAI_MAX_OUTPUT_TOKENS
 
 
 class KeychainReader(Protocol):
@@ -140,6 +183,71 @@ class OpenAIResponsesTransport(Protocol):
         timeout_seconds: float,
     ) -> Mapping[str, object]:
         """Return one raw Responses API-shaped mapping."""
+
+
+class OpenAISDKResponsesTransport:
+    """Official-SDK transport with no retries and no retained provider state."""
+
+    def create_response(
+        self,
+        *,
+        endpoint: str,
+        payload: Mapping[str, object],
+        api_key: str,
+        organization_id: str,
+        project_id: str,
+        timeout_seconds: float,
+    ) -> Mapping[str, object]:
+        """Create one synchronous response and return only required fields."""
+
+        if endpoint != OPENAI_RESPONSES_ENDPOINT:
+            raise InferenceConfigurationError(
+                "only the approved Responses endpoint is valid"
+            )
+        try:
+            with OpenAI(
+                api_key=api_key,
+                organization=organization_id,
+                project=project_id,
+                max_retries=0,
+                timeout=timeout_seconds,
+            ) as client:
+                response = client.responses.create(**cast(Any, dict(payload)))
+        except openai.APITimeoutError as error:
+            raise TimeoutError from error
+        except openai.RateLimitError as error:
+            raise InferenceRateLimitError("provider rate limit was reached") from error
+        except openai.AuthenticationError as error:
+            raise InferenceCredentialError(
+                "the approved provider credential was rejected"
+            ) from error
+        except openai.PermissionDeniedError as error:
+            raise InferenceConfigurationError(
+                "the approved project denied the Responses request"
+            ) from error
+        except openai.APIConnectionError as error:
+            raise InferenceUnavailableError(
+                "provider transport is unavailable"
+            ) from error
+        except openai.APIStatusError as error:
+            if error.status_code >= 500:
+                raise InferenceUnavailableError(
+                    "provider service is unavailable"
+                ) from error
+            raise InferenceConfigurationError(
+                "the provider rejected the approved request configuration"
+            ) from error
+
+        raw = cast(dict[str, object], response.model_dump(mode="json"))
+        return {
+            "status": raw.get("status"),
+            "model": raw.get("model"),
+            "output": _without_provider_identifiers(raw.get("output", [])),
+            "usage": _without_provider_identifiers(raw.get("usage", {})),
+            "service_tier": raw.get("service_tier"),
+            "store": raw.get("store"),
+            "background": raw.get("background"),
+        }
 
 
 class OpenAIResponsesAdapter:
@@ -199,16 +307,30 @@ class OpenAIResponsesAdapter:
             ) from error
         latency_ms = max(0, int((time.monotonic() - started) * 1000))
 
+        if raw.get("status") != "completed":
+            raise InferenceUnavailableError("provider response did not complete")
         returned_model = _required_string(raw, "model")
         if returned_model != self.configuration.model_id:
             raise InferenceModelMismatchError(
                 "provider returned an unapproved model identifier"
             )
+        if (
+            raw.get("service_tier") != OPENAI_SERVICE_TIER
+            or raw.get("store") is not False
+            or raw.get("background") is not False
+        ):
+            raise InferenceProviderPolicyError(
+                "provider response violated approved state or service policy"
+            )
         if _contains_refusal(raw):
             raise InferenceRefusalError("provider refused the bounded task")
         output = _parse_output_json(raw)
         parsed = _validate_structured_result(output)
-        usage = _parse_usage(raw.get("usage"))
+        usage = _parse_usage(raw.get("usage"), returned_model)
+        if usage.cached_input_tokens or usage.cache_write_tokens:
+            raise InferenceProviderPolicyError(
+                "provider reported prohibited prompt-cache activity"
+            )
         return InferenceResult(
             status=InferenceStatus.COMPLETED,
             classification=parsed.classification,
@@ -261,10 +383,20 @@ class OpenAIResponsesAdapter:
             "input": json.dumps(task_input, separators=(",", ":"), sort_keys=True),
             "store": False,
             "background": False,
+            "stream": False,
             "tools": [],
             "tool_choice": "none",
             "max_output_tokens": self.configuration.max_output_tokens,
             "truncation": "disabled",
+            "service_tier": OPENAI_SERVICE_TIER,
+            "reasoning": {
+                "effort": OPENAI_REASONING_EFFORT,
+                "context": "current_turn",
+                "mode": "standard",
+            },
+            "prompt_cache_options": {
+                "mode": OPENAI_PROMPT_CACHE_MODE,
+            },
             "text": {
                 "format": {
                     "type": "json_schema",
@@ -311,11 +443,25 @@ class OpenAIResponsesAdapter:
             )
         if self.configuration.max_requests_per_run <= 0:
             raise InferenceConfigurationError("a positive request cap is required")
+        if self.configuration.max_requests_per_run > 10:
+            raise InferenceConfigurationError(
+                "one model adapter cannot exceed ten evaluation requests"
+            )
         if self._request_count >= self.configuration.max_requests_per_run:
             raise InferenceConfigurationError("bounded request cap is exhausted")
         if self.configuration.timeout_seconds <= 0:
             raise InferenceConfigurationError("a positive timeout is required")
-        if not 1 <= self.configuration.max_output_tokens <= 1000:
+        if self.configuration.model_id not in OPENAI_EVALUATION_MODELS:
+            raise InferenceConfigurationError(
+                "model is outside the approved comparative evaluation"
+            )
+        if self.configuration.api_key_reference != OPENAI_API_KEY_REFERENCE:
+            raise InferenceConfigurationError(
+                "credential reference is outside the approved Keychain item"
+            )
+        if self.configuration.timeout_seconds != 20.0:
+            raise InferenceConfigurationError("the approved timeout is 20 seconds")
+        if self.configuration.max_output_tokens != OPENAI_MAX_OUTPUT_TOKENS:
             raise InferenceConfigurationError("max output tokens are outside policy")
 
 
@@ -410,18 +556,81 @@ def _validate_structured_result(value: object) -> _ParsedStructuredResult:
     )
 
 
-def _parse_usage(value: object) -> UsageMetadata:
+def _parse_usage(value: object, model_id: str) -> UsageMetadata:
     if not isinstance(value, Mapping):
         return UsageMetadata(input_tokens=0, output_tokens=0, total_tokens=0)
     input_tokens = _nonnegative_int(value.get("input_tokens"))
     output_tokens = _nonnegative_int(value.get("output_tokens"))
     total_tokens = _nonnegative_int(value.get("total_tokens"))
+    input_details = value.get("input_tokens_details")
+    output_details = value.get("output_tokens_details")
+    cached_input_tokens = (
+        _nonnegative_int(input_details.get("cached_tokens"))
+        if isinstance(input_details, Mapping)
+        else 0
+    )
+    cache_write_tokens = (
+        _nonnegative_int(input_details.get("cache_write_tokens"))
+        if isinstance(input_details, Mapping)
+        else 0
+    )
+    reasoning_tokens = (
+        _nonnegative_int(output_details.get("reasoning_tokens"))
+        if isinstance(output_details, Mapping)
+        else 0
+    )
+    usage = UsageMetadata(
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=total_tokens,
+        cached_input_tokens=cached_input_tokens,
+        cache_write_tokens=cache_write_tokens,
+        reasoning_tokens=reasoning_tokens,
+    )
     return UsageMetadata(
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         total_tokens=total_tokens,
+        estimated_cost_microusd=estimate_usage_cost_microusd(model_id, usage),
+        cached_input_tokens=cached_input_tokens,
+        cache_write_tokens=cache_write_tokens,
+        reasoning_tokens=reasoning_tokens,
     )
 
 
 def _nonnegative_int(value: object) -> int:
     return value if isinstance(value, int) and value >= 0 else 0
+
+
+def estimate_usage_cost_microusd(model_id: str, usage: UsageMetadata) -> int:
+    """Estimate standard-tier cost from current GPT-5.6 usage details."""
+
+    try:
+        pricing = OPENAI_EVALUATION_PRICING[model_id]
+    except KeyError:
+        raise InferenceConfigurationError(
+            "pricing is unavailable for the approved model"
+        ) from None
+    uncached_tokens = max(
+        0,
+        usage.input_tokens - usage.cached_input_tokens - usage.cache_write_tokens,
+    )
+    estimate = (
+        Decimal(uncached_tokens) * pricing.input_microusd_per_token
+        + Decimal(usage.cached_input_tokens) * pricing.cached_input_microusd_per_token
+        + Decimal(usage.cache_write_tokens) * pricing.cache_write_microusd_per_token
+        + Decimal(usage.output_tokens) * pricing.output_microusd_per_token
+    )
+    return int(estimate.to_integral_value(rounding=ROUND_CEILING))
+
+
+def _without_provider_identifiers(value: object) -> object:
+    if isinstance(value, Mapping):
+        return {
+            str(key): _without_provider_identifiers(item)
+            for key, item in value.items()
+            if key not in {"id", "request_id", "_request_id"}
+        }
+    if isinstance(value, list):
+        return [_without_provider_identifiers(item) for item in value]
+    return value

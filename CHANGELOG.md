@@ -129,12 +129,25 @@ No strict versioning scheme is promised before a distributable product exists.
 - Non-content inference audit persistence and lifecycle pruning, plus a
   25-scenario mocked evaluation reporting zero false positives, false
   negatives, or correction regressions.
-- A proposed Milestone 8 live-evaluation gate that keeps synthetic Tier 1
-  evaluation, API-key creation, billing, retention, model comparison, and any
-  private-data egress behind separate explicit approval.
+- A Milestone 8 live-evaluation gate that keeps synthetic Tier 1 evaluation,
+  API-key creation, billing, retention, model comparison, and any private-data
+  egress behind explicit approval.
+- An exact-pinned official OpenAI Python SDK transport for the disabled-by-
+  default Responses adapter, with zero retries, a 20-second timeout, strict
+  Structured Outputs, `store=false`, explicit cache control, and no tools or
+  provider state.
+- A twenty-call synthetic-only Terra–Luna comparison harness with application-
+  owned cost, call, sensitivity, provenance, caching, and persistence
+  boundaries plus a private mode-`0600` review artifact.
 
 ### Changed
 
+- Accepted and exercised the Milestone 8 live-evaluation gate. All twenty
+  synthetic calls completed with zero false-positive actionable claims,
+  schema, provenance, provider, cache, or correction failures; deterministic
+  policy safely rejected three moderate-uncertainty suggestions. Human model
+  review remains pending, and no production model or routine hosted inference
+  is authorized.
 - Accepted Brad's Milestone 7 private evidence and briefing review, completing
   the precision-first deterministic trust gate. Every displayed conclusion
   remains evidence-linked, unsupported candidates remain

@@ -47,6 +47,7 @@ from chief_of_staff.inference.providers.base import (
     InferenceDisabledError,
     InferenceModelMismatchError,
     InferenceProvider,
+    InferenceProviderPolicyError,
     InferenceRateLimitError,
     InferenceRefusalError,
     InferenceSchemaError,
@@ -69,6 +70,7 @@ class ContextualInferenceCoordinator:
         logger: logging.Logger | None = None,
         briefing_run_id: str | None = None,
         model_configuration_version: str = MODEL_CONFIGURATION_VERSION,
+        persist_conclusions: bool = True,
     ) -> None:
         self.provider = provider
         self.enabled = enabled
@@ -76,6 +78,7 @@ class ContextualInferenceCoordinator:
         self.logger = logger
         self.briefing_run_id = briefing_run_id
         self.model_configuration_version = model_configuration_version
+        self.persist_conclusions = persist_conclusions
 
     def evaluate(
         self,
@@ -219,6 +222,20 @@ class ContextualInferenceCoordinator:
                 validation=validation,
                 status=InferenceStatus.REJECTED,
             )
+        except InferenceProviderPolicyError:
+            validation = ValidationReport(
+                status=ValidationStatus.POLICY_REJECTED,
+                errors=("provider response violated approved request policy",),
+            )
+            return self._failure(
+                candidate,
+                request,
+                now,
+                ReducedModeReason.POLICY_REJECTED,
+                provider_invoked=True,
+                validation=validation,
+                status=InferenceStatus.REJECTED,
+            )
         except InferenceUnavailableError:
             return self._failure(
                 candidate,
@@ -262,7 +279,7 @@ class ContextualInferenceCoordinator:
             result=result,
             validation=validation,
         )
-        if briefing_candidate is not None:
+        if briefing_candidate is not None and self.persist_conclusions:
             self._persist_conclusion(candidate, result, briefing_candidate, now)
         return InferenceOutcome(
             candidate_id=candidate.id,

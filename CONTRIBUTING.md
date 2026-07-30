@@ -24,8 +24,11 @@ together after the new minor line is evaluated.
 The project uses the standard-library `venv` module and pip dependency groups.
 The ignored `.venv/` directory is the default local environment. Runtime
 dependencies belong in `project.dependencies`; development-only tools belong
-in the `dev` dependency group in `pyproject.toml`. Milestone 1 intentionally
-has no third-party runtime dependencies.
+in the `dev` dependency group in `pyproject.toml`. The official OpenAI Python
+SDK is the only third-party runtime dependency. It is exact-pinned to the
+version evaluated for the bounded Milestone 8 Responses transport; do not add
+a general AI framework or change the pin without provider-boundary and
+fresh-install validation.
 
 Create or refresh the environment:
 

@@ -25,14 +25,17 @@ validation. Brad reviewed the private evidence and briefing and judged the
 detections and supporting logic sound, completing and accepting Milestone 7.
 Milestone 8's provider-neutral boundary, deterministic sensitivity and
 evidence controls, disabled OpenAI Responses adapter, persistence metadata,
-and synthetic evaluation are implemented. Its 25-scenario mocked gate passes
-with no false positives or false negatives. Milestone 8 is paused at its live
-OpenAI authorization and data-egress gate; no production model is selected.
-The temporary live-validation authorization ended when the Milestone 7
-artifact was produced. No repeat source retrieval, authorization refresh,
-scope change, hosted inference, private-data egress, or broader live access is
-now authorized. Personal Gmail and Google Drive remain deferred and
-unauthorized.
+synthetic evaluation, and official-SDK live transport are implemented. Its
+25-scenario mocked gate and one authorized twenty-call synthetic Terra–Luna
+comparison are complete. The live comparison produced zero false-positive
+actionable claims, schema failures, provenance failures, provider failures,
+cache reads or writes, or correction regressions; deterministic policy safely
+rejected three moderate-uncertainty suggestions. Brad's category-specific
+review and production-model decision remain pending. The one-time provider
+authorization is consumed. No repeat provider call, source retrieval,
+authorization refresh, scope change, routine hosted inference, private-data
+egress, production-model selection, or Milestone 9 work is now authorized.
+Personal Gmail and Google Drive remain deferred and unauthorized.
 
 ## Working rules
 
@@ -96,11 +99,14 @@ The Version 1 design-readiness requirements have been met:
 
 Implementation may proceed only when a task explicitly authorizes it. The
 Google Calendar, Todoist, Jira project-discovery, Jira issue, and combined Work
-Gmail trial gates have been exercised. Do not repeat live retrieval, refresh
+Gmail trial gates and the one-time Milestone 8 synthetic provider comparison
+have been exercised. Do not repeat live retrieval or provider calls, refresh
 authorization, broaden access, repeat Jira discovery, run an unrelated live
-retrieval, or begin another connector without new explicit approval from Brad.
-Satisfy a milestone's acceptance gate before beginning dependent work. Record
-material new product or architecture decisions before implementing them.
+retrieval, select a production model, enable routine hosted inference, or
+begin another connector or Milestone 9 without new explicit approval from
+Brad. Satisfy a milestone's acceptance gate before beginning dependent work.
+Record material new product or architecture decisions before implementing
+them.
 
 ## Validation
 

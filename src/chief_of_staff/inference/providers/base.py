@@ -54,3 +54,7 @@ class InferenceSchemaError(InferenceProviderError):
 
 class InferenceModelMismatchError(InferenceProviderError):
     """Raised when a provider silently returns a different model."""
+
+
+class InferenceProviderPolicyError(InferenceProviderError):
+    """Raised when the provider violates an approved request policy."""

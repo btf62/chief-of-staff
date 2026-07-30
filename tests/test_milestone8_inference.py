@@ -55,6 +55,8 @@ from chief_of_staff.inference.providers.base import (
 )
 from chief_of_staff.inference.providers.openai import (
     CONTEXTUAL_ACTION_RESULT_SCHEMA,
+    OPENAI_API_KEY_REFERENCE,
+    OPENAI_MAX_OUTPUT_TOKENS,
     OpenAIAdapterConfiguration,
     OpenAIResponsesAdapter,
     OpenAIRetentionStatus,
@@ -124,7 +126,7 @@ class _FakeResponsesTransport:
     def __init__(
         self,
         *,
-        returned_model: str = "synthetic-model",
+        returned_model: str = "gpt-5.6-terra",
         output: Mapping[str, object] | None = None,
     ) -> None:
         self.returned_model = returned_model
@@ -159,6 +161,7 @@ class _FakeResponsesTransport:
             "recommendation": InclusionRecommendation.INCLUDE.value,
         }
         return {
+            "status": "completed",
             "model": self.returned_model,
             "output": [
                 {
@@ -175,7 +178,17 @@ class _FakeResponsesTransport:
                 "input_tokens": 90,
                 "output_tokens": 18,
                 "total_tokens": 108,
+                "input_tokens_details": {
+                    "cached_tokens": 0,
+                    "cache_write_tokens": 0,
+                },
+                "output_tokens_details": {
+                    "reasoning_tokens": 4,
+                },
             },
+            "service_tier": "default",
+            "store": False,
+            "background": False,
         }
 
 
@@ -255,18 +268,15 @@ def _adapter_configuration(
         live_use_approved=live_use_approved,
         organization_id="org-synthetic",
         project_id="proj-synthetic",
-        model_id="synthetic-model",
+        model_id="gpt-5.6-terra",
         model_configuration_version=MODEL_CONFIGURATION_VERSION,
         retention_status=OpenAIRetentionStatus.STANDARD,
         provider_policy_review_owner="synthetic-owner",
         prompt_cache_policy_reviewed=True,
-        api_key_reference=KeychainSecretReference(
-            service="chief-of-staff/openai-test",
-            account="synthetic-evaluation-key",
-        ),
+        api_key_reference=OPENAI_API_KEY_REFERENCE,
         max_requests_per_run=1,
         timeout_seconds=20.0,
-        max_output_tokens=500,
+        max_output_tokens=OPENAI_MAX_OUTPUT_TOKENS,
     )
 
 
@@ -499,13 +509,21 @@ def test_openai_payload_is_strict_stateless_tool_free_and_bounded() -> None:
     schema = cast(dict[str, object], format_value["schema"])
     properties = cast(dict[str, object], schema["properties"])
 
-    assert payload["model"] == "synthetic-model"
+    assert payload["model"] == "gpt-5.6-terra"
     assert payload["store"] is False
     assert payload["background"] is False
+    assert payload["stream"] is False
     assert payload["tools"] == []
     assert payload["tool_choice"] == "none"
     assert payload["truncation"] == "disabled"
     assert payload["max_output_tokens"] == 500
+    assert payload["service_tier"] == "default"
+    assert payload["reasoning"] == {
+        "effort": "low",
+        "context": "current_turn",
+        "mode": "standard",
+    }
+    assert payload["prompt_cache_options"] == {"mode": "explicit"}
     assert format_value["type"] == "json_schema"
     assert format_value["strict"] is True
     assert schema == CONTEXTUAL_ACTION_RESULT_SCHEMA

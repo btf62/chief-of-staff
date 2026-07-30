@@ -195,9 +195,9 @@ production-model selection remain unapproved.
 
 ## OpenAI API verification
 
-The following provider facts were verified on 2026-07-29. They must be
-rechecked at the live authorization gate because provider behavior and
-eligibility can change:
+The following provider facts were verified on 2026-07-29 immediately before
+the bounded live comparison. They must be rechecked before any later hosted
+use because provider behavior and eligibility can change:
 
 - The [Responses API](https://developers.openai.com/api/docs/guides/migrate-to-responses)
   is recommended for new projects and uses `POST /v1/responses`.
@@ -212,23 +212,30 @@ eligibility can change:
   that application-state storage, but it does not mean Zero Data Retention.
 - Modified Abuse Monitoring and Zero Data Retention require eligibility and
   approval. Endpoint, feature, and model eligibility can differ.
-- [Prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching#prompt-cache-retention)
-  has separate retention behavior. On current GPT-5.6-family guidance, cache
-  TTL controls a minimum rather than a maximum, and cached material may remain
-  eligible longer.
+- [Prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching)
+  has separate retention behavior. Current GPT-5.6 guidance supports explicit
+  caching mode; supplying no explicit breakpoints disables cache writes.
 - [Production guidance](https://developers.openai.com/api/docs/guides/production-best-practices#api-keys)
   requires API keys to remain outside code and public repositories in secure
   secret storage.
 
-The disabled adapter sets `store=false`, uses no background mode, tools,
-conversation history, files, vector stores, hosted containers, fine-tuning,
-or provider memory. Prompt caching and organization retention remain visible
-live-gate decisions rather than assumptions hidden in adapter code.
+The adapter remains disabled by default. Its official
+[OpenAI Python SDK](https://github.com/openai/openai-python) transport is pinned
+to the evaluated version, sets `store=false`, uses explicit caching mode with
+no breakpoints, and enables no background mode, tools, conversation history,
+files, vector stores, hosted containers, fine-tuning, or provider memory.
+Organization retention and model selection remain explicit configuration and
+review decisions rather than hidden adapter assumptions.
 
-The synthetic gate adds no provider SDK or inference-framework dependency.
-The adapter translates to the documented Responses request shape through an
-injected transport contract, which permits complete mocked validation while
-leaving any live HTTP transport unimplemented until the authorization gate.
+The one-time 2026-07-29 comparison exercised ten synthetic Tier 1 scenarios
+once against both `gpt-5.6-terra` and `gpt-5.6-luna`. All twenty calls
+completed with zero false-positive actionable claims, schema failures,
+provenance failures, provider failures, cache reads, cache writes, or
+correction regressions. The deterministic precision-first policy safely
+rejected three moderate-uncertainty actionable suggestions. Brad's
+category-specific review and production-model selection remain pending. See
+the [live-evaluation gate](../../operations/milestone-8-live-evaluation-gate.md)
+for the aggregate results and consumed authorization boundary.
 
 ## Related documents
 

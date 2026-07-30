@@ -24,11 +24,15 @@ and explicitly judged the logic sound, completing Milestone 6. Milestone 7
 precision-first deterministic detection passed its synthetic evaluation and
 one five-source live validation. Brad reviewed the private evidence and
 briefing and accepted the detections and supporting logic, completing
-Milestone 7. Milestone 8's provider-neutral implementation and 25-scenario
-mocked gate are complete with no false positives or false negatives. Work is
-paused at the live OpenAI authorization and data-egress gate; hosted inference
-and private-data egress remain unauthorized. Personal Gmail and Google Drive
-remain deferred and unauthorized.
+Milestone 7. Milestone 8's provider-neutral implementation, 25-scenario mocked
+gate, and one bounded twenty-call synthetic Terra–Luna comparison are
+complete. The comparison produced no false-positive actionable claims,
+schema, provenance, provider, cache, or correction failures; three
+moderate-uncertainty suggestions were safely rejected by deterministic policy.
+Work is paused for Brad's category-specific review and explicit
+production-model decision. The one-time authorization is consumed, and
+routine hosted inference and private-data egress remain unauthorized. Personal
+Gmail and Google Drive remain deferred and unauthorized.
 Design acceptance authorizes implementation within the accepted scope; it does
 not mean the complete Daily Briefing has passed operational acceptance.
 
@@ -96,7 +100,8 @@ not mean the complete Daily Briefing has passed operational acceptance.
 - [Run the on-demand briefing](operations/runbooks/on-demand-briefing.md) —
   supported local command and safe operating behavior
 - [Milestone 8 live-evaluation gate](operations/milestone-8-live-evaluation-gate.md)
-  — proposed OpenAI authorization, retention, cost, and data-egress decisions
+  — accepted and exercised OpenAI project, retention, cost, request, and
+  synthetic-comparison boundary
 
 ### Repository guidance
 

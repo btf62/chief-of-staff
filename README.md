@@ -7,7 +7,8 @@ identifying priorities, commitments, and useful signals.
 
 ## Status
 
-**Phase:** Milestones 1–7 complete; Milestone 8 paused at its live gate
+**Phase:** Milestones 1–7 complete; Milestone 8 live comparison complete,
+awaiting human model review
 
 The Python, local-state, deterministic briefing, repository connector, and
 read-only Google Calendar foundations are complete. An explicitly approved,
@@ -30,11 +31,15 @@ deadline, preparation, and insufficient-evidence behavior. Its synthetic
 evaluation passed, and a 2026-07-29 five-source live validation produced a
 private review artifact and a 635-word briefing without external writes or
 hosted inference. Brad reviewed that evidence and briefing and accepted the
-detections and supporting logic. Milestone 8's provider-neutral boundary and
-25-scenario mocked evaluation are complete with zero false positives or false
-negatives. The OpenAI adapter remains disabled, no production model is
-selected, and hosted inference and private-data egress remain unauthorized.
-Personal Gmail and Google Drive remain deferred and unauthorized.
+detections and supporting logic. Milestone 8's provider-neutral boundary,
+25-scenario mocked evaluation, and one authorized twenty-call synthetic
+Terra–Luna comparison are complete. Every live call completed with zero
+false-positive actionable claims or schema, provenance, provider, cache, or
+correction failures. Three moderate-uncertainty suggestions were safely
+rejected by deterministic policy. The adapter remains disabled by default; no
+production model is selected, the one-time authorization is consumed, and
+routine hosted inference and private-data egress remain unauthorized. Personal
+Gmail and Google Drive remain deferred and unauthorized.
 
 ## Repository map
 

@@ -1,60 +1,112 @@
 # Milestone 8 Live OpenAI Evaluation Gate
 
-- **Status:** Proposed
+- **Status:** Accepted
+- **Version:** 1
 - **Owner:** Brad
 - **Last updated:** 2026-07-29
 
-This proposal defines a later, separately authorized comparative evaluation of
+This document records the authorized and completed comparative evaluation of
 the accepted
 [`contextual_action_classification`](../product/features/contextual-action-classification-v1.md)
-task. It does not authorize an API key, billing setup, an API call, hosted
-inference, private-data egress, or a production model.
+task. The one-time authorization permitted a dedicated project and credential
+plus twenty synthetic Tier 1 Responses API calls. It did not authorize
+private-source evidence, routine hosted inference, or a production model.
 
-The first live provider evaluation should use synthetic Tier 1 scenarios.
-Minimized live Work Gmail evidence remains a separate, visible approval within
-any later trial plan.
+The trial ended after its private comparison artifact was produced. Any repeat
+call, private-data egress, production-model selection, or routine hosted use
+requires new explicit approval.
 
-## Decisions Brad must approve
+## Accepted configuration
 
-| Decision | Proposed bounded choice or required confirmation |
+| Decision | Accepted boundary |
 | --- | --- |
-| OpenAI organization and project | Exact organization and dedicated project ID; no default-organization assumption |
-| Ownership and billing | Named organizational owner, billing owner, project budget, and spend alerts |
-| Retention status | Confirm standard, Modified Abuse Monitoring, or Zero Data Retention at both organization and project levels |
-| Provider-policy review owner | Name the person responsible for reviewing retention, endpoint, model, and feature changes |
-| Keychain identity | Approve exact service and account names; proposed pattern: `chief-of-staff/openai` and `milestone-8-evaluation-api-key` |
-| Candidate models | Comparative candidates: `gpt-5.6-terra` and `gpt-5.6-luna`; reverify project, Structured Outputs, and retention eligibility immediately before use |
+| OpenAI organization and project | One dedicated `Chief of Staff — M8 Evaluation` project in a verified Northridge-controlled organization; private identifiers remain only in ignored local configuration |
+| Ownership and billing | Brad is an organization owner, project owner, and provider-policy review owner; existing organization API billing was active |
+| Retention status | Standard provider retention; `store=false` disables Responses application-state storage but does not imply Zero Data Retention |
+| Project spend control | $1 monthly hard limit, with the provider warning that enforcement is not instantaneous; the application separately enforces a $1 trial cap |
+| Project model access | Allow only `gpt-5.6-terra` and `gpt-5.6-luna` |
+| Service account | Project-scoped `chief-of-staff-local` with a custom Responses-only role |
+| Keychain identity | Service `chief-of-staff/openai`; account `milestone-8-evaluation-api-key` |
 | Endpoint and features | `POST /v1/responses`, strict `text.format` Structured Outputs, `store=false`; no tools, stateful history, background mode, files, search, MCP, containers, or fine-tuning |
 | Sensitivity | Tier 1 ordinary operational only |
-| Initial evidence | Synthetic contextual promises, waiting expectations, and meeting-preparation scenarios only |
+| Evidence | Ten synthetic contextual, exclusion, conflict, and adversarial scenarios; no live-source evidence |
 | Evidence limits | No more than 3 items, 600 characters per item, and 1,200 total evidence characters per request |
-| Calls per run | Proposed maximum of 20 total calls, one response per candidate, no silent retry |
-| Timeout and retry | Proposed 20-second timeout and zero automatic retries |
-| Trial cost | Brad must approve an exact dollar maximum after current pricing is reviewed |
-| Local retention | Persist only non-content audit metadata and accepted structured conclusions under ADR-0004; do not persist raw prompts or provider responses |
+| Calls | Exactly 20 maximum: 10 per model, one response per scenario, with no retry |
+| Timeout and execution | 20 seconds, low reasoning effort, default service tier, non-streaming |
+| Trial cost | $1 maximum; conservative preflight maximum $0.188476 |
+| Prompt caching | Explicit caching mode with no breakpoints; any observed cache read or write fails the gate |
+| Local retention | Persist only non-content audit metadata; do not persist raw provider responses or production conclusions |
 | Private review | One ignored, mode-`0600` comparison artifact containing only the minimum approved evidence and structured results |
-| Acceptance thresholds | Zero false-positive actionable claims in the bounded trust set; zero schema, provenance, secret-egress, or correction regressions; category-specific precision reviewed by Brad |
-| Live Work Gmail evidence | Not approved by this proposal; requires a separate explicit yes/no decision after the synthetic trial |
+| Acceptance thresholds | Zero false-positive actionable claims, invented references, secret egress, correction regressions, or policy-invalid accepted results; category-specific precision reviewed by Brad |
+| Work Gmail evidence | Prohibited during this trial and still not authorized for hosted inference |
 
-## Preflight
+## Provider-policy verification
 
-Before any request:
+The following facts were reverified from current provider documentation on
+2026-07-29:
 
-1. Verify the exact organization, project, owner, billing responsibility, and
-   spend limit.
-2. Verify the project-level retention setting and current official data-control
-   documentation.
-3. Verify candidate model, Structured Outputs, Responses API, and retention
-   eligibility.
-4. Approve the exact model configurations to compare without designating
-   either as production.
-5. Create the Keychain entry through a separately approved secure flow.
-6. Confirm the adapter remains disabled outside the bounded evaluation.
-7. Run credential, private-data, configuration, and no-network tests.
+- [Projects and service accounts](https://help.openai.com/en/articles/9186755-managing-your-work-in-platform-with-projects)
+  support project-scoped credentials, model controls, and project budgets.
+- The [Responses API](https://developers.openai.com/api/docs/guides/migrate-to-responses)
+  is the current recommended stateful-capable API, while this trial explicitly
+  disabled provider state with `store=false`.
+- [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs)
+  supports strict application-owned JSON Schema output.
+- [Data controls](https://developers.openai.com/api/docs/guides/your-data)
+  state that API data is not used for training by default and that standard
+  abuse-monitoring logs may retain content for up to 30 days. The organization
+  did not expose a Modified Abuse Monitoring or Zero Data Retention selection.
+- [Prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching)
+  documents explicit caching mode. Omitting explicit breakpoints disables
+  cache writes; the trial observed zero cached-input and cache-write tokens.
+- [API-key safety](https://developers.openai.com/api/docs/guides/production-best-practices#api-keys)
+  requires secure server-side storage; the project key remains only in macOS
+  Keychain.
+- The candidate model pages for
+  [GPT-5.6 Terra](https://developers.openai.com/api/docs/models/gpt-5.6-terra)
+  and
+  [GPT-5.6 Luna](https://developers.openai.com/api/docs/models/gpt-5.6-luna)
+  documented Responses and Structured Outputs support.
+- [Current pricing](https://developers.openai.com/api/docs/pricing) was used
+  for the application-owned cost estimate. Standard short-context rates were
+  $2.50/$15.00 per million input/output tokens for Terra and $1.00/$6.00 for
+  Luna.
+
+The provider-controlled monthly hard limit may be exceeded slightly because
+enforcement is not instantaneous. The application preflight and per-call
+boundaries remain the authoritative trial controls.
+
+## Completed comparison
+
+The one-time synthetic comparison completed on 2026-07-29:
+
+| Metric | Terra | Luna |
+| --- | ---: | ---: |
+| Calls attempted / completed | 10 / 10 | 10 / 10 |
+| True positives | 1 | 2 |
+| False positives | 0 | 0 |
+| False negatives | 2 | 1 |
+| Correct exclusions | 3 | 3 |
+| Insufficient-evidence results | 1 | 3 |
+| Safe policy rejections | 2 | 1 |
+| Schema / provenance / provider failures | 0 / 0 / 0 | 0 / 0 / 0 |
+| Average / maximum latency | 1,808 / 2,796 ms | 1,689.7 / 2,091 ms |
+| Input / output / reasoning tokens | 2,934 / 863 / 0 | 2,934 / 1,160 / 274 |
+| Estimated cost | $0.020283 | $0.009894 |
+
+Total estimated cost was $0.030177. No cache read or write tokens were
+reported, no correction regression occurred, and no production model was
+selected.
+
+The three policy rejections were moderate-uncertainty actionable suggestions.
+The application correctly rejected them under its precision-first rule and
+entered deterministic reduced mode; they were not policy-invalid accepted
+results. Luna produced the stronger bounded quantitative result, but Brad's
+category-specific review and explicit production selection remain required.
 
 ## Mandatory stop
 
-The later synthetic live trial must stop after its bounded comparison and
-private review artifact. Selecting a production model, enabling routine hosted
-inference, or including minimized live Work Gmail evidence each requires
-another explicit approval.
+The synthetic live authorization is consumed. Do not repeat an API call,
+refresh or broaden the credential, send private source evidence, select a
+production model, enable routine hosted inference, or begin Milestone 9
+without a new explicit instruction from Brad.

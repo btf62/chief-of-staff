@@ -217,6 +217,9 @@ class UsageMetadata:
     output_tokens: int
     total_tokens: int
     estimated_cost_microusd: int | None = None
+    cached_input_tokens: int = 0
+    cache_write_tokens: int = 0
+    reasoning_tokens: int = 0
 
 
 @dataclass(frozen=True, slots=True)
