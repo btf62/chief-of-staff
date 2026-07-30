@@ -129,3 +129,9 @@ def test_makefile_exposes_supported_briefing_target() -> None:
 
     assert "briefing:" in makefile
     assert "-m chief_of_staff.gmail_live_cli briefing" in makefile
+    assert "web:" in makefile
+    assert "-m chief_of_staff.web.server" in makefile
+    assert "web-open:" in makefile
+    assert "-m chief_of_staff.web.server --open" in makefile
+    assert "connector-status:" in makefile
+    assert "-m chief_of_staff.operations_cli connector-status" in makefile

@@ -16,6 +16,11 @@ from chief_of_staff.auth import (
     WorkGmailInstalledAppOAuth,
     WorkGmailOAuthClientImporter,
 )
+from chief_of_staff.connector_health import (
+    APPROVED_CONNECTORS,
+    format_health_report,
+    inspect_approved_connectors,
+)
 from chief_of_staff.connectors import (
     GMAIL_WORK_ACCOUNT,
     GMAIL_WORK_INSTANCE,
@@ -34,6 +39,11 @@ from chief_of_staff.jira_issue_live_cli import (
     _todoist_connector,
 )
 from chief_of_staff.live_trial import LiveTrialError
+from chief_of_staff.on_demand import (
+    InsufficientBriefingEvidence,
+    OnDemandBriefingReport,
+    OnDemandBriefingRunner,
+)
 from chief_of_staff.persistence import Database, StateStore
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -147,11 +157,60 @@ def main(arguments: list[str] | None = None) -> int:
             )
             return 0
 
-        if parsed.command in {"trial", "briefing"}:
+        if parsed.command == "briefing":
+            preflight = inspect_approved_connectors(state_store, keychain)
+            by_instance = {report.connector.instance_id: report for report in preflight}
+            try:
+                with _exclusive_briefing_run(BRIEFING_LOCK_PATH):
+                    report = OnDemandBriefingRunner(
+                        state_store=state_store,
+                        repository_root=REPOSITORY_ROOT,
+                        repository_paths=APPROVED_REPOSITORY_PATHS,
+                        approved_connectors=APPROVED_CONNECTORS,
+                        preflight=preflight,
+                        calendar_connector=(
+                            _calendar_connector(state_store, keychain)
+                            if by_instance["google_calendar:primary"].can_retrieve
+                            else None
+                        ),
+                        todoist_connector=(
+                            _todoist_connector(state_store, keychain)
+                            if by_instance["todoist:primary"].can_retrieve
+                            else None
+                        ),
+                        jira_connector=(
+                            _jira_connector(state_store, keychain)
+                            if by_instance["jira:primary"].can_retrieve
+                            else None
+                        ),
+                        gmail_connector=(
+                            _gmail_connector(state_store, keychain, oauth)
+                            if by_instance["gmail:work"].can_retrieve
+                            else None
+                        ),
+                        briefing_directory=BRIEFING_DIRECTORY,
+                        review_directory=REVIEW_DIRECTORY,
+                        briefing_date_override=parsed.briefing_date,
+                    ).run()
+            except BlockingIOError:
+                print("A Daily Briefing is already running. No second run was started.")
+                return 3
+            except InsufficientBriefingEvidence as error:
+                print(f"Daily Briefing stopped safely: {error}")
+                for connector_report in preflight:
+                    if connector_report.can_retrieve:
+                        continue
+                    print()
+                    print("\n".join(format_health_report(connector_report)))
+                return 2
+            _print_on_demand_success(report)
+            return 0
+
+        if parsed.command == "trial":
             gmail = _gmail_connector(state_store, keychain, oauth)
             try:
                 with _exclusive_briefing_run(BRIEFING_LOCK_PATH):
-                    report = GmailMvpTrialRunner(
+                    trial_report = GmailMvpTrialRunner(
                         state_store=state_store,
                         repository_root=REPOSITORY_ROOT,
                         repository_paths=APPROVED_REPOSITORY_PATHS,
@@ -167,24 +226,11 @@ def main(arguments: list[str] | None = None) -> int:
                 print("A Daily Briefing is already running. No second run was started.")
                 return 3
             except GmailMvpTrialFailure as error:
-                if parsed.command == "briefing":
-                    _print_briefing_failure(error)
-                else:
-                    _print_json(asdict(error.report))
+                _print_json(asdict(error.report))
                 return 2
             except LiveTrialError:
-                if parsed.command == "briefing":
-                    print(
-                        "Daily Briefing stopped safely because an approved "
-                        "source was unavailable."
-                    )
-                    print("No completed briefing was created.")
-                    return 2
                 raise
-            if parsed.command == "briefing":
-                _print_briefing_success(report)
-            else:
-                _print_json(asdict(report))
+            _print_json(asdict(trial_report))
             return 0
     raise RuntimeError("unsupported Work Gmail command")
 
@@ -319,6 +365,21 @@ def _print_briefing_success(report: GmailMvpTrialReport) -> None:
         f"{report.body_candidates_eligible} eligible messages selected; "
         f"{report.body_candidates_omitted} omitted without body retrieval."
     )
+    print("All external sources remained read-only.")
+
+
+def _print_on_demand_success(report: OnDemandBriefingReport) -> None:
+    print("Daily Briefing ready.")
+    print(f"Briefing: {report.briefing_path}")
+    if report.review_path is not None:
+        print(f"Private Gmail review: {report.review_path}")
+    if report.degraded_sources:
+        print("Reduced source coverage:")
+        for degraded in report.degraded_sources:
+            for line in format_health_report(degraded):
+                print(f"  {line}")
+    else:
+        print("Approved source coverage completed.")
     print("All external sources remained read-only.")
 
 

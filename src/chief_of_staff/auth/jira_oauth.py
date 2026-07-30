@@ -656,7 +656,8 @@ def _validate_account_inputs(
 
 def _confirm_browser_account(expected_account_identity: str) -> bool:
     response = input(
-        "Enter the Atlassian account shown in the consent flow to confirm "
+        "Enter the displayed Atlassian account email address (not the "
+        "application name) to confirm "
         f"{expected_account_identity}: "
     )
     return hmac.compare_digest(

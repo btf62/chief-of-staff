@@ -1083,8 +1083,8 @@ def test_no_briefing_empty_history_long_content_and_private_fields_are_safe(
     empty_app = create_app(empty_path, session_secret=b"s" * 32, testing=True)
     try:
         response = _get(empty_app.test_client(), "/")
-        assert b"No briefing is available yet" in response.data
-        assert b"No connector was contacted" in response.data
+        assert b"No briefing has been generated yet." in response.data
+        assert b"make briefing" in response.data
     finally:
         close_application(empty_app)
 

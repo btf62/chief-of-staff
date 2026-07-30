@@ -6,12 +6,12 @@ RUFF := $(VENV)/bin/ruff
 MYPY := $(VENV)/bin/mypy
 PYTEST := $(VENV)/bin/pytest
 
-.PHONY: bootstrap format format-check lint typecheck test docs-check inference-eval ranking-eval demo demo-synthetic briefing check
+.PHONY: bootstrap format format-check lint typecheck test docs-check inference-eval ranking-eval demo demo-synthetic briefing web web-open connector-status check
 
 bootstrap:
 	$(PYTHON) -m venv $(VENV)
 	$(VENV_PYTHON) -m pip install --upgrade "pip>=25.1"
-	$(VENV_PYTHON) -m pip install --editable . --group dev
+	$(VENV_PYTHON) -m pip install --upgrade --force-reinstall --editable . --group dev
 
 format:
 	$(RUFF) format .
@@ -46,5 +46,14 @@ demo-synthetic:
 
 briefing:
 	$(VENV_PYTHON) -m chief_of_staff.gmail_live_cli briefing
+
+web:
+	$(VENV_PYTHON) -m chief_of_staff.web.server
+
+web-open:
+	$(VENV_PYTHON) -m chief_of_staff.web.server --open
+
+connector-status:
+	$(VENV_PYTHON) -m chief_of_staff.operations_cli connector-status
 
 check: lint typecheck test docs-check inference-eval ranking-eval

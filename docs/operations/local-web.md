@@ -13,20 +13,33 @@ evidence links, and the four-page PDF rendering, then accepted Milestone 10.
 
 ## Start
 
-Create the supported environment, then run:
+Create or refresh the supported environment, then run:
 
 ```text
-chief-of-staff-web
+make bootstrap
+make web
 ```
 
-The command opens and migrates `.local/state.sqlite3`, starts Waitress with
+`make bootstrap` refreshes an older editable installation as well as creating
+the project-owned environment. It installs the `chief-of-staff-web` entry
+point, but normal repository operation does not depend on a shell activation
+or a previously installed entry point.
+
+`make web` opens and migrates `.local/state.sqlite3`, starts Waitress with
 one application thread, binds only to `127.0.0.1:8765`, and prints the safe
-local URL and operational status.
+local URL and operational status. It does not open a browser.
 
 Open the browser automatically after the server is ready with:
 
 ```text
-chief-of-staff-web --open
+make web-open
+```
+
+The module-based launch remains supported:
+
+```text
+.venv/bin/python -m chief_of_staff.web.server
+.venv/bin/python -m chief_of_staff.web.server --open
 ```
 
 Use another explicit local port only when needed:
@@ -68,6 +81,9 @@ a new security decision.
 Press Control-C in the foreground terminal. Waitress and the application-owned
 SQLite connection shut down before the command exits. Milestone 10 creates no
 background service, login item, worker, or scheduled process.
+
+The local interface never invokes a connector. When no completed briefing
+exists, it directs Brad to run `make briefing` in Terminal and refresh.
 
 ## Local data
 

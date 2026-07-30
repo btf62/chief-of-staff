@@ -1756,6 +1756,79 @@ def test_repository_calendar_and_todoist_failures_are_independently_disclosed() 
     assert "`todoist`: unavailable" in coverage
 
 
+@pytest.mark.parametrize(
+    "unavailable_source",
+    ("google_calendar", "todoist", "jira", "gmail"),
+)
+def test_each_single_source_outage_preserves_independent_reduced_coverage(
+    unavailable_source: str,
+) -> None:
+    context = resolve_context(
+        run_id=f"single-outage-{unavailable_source}",
+        briefing_date=BRIEFING_DATE,
+        timezone="America/New_York",
+    )
+    sources = ("google_calendar", "todoist", "jira", "gmail")
+    connectors = tuple(
+        _MvpCoverageConnector(
+            source,
+            status=(
+                CoverageStatus.UNAVAILABLE
+                if source == unavailable_source
+                else CoverageStatus.COMPLETE
+            ),
+            error_category=(
+                "synthetic_unavailable" if source == unavailable_source else None
+            ),
+        )
+        for source in sources
+    )
+
+    result = DeterministicBriefingPipeline().run(context, connectors)
+
+    by_source = {coverage.source: coverage.status for coverage in result.plan.coverage}
+    assert by_source[unavailable_source] is CoverageStatus.UNAVAILABLE
+    assert all(
+        by_source[source] is CoverageStatus.COMPLETE
+        for source in sources
+        if source != unavailable_source
+    )
+    assert f"`{unavailable_source}`: unavailable" in result.rendered.text
+
+
+def test_representative_multiple_source_outage_remains_honest() -> None:
+    context = resolve_context(
+        run_id="multiple-outage",
+        briefing_date=BRIEFING_DATE,
+        timezone="America/New_York",
+    )
+    connectors = tuple(
+        _MvpCoverageConnector(
+            source,
+            status=(
+                CoverageStatus.UNAVAILABLE
+                if source in {"google_calendar", "gmail"}
+                else CoverageStatus.COMPLETE
+            ),
+            error_category=(
+                "synthetic_unavailable"
+                if source in {"google_calendar", "gmail"}
+                else None
+            ),
+        )
+        for source in ("google_calendar", "todoist", "jira", "gmail")
+    )
+
+    result = DeterministicBriefingPipeline().run(context, connectors)
+
+    coverage = result.plan.sections[-1].summary or ""
+    assert "`google_calendar`: unavailable" in coverage
+    assert "`gmail`: unavailable" in coverage
+    assert "`todoist`: complete" in coverage
+    assert "`jira`: complete" in coverage
+    assert "0 records" not in coverage
+
+
 def test_read_only_connector_surface_exposes_no_mutation_operations() -> None:
     connector = _connector("synthetic_tasks")
 

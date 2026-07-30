@@ -130,9 +130,11 @@ connector boundary.
 ## Run the on-demand briefing
 
 After the supported environment and approved connector credentials are
-configured, generate the current private briefing with:
+configured, inspect connector health and generate the current private
+briefing with:
 
 ```text
+make connector-status
 make briefing
 ```
 
@@ -141,10 +143,11 @@ for output locations, partial-coverage behavior, and safe failure handling.
 
 ## Open the local briefing
 
-After a structured briefing has been persisted, start the local interface:
+After a structured briefing has been persisted, start the local interface and
+open it in the browser:
 
 ```text
-chief-of-staff-web --open
+make web-open
 ```
 
 It serves only `http://127.0.0.1:8765` by default and runs in the foreground
