@@ -9,6 +9,22 @@ No strict versioning scheme is promised before a distributable product exists.
 
 ### Added
 
+- A private mode-`0600` Milestone 11 synthetic acceptance package covering
+  representative day shapes, every single-source outage, historical lineage,
+  safe source-title handling, responsive browser captures, print/PDF review,
+  and 14 passing acceptance metrics.
+- Whole-day temporal semantics with explicit briefing, generation, and
+  effective-as-of times; written earlier, in-progress, and upcoming states;
+  and preservation of elapsed or partly elapsed focus opportunities.
+- Immutable structured briefing archives for every successful generation,
+  including multiple runs per date, minimized replay facts, explicit recorded,
+  replay, reconstructed, and synthetic lineage, correction overlays, and
+  deletion-aware replay behavior.
+- Retrieval-free approved-connector health inspection, connector-specific
+  recovery guidance, safe preflight omission, and independent reduced-source
+  operation.
+- Supported `make web`, `make web-open`, `make connector-status`, and
+  `make milestone-11-eval` commands for normal local operation and review.
 - A loopback-only Flask and Jinja briefing interface served by Waitress, with
   strict Host and Origin enforcement, CSRF, request limits, optimistic
   versions, idempotency, response security headers, and no remote API or
@@ -164,6 +180,14 @@ No strict versioning scheme is promised before a distributable product exists.
 
 ### Changed
 
+- Corrected the local briefing header so deterministic logic and source
+  coverage are reported independently; full coverage is no longer labeled
+  reduced merely because hosted inference is disabled.
+- Sanitized link-like and HTML-like source titles into readable non-executable
+  text while retaining only the source system's authoritative link.
+- Added conservative print rules that keep notes and items together when
+  practical, avoid isolated section headings, and subordinate interactive
+  review links.
 - Accepted Brad's review of the actual Milestone 10 interface at normal
   browser zoom, a successful five-source July 30 briefing, the correction
   controls and evidence links, and the four-page PDF rendering, completing the

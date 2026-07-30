@@ -485,7 +485,10 @@ def test_interface_language_actions_and_diagnostics_are_user_facing(
 ) -> None:
     client = web_app.test_client()
     home = _get(client, "/").get_data(as_text=True)
-    assert "Deterministic briefing · reduced source coverage" in home
+    assert (
+        "Generated Thursday, July 30 at 8:00 a.m. · Deterministic briefing · "
+        "reduced source coverage"
+    ) in home
     assert "Directly supported" in home
     assert "Inferred" in home
     assert "Suggested action" in home
@@ -578,13 +581,28 @@ def test_content_roles_use_plain_language(
         ("deterministic", "Deterministic briefing"),
         (
             "deterministic_reduced",
-            "Deterministic briefing · reduced source coverage",
+            "Deterministic briefing",
         ),
         ("degraded", "Deterministic briefing · reduced source coverage"),
     ],
 )
 def test_generation_modes_read_naturally(mode: str, expected: str) -> None:
     assert _generation_mode_display(mode) == expected
+
+
+def test_complete_and_reduced_coverage_are_labeled_independently_of_logic_mode() -> (
+    None
+):
+    assert _generation_mode_display("deterministic_reduced") == (
+        "Deterministic briefing"
+    )
+    assert (
+        _generation_mode_display(
+            "deterministic_reduced",
+            has_reduced_coverage=True,
+        )
+        == "Deterministic briefing · reduced source coverage"
+    )
 
 
 def test_request_size_limit_rejects_oversized_form(web_app: Flask) -> None:

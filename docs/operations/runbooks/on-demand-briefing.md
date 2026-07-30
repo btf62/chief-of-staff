@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Owner:** Brad
-- **Last updated:** 2026-07-29
+- **Last updated:** 2026-07-30
 
 This runbook describes the supported local, on-demand Daily Briefing command.
 It reads only the existing approved connector instances and never modifies an
@@ -33,6 +33,32 @@ unauthorized, and boundary-mismatched configuration. It prints an exact safe
 reauthorization command when Brad must act. It never prints tokens, client
 identifiers, private source records, or provider payloads.
 
+### Credential states and recovery
+
+- **Healthy:** The current Keychain access credential is usable.
+- **Refreshable:** The access credential expired, but an already approved
+  Keychain refresh credential can recover it within the existing boundary.
+- **Expired or missing:** Retrieval is skipped. Use the displayed
+  reauthorization command; do not delete SQLite or substitute another account.
+- **Unauthorized or boundary exceeded:** Stop and verify the approved account,
+  scope, and resource before using the displayed command.
+- **Provider unavailable or retrieval failure:** Keep the other sources
+  independent. Retry only within a current authorization; do not reauthorize
+  merely to work around provider availability.
+
+The project-owned forms of the recovery commands are:
+
+```text
+.venv/bin/python -m chief_of_staff.live_cli authorize --account-identity <approved-work-account>
+.venv/bin/python -m chief_of_staff.todoist_live_cli authorize
+.venv/bin/python -m chief_of_staff.jira_live_cli authorize
+.venv/bin/python -m chief_of_staff.gmail_live_cli authorize --account-identity <approved-work-account>
+```
+
+These commands open the existing authorization flow. They do not authorize a
+new account, scope, resource, or refresh-token policy. Stop if the provider
+offers a different boundary than the one already approved.
+
 ## Generate the briefing
 
 Run:
@@ -56,6 +82,11 @@ Both artifacts are ignored by Git and created with mode `0600`. The review
 separates displayed, supported-but-nondisplayed, insufficient-evidence, and
 correction-recurrence results. Do not copy it into the repository or a public
 report.
+
+Every successful generation also archives an immutable structured
+presentation in `.local/state.sqlite3`. Reduced-coverage results and multiple
+successful runs on one date are archived independently. Failed or incomplete
+attempts are not archived.
 
 Then open the latest completed briefing:
 
@@ -117,3 +148,64 @@ external system.
 Changing refresh-token authority remains outside this runbook. The unexecuted
 options are recorded in
 [ADR-0009](../../decisions/0009-choose-connector-authorization-continuity.md).
+
+## Understand time and historical modes
+
+A current briefing describes the whole selected day. The heading records its
+generation time, while written labels distinguish earlier, in-progress, and
+upcoming items. An earlier event or elapsed focus opportunity remains part of
+the day rather than disappearing at generation time.
+
+Historical lineage uses separate meanings:
+
+- **Recorded:** The exact immutable presentation originally generated.
+- **Replay:** A new presentation using current logic and sufficient archived
+  normalized facts from a recorded run. It links to, but never replaces, that
+  run.
+- **Reconstructed:** A later presentation from available historical evidence.
+  It is explicitly limited, filters facts after the historical `as_of`, and
+  never claims to be the original snapshot.
+- **Synthetic:** An invented evaluation scenario. It belongs in private
+  evaluation artifacts, never Brad's personal briefing history.
+
+The production interface intentionally shows the latest briefing only. A
+history dashboard is deferred. The local data model and synthetic evaluation
+support selection by date and generation time without silently substituting a
+reconstruction or synthetic example for a recorded briefing.
+
+## Local retention, correction, and deletion
+
+Private runtime state is stored under:
+
+```text
+.local/state.sqlite3
+.local/briefings/
+.local/gmail/reviews/
+```
+
+These paths are ignored by Git. Source payloads, Gmail bodies, attachments,
+credentials, and hosted-inference responses are not archived for replay.
+
+A later correction or disposition is a current overlay; it does not rewrite
+what the recorded presentation originally said. A permitted local deletion
+removes dependent archived presentation content and replay facts while
+retaining only the approved minimal recurrence tombstone. See
+[Local State Operations](../local-state.md) for the complete lifecycle.
+
+## Milestone 11 human acceptance
+
+The synthetic acceptance package is regenerated with:
+
+```text
+make milestone-11-eval
+```
+
+Its private mode-`0600` artifacts are under
+`.local/milestone-11/review/`. They include representative and outage
+briefings, aggregate metrics, historical comparisons, responsive browser
+captures, and print/PDF evidence. The visual files require an actual browser
+and print review; their presence is part of the gate.
+
+Passing automation does not accept Milestone 11. Brad must review the private
+artifacts and explicitly approve the result before the milestone or MVP is
+marked accepted.

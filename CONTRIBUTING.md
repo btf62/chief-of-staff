@@ -3,14 +3,14 @@
 ## Current scope
 
 The Version 1 design baseline and Milestones 1–10 are complete and accepted.
-Milestone 11 operational hardening may proceed through its approved local and
-synthetic review gate. Contributions may improve authoritative documentation
-or the non-live implementation when explicitly authorized. Do not repeat live
-retrieval, make a provider call, broaden an authorization boundary, refresh
-credentials, begin another connector, enable scheduling, modify an external
-system, or treat Milestone 11 as accepted without new explicit approval. Do
-not begin a later milestone before its dependencies and acceptance gate are
-satisfied.
+Milestone 11 implementation and its private synthetic gate are complete;
+Brad's final artifact review remains pending. Contributions may correct
+authoritative documentation or the non-live Milestone 11 implementation when
+explicitly authorized. Do not repeat live retrieval, make a provider call,
+broaden an authorization boundary, refresh credentials, begin another
+connector, enable scheduling, modify an external system, or treat Milestone 11
+as accepted without new explicit approval. Do not begin a later milestone
+before its dependencies and acceptance gate are satisfied.
 
 ## Python environment
 
@@ -59,8 +59,13 @@ Do not install project tools into the macOS system Python.
 | `make docs-check` | Validate local Markdown links and anchors |
 | `make inference-eval` | Run the mocked Milestone 8 inference evaluation |
 | `make ranking-eval` | Generate the private synthetic Milestone 9 review artifacts |
+| `make milestone-11-eval` | Regenerate the private synthetic Milestone 11 review package |
 | `make demo` | Print the repository-plus-mocked-Calendar briefing |
 | `make demo-synthetic` | Print the fully synthetic reduced briefing |
+| `make connector-status` | Inspect approved connector health without retrieving source records |
+| `make briefing` | Generate one supported on-demand briefing |
+| `make web` | Start the loopback-only local interface |
+| `make web-open` | Start the local interface and open it in a browser |
 | `make check` | Run the complete local quality gate |
 
 GitHub Actions runs the same `make bootstrap` and `make check` workflow on

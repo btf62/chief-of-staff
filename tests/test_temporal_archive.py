@@ -10,15 +10,20 @@ import pytest
 
 from chief_of_staff.archive import (
     HistoricalBriefingService,
+    archive_pipeline_facts,
     deserialize_normalized_record,
     serialize_normalized_record,
 )
 from chief_of_staff.connectors import SourceCoverage, SourceItem, StaticConnector
 from chief_of_staff.domain import (
+    BriefingRun,
+    BriefingStatus,
     Classification,
     Conclusion,
     ConclusionKind,
     ConnectorDomain,
+    ConnectorRun,
+    ConnectorStatus,
     CoverageStatus,
     SourceEvidence,
 )
@@ -35,6 +40,7 @@ from chief_of_staff.pipeline import (
     resolve_context,
     safe_source_title,
 )
+from chief_of_staff.web import presentation_from_plan
 
 DAY = date(2026, 7, 30)
 ZONE = "America/New_York"
@@ -139,6 +145,59 @@ def _coverage(
             freshness_at=datetime(2026, 7, 30, 12, tzinfo=UTC),
             record_count=1,
         ),
+    )
+
+
+def _persist_recorded_result(
+    store: StateStore,
+    result: PipelineResult,
+    *,
+    run_id: str,
+    generated_at: datetime,
+    as_of: datetime,
+) -> None:
+    store.add_briefing_run(
+        BriefingRun(
+            id=run_id,
+            briefing_date=DAY,
+            timezone=ZONE,
+            invocation_mode="synthetic_recorded_test",
+            started_at=generated_at,
+            completed_at=generated_at,
+            status=BriefingStatus.SUCCEEDED,
+            generated_at=generated_at,
+            as_of=as_of,
+            historical_mode=HistoricalMode.RECORDED.value,
+        )
+    )
+    for ordinal, coverage in enumerate(result.plan.coverage):
+        connector_run_id = f"{run_id}:coverage:{ordinal}"
+        store.add_connector_run(
+            ConnectorRun(
+                id=connector_run_id,
+                source=coverage.source,
+                approved_scope=coverage.approved_scope,
+                started_at=generated_at,
+                completed_at=generated_at,
+                status=ConnectorStatus.SUCCEEDED,
+                coverage_status=coverage.status,
+                freshness_at=coverage.freshness_at,
+                record_count=coverage.record_count,
+            )
+        )
+        store.link_connector_run(run_id, connector_run_id)
+    store.save_briefing_presentation(
+        presentation_from_plan(
+            result.plan,
+            briefing_run_id=run_id,
+            created_at=generated_at,
+            state_store=store,
+        )
+    )
+    archive_pipeline_facts(
+        store,
+        briefing_run_id=run_id,
+        result=result,
     )
 
 
@@ -274,13 +333,15 @@ def test_normalized_fact_archive_round_trips_without_provider_payload() -> None:
     assert "mime" not in serialized.casefold()
 
 
-def test_two_runs_replay_lineage_and_synthetic_separation(tmp_path: Path) -> None:
+def test_two_recorded_runs_replay_lineage_and_synthetic_separation(
+    tmp_path: Path,
+) -> None:
     generated = datetime(2026, 7, 31, 13, tzinfo=UTC)
     as_of = datetime(2026, 7, 30, 14, tzinfo=UTC)
     with Database.open(tmp_path / "history.sqlite3") as database:
         store = StateStore(database)
         service = HistoricalBriefingService(store)
-        first = service.reconstruct(
+        first = service.synthetic(
             records=(_normalized("First archived task"),),
             coverage=_coverage(),
             briefing_date=DAY,
@@ -288,7 +349,7 @@ def test_two_runs_replay_lineage_and_synthetic_separation(tmp_path: Path) -> Non
             generated_at=generated,
             as_of=as_of,
         )
-        second = service.reconstruct(
+        second = service.synthetic(
             records=(_normalized("Second archived task"),),
             coverage=_coverage(),
             briefing_date=DAY,
@@ -296,13 +357,31 @@ def test_two_runs_replay_lineage_and_synthetic_separation(tmp_path: Path) -> Non
             generated_at=generated + timedelta(minutes=5),
             as_of=as_of,
         )
-        assert first.run_id is not None
-        assert second.run_id is not None
+        assert first.result is not None
+        assert second.result is not None
+        _persist_recorded_result(
+            store,
+            first.result,
+            run_id="recorded-first",
+            generated_at=generated,
+            as_of=as_of,
+        )
+        _persist_recorded_result(
+            store,
+            second.result,
+            run_id="recorded-second",
+            generated_at=generated + timedelta(minutes=5),
+            as_of=as_of,
+        )
         recorded = service.recorded_for_date(DAY)
         assert len(recorded) == 2
+        assert all(
+            item.run.historical_mode == HistoricalMode.RECORDED.value
+            for item in recorded
+        )
 
         replay = service.replay(
-            first.run_id,
+            "recorded-first",
             generated_at=generated + timedelta(days=1),
         )
         assert replay.result is not None
@@ -310,9 +389,9 @@ def test_two_runs_replay_lineage_and_synthetic_separation(tmp_path: Path) -> Non
         replay_state = store.get_briefing_presentation(replay.run_id)
         assert replay_state is not None
         assert replay_state.run.historical_mode == HistoricalMode.REPLAY.value
-        assert replay_state.run.originating_recorded_run_id == first.run_id
+        assert replay_state.run.originating_recorded_run_id == "recorded-first"
         assert "not the briefing originally shown" in replay.result.rendered.text
-        assert store.get_briefing_presentation(first.run_id) is not None
+        assert store.get_briefing_presentation("recorded-first") is not None
 
         before_synthetic = store.inspect_state().briefing_runs
         synthetic = service.synthetic(

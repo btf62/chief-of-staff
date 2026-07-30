@@ -32,7 +32,8 @@ because the system is not deployed or approved for operational use.
   recurrence projection, deletion, retention pruning, reset, and current
   limitations
 - [Local web interface operations](local-web.md) — loopback launch, stop,
-  reopen, data location, startup diagnostics, and security boundary
+  reopen, data location, startup diagnostics, security boundary, and
+  browser/print review
 - [Deterministic briefing operations](deterministic-briefing.md) — synthetic
   invocation, source coverage, composition, validation, and current
   limitations
@@ -43,3 +44,6 @@ because the system is not deployed or approved for operational use.
   accepted and exercised OpenAI project, retention, cost, request, and
   synthetic-comparison boundary plus Brad's task-specific Luna selection; the
   one-time authorization is consumed
+- [On-demand briefing runbook](runbooks/on-demand-briefing.md) — normal
+  connector-health, generation, local-interface, historical-lineage, and
+  human-acceptance workflow

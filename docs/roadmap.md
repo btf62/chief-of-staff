@@ -503,7 +503,8 @@ good,” explicitly accepting Milestone 10.
 
 ## Milestone 11 — Acceptance and Operational Hardening
 
-- **Status:** In progress — local and synthetic review gate
+- **Status:** Implementation and synthetic gate complete — awaiting Brad's
+  artifact review
 - **Intended user-visible outcome:** Brad can rely on an on-demand Daily
   Briefing v1 within its disclosed source coverage and privacy boundaries.
 - **Dependencies:** Milestone 10, approved live connector access, and an
@@ -525,6 +526,33 @@ good,” explicitly accepting Milestone 10.
 - **Explicitly excluded work:** Scheduled morning generation, service-level
   promises for an always-on host, external actions, deferred source systems,
   analytics, and multi-user operation.
+
+Supported operation now uses project-owned `make` commands for connector
+health, on-demand generation, and the loopback interface. Connector preflight
+keeps each approved source independent, avoids retrieval with unusable
+credentials, gives source-specific recovery guidance, and permits an honest
+reduced-coverage briefing when the remaining evidence is sufficient.
+
+The briefing model now preserves the whole selected day with explicit
+generation and effective-as-of times, written temporal states, and earlier or
+elapsed focus opportunities. Every successful briefing is archived as an
+immutable structured presentation with minimized normalized facts and
+lineage. Recorded, replayed, reconstructed, and synthetic modes remain
+distinct; reconstruction filters future facts and discloses historical
+limitations. Later corrections appear as an overlay, while deletion removes
+permitted archived content and replay facts and retains only the accepted
+minimal tombstone.
+
+The private mode-`0600` synthetic package covers representative day shapes,
+each single-source outage, historical lineage, safe source-title handling,
+1280- and 560-pixel browser views, and a three-page PDF. All 14 acceptance
+metrics passed, including 26 of 26 ranking scenarios, zero unsupported claims,
+zero false-positive actionable recommendations, and zero provider, live
+connector, authorization-refresh, or external-write operations.
+
+This result completes only the implementation and local/synthetic gate.
+Milestone 11 and the MVP remain unaccepted until Brad reviews the private
+artifacts and explicitly approves them.
 
 ## Deferred Milestone — Scheduled Morning Generation
 

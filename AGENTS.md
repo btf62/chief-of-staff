@@ -45,8 +45,10 @@ projection, and transactional deletion behavior are complete and accepted.
 Brad reviewed the actual interface at normal browser zoom, a successful
 five-source July 30 briefing, the correction controls and evidence links, and
 the four-page PDF rendering. Milestone 11 operational hardening is authorized
-only through its local and synthetic review gate. Brad's final review of the
-Milestone 11 artifacts remains the acceptance gate.
+only through its local and synthetic review gate. Its implementation and
+private synthetic acceptance package are complete. Brad's final review of the
+Milestone 11 artifacts remains the acceptance gate, so do not mark the
+milestone accepted or begin deferred work.
 Personal Gmail and Google Drive remain deferred and unauthorized.
 
 ## Working rules
@@ -120,10 +122,12 @@ Brad. Milestone 10 is accepted. Milestone 11 may proceed only within the
 currently approved local and synthetic hardening boundary. Do not perform
 another live retrieval, request or refresh authorization, invoke hosted
 inference, enable scheduling, add a connector, modify an external system, or
-begin a deferred milestone. Brad's final review of the private Milestone 11
-artifacts remains its acceptance gate. Satisfy that gate before treating the
-MVP as accepted. Record material new product or architecture decisions before
-implementing them.
+begin a deferred milestone. The implementation and private synthetic gate are
+complete; only corrections within the accepted Milestone 11 boundary may
+proceed without a new approval. Brad's final review of the private Milestone
+11 artifacts remains its acceptance gate. Satisfy that gate before treating
+the MVP as accepted. Record material new product or architecture decisions
+before implementing them.
 
 ## Validation
 

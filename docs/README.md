@@ -48,7 +48,9 @@ complete and accepted. Brad reviewed the actual interface at normal browser
 zoom, a successful five-source July 30 briefing, the correction controls and
 evidence links, and its four-page PDF rendering. Milestone 11 operational
 hardening is now in progress through its local and synthetic review gate;
-Brad's final artifact review remains required.
+the implementation and private synthetic acceptance package are complete, but
+Brad's final artifact review remains required before the milestone or MVP may
+be accepted.
 Design acceptance authorizes implementation within the accepted scope; it does
 not mean the complete Daily Briefing has passed operational acceptance.
 

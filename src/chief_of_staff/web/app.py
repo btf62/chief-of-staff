@@ -28,6 +28,7 @@ from chief_of_staff.domain import (
     BriefingPresentationItem,
     BriefingPresentationState,
     ConclusionState,
+    CoverageStatus,
     DispositionKind,
 )
 from chief_of_staff.persistence import (
@@ -219,7 +220,11 @@ def create_app(
             briefing=briefing,
             sections=_presentation_sections(briefing, state_store, _handles(app)),
             generation_mode=_generation_mode_display(
-                briefing.presentation.generation_mode
+                briefing.presentation.generation_mode,
+                has_reduced_coverage=any(
+                    item.coverage_status is not CoverageStatus.COMPLETE
+                    for item in briefing.coverage
+                ),
             ),
             generated_at=_format_generated_at(
                 briefing.run.generated_at or briefing.presentation.created_at,
@@ -635,14 +640,21 @@ def _coverage_view(
     )
 
 
-def _generation_mode_display(value: str) -> str:
+def _generation_mode_display(
+    value: str,
+    *,
+    has_reduced_coverage: bool = False,
+) -> str:
     labels = {
         "deterministic": "Deterministic briefing",
         "deterministic_full": "Deterministic briefing",
-        "deterministic_reduced": ("Deterministic briefing · reduced source coverage"),
-        "degraded": "Deterministic briefing · reduced source coverage",
+        "deterministic_reduced": "Deterministic briefing",
+        "degraded": "Deterministic briefing",
     }
-    return labels.get(value, "Deterministic briefing")
+    label = labels.get(value, "Deterministic briefing")
+    if value == "degraded" or has_reduced_coverage:
+        return f"{label} · reduced source coverage"
+    return label
 
 
 def _content_role(item: BriefingPresentationItem) -> str:

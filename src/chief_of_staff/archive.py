@@ -10,6 +10,7 @@ from datetime import UTC, date, datetime
 from chief_of_staff.connectors import SourceCoverage
 from chief_of_staff.domain import (
     BriefingArchivedFact,
+    BriefingPresentationState,
     BriefingRun,
     BriefingStatus,
     ConnectorDomain,
@@ -139,7 +140,7 @@ class HistoricalBriefingService:
     def recorded_for_date(
         self,
         briefing_date: date,
-    ) -> tuple[object, ...]:
+    ) -> tuple[BriefingPresentationState, ...]:
         """Return exact persisted presentations; never silently recompute."""
 
         return self.state_store.list_briefing_presentations_for_date(briefing_date)
