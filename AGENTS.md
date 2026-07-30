@@ -32,7 +32,10 @@ section prose, and it does not authorize routine hosted inference or private-
 source egress. The one-time provider authorization is consumed. No repeat
 provider call, source retrieval, authorization refresh, scope change, routine
 hosted inference, private-data egress, or model selection for another task is
-now authorized.
+now authorized. Milestone 9 deterministic ranking and composition has passed
+its 26-scenario synthetic implementation gate. Its private representative
+briefings await Brad's review, so Milestone 9 is not yet accepted as complete
+and Milestone 10 must not begin.
 Personal Gmail and Google Drive remain deferred and unauthorized.
 
 ## Working rules
@@ -102,10 +105,10 @@ have been exercised. Do not repeat live retrieval or provider calls, refresh
 authorization, broaden access, repeat Jira discovery, run an unrelated live
 retrieval, enable routine hosted inference, select a model for another
 inference task, or begin another connector without new explicit approval from
-Brad. The current task explicitly authorizes deterministic Milestone 9 work
-only. Satisfy a milestone's acceptance gate before beginning dependent work.
-Record material new product or architecture decisions before implementing
-them.
+Brad. Do not begin Milestone 10 before Brad accepts the Milestone 9
+representative briefings. Satisfy a milestone's acceptance gate before
+beginning dependent work. Record material new product or architecture
+decisions before implementing them.
 
 ## Validation
 

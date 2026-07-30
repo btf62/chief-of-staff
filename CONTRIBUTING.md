@@ -2,14 +2,14 @@
 
 ## Current scope
 
-The Version 1 design baseline and Milestones 1–4 are complete.
-[Milestone 4 — First Safe Connectors](docs/roadmap.md#milestone-4--first-safe-connectors)
-included one explicitly approved, bounded Google Calendar live trial.
-Contributions may improve authoritative documentation or the non-live
-implementation when explicitly authorized. Do not repeat live Calendar
-retrieval, broaden its boundary, refresh authorization, or begin another
-connector without new explicit approval. Do not begin a later milestone before
-its dependencies and acceptance gate are satisfied.
+The Version 1 design baseline and Milestones 1–8 are complete. Milestone 9's
+deterministic implementation and synthetic gate are complete; Brad's review
+of the representative briefings remains its acceptance gate. Contributions
+may improve authoritative documentation or the non-live implementation when
+explicitly authorized. Do not repeat live retrieval, make a provider call,
+broaden an authorization boundary, refresh credentials, begin another
+connector, or begin Milestone 10 without new explicit approval. Do not begin a
+later milestone before its dependencies and acceptance gate are satisfied.
 
 ## Python environment
 
@@ -54,6 +54,8 @@ Do not install project tools into the macOS system Python.
 | `make typecheck` | Run strict mypy checks against application, test, tool, and example Python |
 | `make test` | Run pytest |
 | `make docs-check` | Validate local Markdown links and anchors |
+| `make inference-eval` | Run the mocked Milestone 8 inference evaluation |
+| `make ranking-eval` | Generate the private synthetic Milestone 9 review artifacts |
 | `make demo` | Print the repository-plus-mocked-Calendar briefing |
 | `make demo-synthetic` | Print the fully synthetic reduced briefing |
 | `make check` | Run the complete local quality gate |

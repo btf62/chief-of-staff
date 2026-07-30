@@ -1,7 +1,7 @@
 # Architecture Overview
 
 - **Status:** Accepted
-- **Version:** 6
+- **Version:** 7
 - **Owner:** Brad
 - **Last updated:** 2026-07-28
 
@@ -397,8 +397,11 @@ Every inferred item retains:
 Ranking factors come from the feature specification and Leadership Model:
 stewardship, deadlines, calendar obligations, official six-month goals,
 seasonal initiatives, people waiting, relationship consequences, preparation,
-age, delegation, estimated effort, available time and energy, and opportunity
-cost.
+age, delegation, source-supported effort, available time and energy, and
+opportunity cost. Milestone 9 implements these as inspectable source-backed
+factors and qualitative bands. Overdue state, assignment, recency, and source
+priority cannot independently force a primary outcome. Genuinely qualitative
+ties retain their evidence and use a documented deterministic fallback.
 
 Corrections influence future behavior through explicit local overlays,
 versioned rules, and reviewed regression scenarios. They do not silently train
@@ -478,6 +481,12 @@ local state.
 The recommendation engine produces a structured briefing plan before prose is
 generated. The composer may summarize and connect approved content, but it
 does not invent additional facts or independently select new priorities.
+
+The Milestone 9 plan distinguishes authoritative facts, explicit detections,
+inferred conclusions, recommendations, and presentation synthesis. It retains
+ordered candidates, selected outcome IDs, factor evidence, correction
+suppressions, presentation-level duplicate suppressions, unresolved
+conflicts, note inputs, confidence, provenance, and coverage warnings.
 
 Composition enforces:
 

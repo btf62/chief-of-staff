@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 
@@ -15,7 +16,7 @@ from chief_of_staff.connectors import (
     SourceCoverage,
     connector_instance_key,
 )
-from chief_of_staff.domain import CoverageStatus
+from chief_of_staff.domain import CoverageStatus, RecurrenceDecision
 from chief_of_staff.pipeline.briefing import (
     BriefingPlan,
     RenderedBriefing,
@@ -54,6 +55,8 @@ class DeterministicBriefingPipeline:
         self,
         context: InvocationContext,
         connectors: tuple[ReadOnlyConnector, ...],
+        *,
+        recurrence_decisions: Mapping[str, RecurrenceDecision] | None = None,
     ) -> PipelineResult:
         """Execute the deterministic pipeline on explicitly supplied connectors."""
 
@@ -164,6 +167,7 @@ class DeterministicBriefingPipeline:
             context,
             deduplication.records,
             tuple(coverage),
+            recurrence_decisions=recurrence_decisions,
         )
         coverage_with_display_counts = _coverage_with_display_counts(
             plan,
@@ -173,6 +177,7 @@ class DeterministicBriefingPipeline:
             context,
             deduplication.records,
             coverage_with_display_counts,
+            recurrence_decisions=recurrence_decisions,
         )
         rendered = render_briefing(plan)
         validate_briefing(plan, rendered)
@@ -186,6 +191,8 @@ class DeterministicBriefingPipeline:
 def recompose_pipeline_result(
     result: PipelineResult,
     context: InvocationContext,
+    *,
+    recurrence_decisions: Mapping[str, RecurrenceDecision] | None = None,
 ) -> PipelineResult:
     """Compose another date from an already retrieved normalized snapshot."""
 
@@ -194,9 +201,15 @@ def recompose_pipeline_result(
         context,
         result.deduplication.records,
         result.plan.coverage,
+        recurrence_decisions=recurrence_decisions,
     )
     coverage = _coverage_with_display_counts(plan, result.plan.coverage)
-    plan = build_reduced_plan(context, result.deduplication.records, coverage)
+    plan = build_reduced_plan(
+        context,
+        result.deduplication.records,
+        coverage,
+        recurrence_decisions=recurrence_decisions,
+    )
     rendered = render_briefing(plan)
     validate_briefing(plan, rendered)
     return replace(result, plan=plan, rendered=rendered)

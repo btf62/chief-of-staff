@@ -76,6 +76,17 @@ class NormalizedRecord:
     source_owned_risk: bool = False
     source_created_at: datetime | None = None
     source_updated_at: datetime | None = None
+    hard_deadline: bool = False
+    primary_stewardship: bool = False
+    relationship_consequence: bool = False
+    six_month_goal: bool = False
+    seasonal_initiative: bool = False
+    delegation_opportunity: bool = False
+    energy_requirement: str | None = None
+    opportunity_cost: str | None = None
+    uncertainty: str | None = None
+    inference_explanation: str | None = None
+    evidence_fingerprint: str | None = None
     associated_provenance: tuple[Provenance, ...] = ()
     association_conflicts: tuple[str, ...] = ()
 
@@ -159,6 +170,33 @@ def normalize_item(
         source_owned_risk=_boolean(item, "source_owned_risk", default=False),
         source_created_at=_optional_datetime(item, "source_created_at", zone),
         source_updated_at=_optional_datetime(item, "source_updated_at", zone),
+        hard_deadline=_boolean(item, "hard_deadline", default=False),
+        primary_stewardship=_boolean(item, "primary_stewardship", default=False),
+        relationship_consequence=_boolean(
+            item,
+            "relationship_consequence",
+            default=False,
+        ),
+        six_month_goal=_boolean(item, "six_month_goal", default=False),
+        seasonal_initiative=_boolean(item, "seasonal_initiative", default=False),
+        delegation_opportunity=_boolean(
+            item,
+            "delegation_opportunity",
+            default=False,
+        ),
+        energy_requirement=_optional_choice(
+            item,
+            "energy_requirement",
+            {"low", "moderate", "high"},
+        ),
+        opportunity_cost=_optional_string(item, "opportunity_cost"),
+        uncertainty=_optional_choice(
+            item,
+            "uncertainty",
+            {"low", "moderate", "high", "unknown"},
+        ),
+        inference_explanation=_optional_string(item, "inference_explanation"),
+        evidence_fingerprint=_optional_string(item, "evidence_fingerprint"),
     )
 
 
@@ -177,6 +215,21 @@ def _optional_string(item: SourceItem, key: str) -> str | None:
         raise ValueError(f"{key} must be a string")
     stripped = value.strip()
     return stripped or None
+
+
+def _optional_choice(
+    item: SourceItem,
+    key: str,
+    permitted: set[str],
+) -> str | None:
+    value = _optional_string(item, key)
+    if value is None:
+        return None
+    normalized = value.casefold()
+    if normalized not in permitted:
+        allowed = ", ".join(sorted(permitted))
+        raise ValueError(f"{key} must be one of: {allowed}")
+    return normalized
 
 
 def _integer(item: SourceItem, key: str, *, default: int) -> int:

@@ -1,7 +1,7 @@
 # Product Requirements
 
 - **Status:** Accepted
-- **Version:** 3
+- **Version:** 4
 - **Owner:** Brad
 - **Last updated:** 2026-07-28
 
@@ -75,6 +75,7 @@ All product capabilities must:
 | Daily Briefing v1 | [Specification](features/daily-briefing-v1.md) | Accepted |
 | Deterministic Explicit Detection v1 | [Specification](features/deterministic-explicit-detection-v1.md) | Accepted |
 | Contextual Action Classification v1 | [Specification](features/contextual-action-classification-v1.md) | Accepted |
+| Ranking and Briefing Composition v1 | [Specification](features/ranking-and-briefing-composition-v1.md) | Accepted |
 
 Detailed feature specifications belong in the
 [feature specifications directory](features/README.md).

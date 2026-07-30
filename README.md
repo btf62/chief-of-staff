@@ -7,7 +7,7 @@ identifying priorities, commitments, and useful signals.
 
 ## Status
 
-**Phase:** Milestones 1–8 complete; deterministic Milestone 9 authorized
+**Phase:** Milestones 1–8 complete; Milestone 9 implementation review pending
 
 The Python, local-state, deterministic briefing, repository connector, and
 read-only Google Calendar foundations are complete. An explicitly approved,
@@ -41,7 +41,11 @@ and selected OpenAI `gpt-5.6-luna` with low reasoning for
 remains disabled by default, the one-time authorization is consumed, and
 routine hosted inference and private-data egress remain unauthorized. No
 model is selected for ranking or synthesis. Personal Gmail and Google Drive
-remain deferred and unauthorized.
+remain deferred and unauthorized. Milestone 9 now has explainable
+deterministic ranking, an application-owned briefing plan, conservative
+duplicate and conflict handling, canonical composition, and a passing
+26-scenario synthetic gate. Brad's review of the private representative
+briefings remains the milestone acceptance gate.
 
 ## Repository map
 

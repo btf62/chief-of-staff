@@ -9,6 +9,15 @@ No strict versioning scheme is promised before a distributable product exists.
 
 ### Added
 
+- An accepted Ranking and Briefing Composition v1 specification, explainable
+  qualitative priority bands with source-backed factors and deterministic tie
+  behavior, correction-before-ranking, and untrusted priority-instruction
+  exclusion.
+- A formalized application-owned briefing plan retaining semantic content
+  roles, selected outcomes, note inputs, correction and duplicate
+  suppressions, conflicts, uncertainty, provenance, and coverage warnings.
+- A 26-scenario Milestone 9 synthetic evaluation with five private mode-`0600`
+  representative briefings and an aggregate report under ignored local state.
 - Initial documentation-first repository structure.
 - Canonical locations for foundational, product, architecture, connector,
   decision, operations, and runbook documentation.

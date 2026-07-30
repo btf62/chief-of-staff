@@ -6,7 +6,7 @@ RUFF := $(VENV)/bin/ruff
 MYPY := $(VENV)/bin/mypy
 PYTEST := $(VENV)/bin/pytest
 
-.PHONY: bootstrap format format-check lint typecheck test docs-check inference-eval demo demo-synthetic briefing check
+.PHONY: bootstrap format format-check lint typecheck test docs-check inference-eval ranking-eval demo demo-synthetic briefing check
 
 bootstrap:
 	$(PYTHON) -m venv $(VENV)
@@ -35,6 +35,9 @@ docs-check:
 inference-eval:
 	$(VENV_PYTHON) tools/evaluate_inference.py
 
+ranking-eval:
+	$(VENV_PYTHON) tools/evaluate_ranking.py
+
 demo:
 	$(VENV_PYTHON) examples/generate_connector_briefing.py
 
@@ -44,4 +47,4 @@ demo-synthetic:
 briefing:
 	$(VENV_PYTHON) -m chief_of_staff.gmail_live_cli briefing
 
-check: lint typecheck test docs-check inference-eval
+check: lint typecheck test docs-check inference-eval ranking-eval

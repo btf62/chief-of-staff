@@ -1,7 +1,7 @@
 # Feature: Daily Briefing v1
 
 - **Status:** Accepted
-- **Version:** 9
+- **Version:** 10
 - **Owner:** Brad
 - **Last updated:** 2026-07-28
 
@@ -676,5 +676,6 @@ ADR as appropriate.
 - [Constitution](../../foundations/constitution.md)
 - [Leadership Model](../../foundations/leadership-model.md)
 - [Technical Architecture](../../architecture/overview.md)
+- [Ranking and Briefing Composition v1](ranking-and-briefing-composition-v1.md)
 - [ADR-0001: Documentation-First Development](../../decisions/0001-documentation-first-development.md)
 - [ADR-0002: Governing Document Authority](../../decisions/0002-define-governing-document-authority.md)

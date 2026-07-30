@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from enum import StrEnum
@@ -10,9 +11,20 @@ from itertools import pairwise
 from zoneinfo import ZoneInfo
 
 from chief_of_staff.connectors import SourceCoverage
-from chief_of_staff.domain import ConnectorDomain, CoverageStatus
+from chief_of_staff.domain import (
+    ConnectorDomain,
+    CoverageStatus,
+    RecurrenceDecision,
+)
 from chief_of_staff.pipeline.context import InvocationContext, WorkdayType
 from chief_of_staff.pipeline.normalization import NormalizedRecord, RecordKind
+from chief_of_staff.pipeline.ranking import (
+    PriorityBand,
+    RankedCandidate,
+    RankingFactorKind,
+    SuppressedCandidate,
+    rank_candidates,
+)
 
 MAX_WORDS = 1000
 PREFERRED_WORDS = 800
@@ -31,6 +43,12 @@ FOCUS_WINDOW_END = time(17)
 FOCUS_BLOCK_DURATION = timedelta(minutes=90)
 FOCUS_TRANSITION_MARGIN = timedelta(minutes=15)
 CONTROL_TOKEN = re.compile(r"(?<!\S)@[A-Za-z0-9_-]+")
+UNTRUSTED_PRIORITY_INSTRUCTION = re.compile(
+    r"\b(?:ignore (?:policy|instructions)|"
+    r"make (?:this|me) (?:the )?(?:top|highest) priority|"
+    r"override (?:the )?(?:ranking|priority))\b",
+    flags=re.IGNORECASE,
+)
 
 
 class BriefingSectionName(StrEnum):
@@ -60,6 +78,16 @@ class CalendarEventClassification(StrEnum):
     ALL_DAY_CONTEXT = "All-day context"
     STATUS_SIGNAL = "Status signal"
     SCHEDULED_EVENT = "Scheduled event"
+
+
+class BriefingContentKind(StrEnum):
+    """Semantic role of planned content before presentation rendering."""
+
+    AUTHORITATIVE_FACT = "authoritative_source_fact"
+    EXPLICIT_DETECTION = "explicit_detection"
+    INFERRED_CONCLUSION = "inferred_conclusion"
+    RECOMMENDATION = "recommendation"
+    PRESENTATION_SYNTHESIS = "presentation_only_synthesis"
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,6 +170,12 @@ class BriefingItem:
     detail: str
     sources: tuple[SourceLink, ...]
     priority_inputs: PriorityInputs | None = None
+    content_kind: BriefingContentKind = BriefingContentKind.AUTHORITATIVE_FACT
+    inference_explanation: str | None = None
+    uncertainty: str | None = None
+    sort_at: datetime | None = None
+    priority_band: PriorityBand | None = None
+    ranking_factor_kinds: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -206,12 +240,52 @@ class FocusWindow:
 
 
 @dataclass(frozen=True, slots=True)
+class ChiefOfStaffNoteInputs:
+    """Supported facts and recommendations available to deterministic synthesis."""
+
+    workday_type: WorkdayType
+    fixed_commitment_ids: tuple[str, ...]
+    primary_outcome_id: str | None
+    focus_window: tuple[datetime, datetime] | None
+    tomorrow_sequence_ids: tuple[str, ...]
+    workday_diagnostics: tuple[str, ...]
+    todoist_ranking_degraded: bool
+    unresolved_conflict_record_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class SuppressedDuplicate:
+    """Presentation-level suppression that preserves every source record."""
+
+    representative_record_id: str
+    suppressed_record_id: str
+    sources: tuple[SourceLink, ...]
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
+class PlanConflict:
+    """Material disagreement retained for presentation and review."""
+
+    record_id: str
+    conflicting_fields: tuple[str, ...]
+    sources: tuple[SourceLink, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class BriefingPlan:
     """Structured content selected before Markdown rendering."""
 
     context: InvocationContext
     coverage: tuple[SourceCoverage, ...]
     sections: tuple[BriefingSection, ...]
+    ordered_eligible_candidates: tuple[RankedCandidate, ...] = ()
+    selected_outcome_ids: tuple[str, ...] = ()
+    note_inputs: ChiefOfStaffNoteInputs | None = None
+    suppressed_duplicates: tuple[SuppressedDuplicate, ...] = ()
+    suppressed_by_correction: tuple[SuppressedCandidate, ...] = ()
+    unresolved_conflicts: tuple[PlanConflict, ...] = ()
+    coverage_warnings: tuple[str, ...] = ()
     task_candidate_audits: tuple[TaskCandidateAudit, ...] = ()
     task_planning_confidences: tuple[TaskPlanningConfidence, ...] = ()
     generation_mode: str = "deterministic_reduced"
@@ -237,6 +311,8 @@ def build_reduced_plan(
     context: InvocationContext,
     records: tuple[NormalizedRecord, ...],
     coverage: tuple[SourceCoverage, ...],
+    *,
+    recurrence_decisions: Mapping[str, RecurrenceDecision] | None = None,
 ) -> BriefingPlan:
     """Compose a factual reduced-mode plan without hosted inference."""
 
@@ -299,19 +375,63 @@ def build_reduced_plan(
             confidence_by_source.get(record.provenance.source),
         )
     )
+    conclusion_records = tuple(
+        record
+        for record in records
+        if record.kind
+        in {
+            RecordKind.WAITING_ITEM,
+            RecordKind.COMMITMENT,
+            RecordKind.PREPARATION_ITEM,
+        }
+        and _is_presentable_conclusion(record)
+    )
     candidate_task_ids = {record.id for record in task_records}
-    prioritized_tasks = sorted(
-        task_records,
-        key=lambda record: _priority_sort_key(record, today),
+    focus_window = _recommended_focus_window(todays_calendar_context, context)
+    ranking = rank_candidates(
+        (*task_records, *conclusion_records),
+        briefing_date=today,
+        recurrence_decisions=recurrence_decisions,
+        available_calendar_window=(
+            None
+            if focus_window is None
+            else (focus_window.starts_at, focus_window.ends_at)
+        ),
+    )
+    ranked_by_id = {candidate.record.id: candidate for candidate in ranking.ordered}
+    prioritized_tasks = [
+        candidate.record
+        for candidate in ranking.ordered
+        if candidate.record.kind is RecordKind.TASK
+    ]
+    ranked_conclusions = tuple(
+        candidate.record
+        for candidate in ranking.ordered
+        if candidate.record.kind
+        in {
+            RecordKind.WAITING_ITEM,
+            RecordKind.COMMITMENT,
+            RecordKind.PREPARATION_ITEM,
+        }
+    )
+    suppressed_duplicates = _presentation_duplicate_suppressions(
+        prioritized_tasks,
+        today,
     )
     prioritized_tasks = _collapse_associated_task_candidates(
         prioritized_tasks,
         today,
     )
     outcome_candidates = tuple(
-        record for record in prioritized_tasks if _is_outcome_candidate(record, today)
+        record
+        for record in prioritized_tasks
+        if ranked_by_id[record.id].band
+        in {
+            PriorityBand.CRITICAL,
+            PriorityBand.TODAY,
+        }
+        and _is_outcome_candidate(record, today)
     )[:MAX_OUTCOMES]
-    focus_window = _recommended_focus_window(todays_calendar_context, context)
     todoist_confidence = confidence_by_source.get("todoist")
     sections: list[BriefingSection] = [
         BriefingSection(
@@ -331,7 +451,12 @@ def build_reduced_plan(
             BriefingSection(
                 name=BriefingSectionName.TODAYS_OUTCOMES,
                 items=tuple(
-                    _outcome_item(record, today) for record in outcome_candidates
+                    _outcome_item(
+                        record,
+                        today,
+                        ranked_by_id[record.id],
+                    )
+                    for record in outcome_candidates
                 ),
             )
         )
@@ -376,10 +501,8 @@ def build_reduced_plan(
     )
     explicit_preparation = tuple(
         record
-        for record in records
-        if record.kind is RecordKind.PREPARATION_ITEM
-        and record.preparation is not None
-        and record.status == "explicit"
+        for record in ranked_conclusions
+        if record.kind is RecordKind.PREPARATION_ITEM and record.preparation is not None
     )
     preparation = (*calendar_preparation, *task_preparation, *explicit_preparation)
     if preparation:
@@ -394,9 +517,8 @@ def build_reduced_plan(
         sorted(
             (
                 record
-                for record in records
+                for record in ranked_conclusions
                 if record.kind is RecordKind.WAITING_ITEM
-                and record.status == "explicit"
             ),
             key=_email_conclusion_sort_key,
         )
@@ -418,11 +540,7 @@ def build_reduced_plan(
         and record.source_owned_risk
     )
     email_commitments_at_risk = tuple(
-        record
-        for record in records
-        if record.kind is RecordKind.COMMITMENT
-        and record.explicit_commitment
-        and record.status == "explicit"
+        record for record in ranked_conclusions if record.kind is RecordKind.COMMITMENT
     )
     commitments_at_risk = tuple(
         sorted(
@@ -539,10 +657,52 @@ def build_reduced_plan(
         )
     )
 
+    conflicts = tuple(
+        PlanConflict(
+            record_id=record.id,
+            conflicting_fields=record.association_conflicts,
+            sources=_source_links(record),
+        )
+        for record in records
+        if record.association_conflicts
+    )
+    note_inputs = ChiefOfStaffNoteInputs(
+        workday_type=context.workday_type,
+        fixed_commitment_ids=tuple(
+            record.id
+            for record in todays_calendar_context
+            if classify_calendar_event(record)
+            is CalendarEventClassification.FIXED_COMMITMENT
+        ),
+        primary_outcome_id=(
+            None if not outcome_candidates else outcome_candidates[0].id
+        ),
+        focus_window=(
+            None
+            if focus_window is None
+            else (focus_window.starts_at, focus_window.ends_at)
+        ),
+        tomorrow_sequence_ids=tuple(record.id for record in tomorrow_sequence),
+        workday_diagnostics=context.workday_diagnostics,
+        todoist_ranking_degraded=bool(
+            todoist_confidence is not None
+            and todoist_confidence.relative_ranking_degraded
+        ),
+        unresolved_conflict_record_ids=tuple(
+            conflict.record_id for conflict in conflicts
+        ),
+    )
     return BriefingPlan(
         context=context,
         coverage=coverage,
         sections=tuple(sections),
+        ordered_eligible_candidates=ranking.ordered,
+        selected_outcome_ids=tuple(record.id for record in outcome_candidates),
+        note_inputs=note_inputs,
+        suppressed_duplicates=suppressed_duplicates,
+        suppressed_by_correction=ranking.suppressed,
+        unresolved_conflicts=conflicts,
+        coverage_warnings=_coverage_warnings(coverage),
         task_candidate_audits=_task_candidate_audits(
             available_task_records,
             task_records,
@@ -601,8 +761,12 @@ def validate_briefing(
         errors.append("Chief of Staff Note exceeds 150 words")
     if note is not None and "source coverage" in (note.summary or "").casefold():
         errors.append("Chief of Staff Note must not contain source coverage metadata")
+    if plan.note_inputs is None:
+        errors.append("Chief of Staff Note inputs are missing")
     if rendered.word_count > MAX_WORDS:
         errors.append("briefing exceeds the 1,000-word maximum")
+    if len(plan.selected_outcome_ids) > MAX_OUTCOMES:
+        errors.append("structured plan selects more than three outcomes")
 
     seen_keys: set[str] = set()
     for section in plan.sections:
@@ -630,7 +794,31 @@ def validate_briefing(
                 errors.append(f"{item.key} has no source provenance")
             if item.key in seen_keys:
                 errors.append(f"{item.key} appears more than once")
+            if item.content_kind is BriefingContentKind.INFERRED_CONCLUSION and (
+                not item.inference_explanation or not item.uncertainty
+            ):
+                errors.append(
+                    f"{item.key} is inferred without explanation and uncertainty"
+                )
             seen_keys.add(item.key)
+
+    calendar_section = next(
+        (
+            section
+            for section in plan.sections
+            if section.name is BriefingSectionName.TODAYS_CALENDAR
+        ),
+        None,
+    )
+    if calendar_section is not None:
+        calendar_times = [
+            item.sort_at for item in calendar_section.items if item.sort_at is not None
+        ]
+        if calendar_times != sorted(calendar_times):
+            errors.append("Calendar items are not chronological")
+
+    if any(len(item.sources) < 2 for item in plan.suppressed_duplicates):
+        errors.append("duplicate suppression must preserve every source link")
 
     coverage_sections = tuple(
         section
@@ -792,6 +980,20 @@ def _coverage_summary(
     return ". ".join(coverage_parts) + "."
 
 
+def _coverage_warnings(
+    coverage: tuple[SourceCoverage, ...],
+) -> tuple[str, ...]:
+    warnings: list[str] = []
+    for report in coverage:
+        label = _coverage_label(report)
+        if report.status is not CoverageStatus.COMPLETE:
+            warnings.append(f"{label}: {report.status.value}")
+        if report.error_category is not None:
+            warnings.append(f"{label}: {report.error_category}")
+        warnings.extend(f"{label}: {warning}" for warning in report.warnings)
+    return tuple(warnings)
+
+
 def _coverage_boundary_disclosure(report: SourceCoverage) -> str | None:
     """Keep partial/failure disclosure plain without reproducing audit detail."""
 
@@ -832,6 +1034,13 @@ def _normal_workday_note(
             f"The strongest supported outcome is {_display_title(primary_outcome)}, "
             f"{_brief_due_phrase(primary_outcome, context.briefing_date)}."
         )
+        if primary_outcome.association_conflicts:
+            parts.append(
+                "The central priority tension is an unresolved cross-source "
+                "disagreement about "
+                + ", ".join(primary_outcome.association_conflicts)
+                + "; preserve both facts and verify the conflict before acting."
+            )
     else:
         parts.append("No task has enough current evidence to become a primary outcome.")
     if focus_window is not None and primary_outcome is not None:
@@ -1198,6 +1407,16 @@ def _is_material_status_signal(record: NormalizedRecord) -> bool:
     return event_type == "outofoffice" or record.preparation is not None
 
 
+def _is_presentable_conclusion(record: NormalizedRecord) -> bool:
+    if record.status == "explicit":
+        return True
+    return bool(
+        record.status == "inferred"
+        and record.inference_explanation
+        and record.uncertainty == "low"
+    )
+
+
 def _is_outcome_candidate(record: NormalizedRecord, today: date) -> bool:
     return record.explicit_commitment or (
         record.due_at is not None and record.due_at.date() == today
@@ -1250,6 +1469,8 @@ def _task_is_daily_candidate(
     planning_confidence: TaskPlanningConfidence | None,
 ) -> bool:
     if not context.is_workday:
+        return False
+    if _contains_untrusted_priority_instruction(record):
         return False
     due_date = None if record.due_at is None else record.due_at.date()
     if context.workday_type is WorkdayType.MINISTRY_WORKDAY:
@@ -1329,6 +1550,44 @@ def _collapse_associated_task_candidates(
             if candidate.id != representative.id
         )
     return [record for record in records if record.id not in suppressed]
+
+
+def _presentation_duplicate_suppressions(
+    records: list[NormalizedRecord],
+    today: date,
+) -> tuple[SuppressedDuplicate, ...]:
+    candidates = {record.id: record for record in records}
+    decisions: dict[tuple[str, str], SuppressedDuplicate] = {}
+    for record in records:
+        related = tuple(
+            candidates[related_id]
+            for related_id in record.related_source_ids
+            if related_id in candidates
+        )
+        if not related:
+            continue
+        representative = min(
+            (record, *related),
+            key=lambda candidate: _priority_sort_key(candidate, today),
+        )
+        for duplicate in (record, *related):
+            if duplicate.id == representative.id:
+                continue
+            key = (representative.id, duplicate.id)
+            decisions[key] = SuppressedDuplicate(
+                representative_record_id=representative.id,
+                suppressed_record_id=duplicate.id,
+                sources=tuple(
+                    dict.fromkeys(
+                        (*_source_links(representative), *_source_links(duplicate))
+                    )
+                ),
+                reason=(
+                    "Strong explicit cross-source association supports one visible "
+                    "recommendation while retaining both authoritative records."
+                ),
+            )
+    return tuple(decisions[key] for key in sorted(decisions))
 
 
 def _todoist_task_is_daily_candidate(
@@ -1476,6 +1735,8 @@ def _task_candidate_exclusion_reason(
 ) -> str:
     if not context.is_workday:
         return "configured non-workday"
+    if _contains_untrusted_priority_instruction(record):
+        return "untrusted source content attempted to direct ranking"
     if context.workday_type is WorkdayType.MINISTRY_WORKDAY:
         return "unrelated to ministry workday"
     due_date = None if record.due_at is None else record.due_at.date()
@@ -1494,6 +1755,13 @@ def _task_candidate_exclusion_reason(
             return "overdue Jira issue without another current signal"
         return "Jira assignment or priority without current briefing evidence"
     return "outside seven-day daily horizon without another priority signal"
+
+
+def _contains_untrusted_priority_instruction(record: NormalizedRecord) -> bool:
+    candidate_text = " ".join(
+        value for value in (record.title, record.summary) if value is not None
+    )
+    return UNTRUSTED_PRIORITY_INSTRUCTION.search(candidate_text) is not None
 
 
 def _recommended_focus_window(
@@ -1607,6 +1875,7 @@ def _recommended_focus_section(
                 headline=f"{span} available focus window",
                 detail=detail,
                 sources=sources,
+                content_kind=BriefingContentKind.RECOMMENDATION,
             ),
         ),
     )
@@ -1818,16 +2087,55 @@ def _natural_clock(value: datetime) -> tuple[str, str]:
     )
 
 
-def _outcome_item(record: NormalizedRecord, today: date) -> BriefingItem:
+def _outcome_item(
+    record: NormalizedRecord,
+    today: date,
+    ranked: RankedCandidate,
+) -> BriefingItem:
     inputs = _priority_inputs(record, today)
     deadline = _source_due_sentence(record, today)
+    ranking_reason = _visible_ranking_reason(ranked)
     return BriefingItem(
         key=f"outcome:{record.id}",
         headline=_display_title(record),
-        detail=f"{inputs.explanation()}. {deadline}{_association_detail(record)}",
+        detail=f"{ranking_reason} {deadline}{_association_detail(record)}",
         sources=_source_links(record),
         priority_inputs=inputs,
+        content_kind=BriefingContentKind.RECOMMENDATION,
+        priority_band=ranked.band,
+        ranking_factor_kinds=tuple(factor.kind.value for factor in ranked.factors),
     )
+
+
+def _visible_ranking_reason(candidate: RankedCandidate) -> str:
+    band_label = {
+        PriorityBand.CRITICAL: "Critical",
+        PriorityBand.TODAY: "Today's",
+        PriorityBand.APPROACHING: "Approaching",
+        PriorityBand.STRATEGIC: "Strategic",
+        PriorityBand.BACKGROUND: "Background",
+    }[candidate.band]
+    labels = {
+        RankingFactorKind.HARD_DEADLINE: "a source-marked hard deadline",
+        RankingFactorKind.DUE_DATE: "the current source due date",
+        RankingFactorKind.CALENDAR_OBLIGATION: "a Calendar-bound obligation",
+        RankingFactorKind.PREPARATION_DEPENDENCY: "required preparation",
+        RankingFactorKind.PERSON_OR_TEAM_BLOCKED: "a person or team is blocked",
+        RankingFactorKind.PRIMARY_STEWARDSHIP: "primary stewardship",
+        RankingFactorKind.MINISTRY_OR_RELATIONSHIP_CONSEQUENCE: (
+            "a ministry or relationship consequence"
+        ),
+        RankingFactorKind.SIX_MONTH_GOAL: "an official six-month goal",
+        RankingFactorKind.SEASONAL_INITIATIVE: "a current seasonal initiative",
+        RankingFactorKind.BLOCKER_OR_DEPENDENCY: "a blocker or dependency",
+        RankingFactorKind.CORRECTION_OR_DISPOSITION: "accepted local correction state",
+    }
+    reasons = tuple(
+        labels[factor.kind] for factor in candidate.factors if factor.kind in labels
+    )
+    if not reasons:
+        return f"{band_label} priority from supported current source evidence."
+    return f"{band_label} priority because of {', '.join(reasons)}."
 
 
 def _calendar_item(record: NormalizedRecord) -> BriefingItem:
@@ -1876,10 +2184,16 @@ def _jira_risk_item(record: NormalizedRecord) -> BriefingItem:
 
 
 def _email_waiting_item(record: NormalizedRecord) -> BriefingItem:
+    detail = record.summary or "A direct request has no later bounded reply."
+    if record.status == "inferred":
+        detail = (
+            f"Inferred with {record.uncertainty} uncertainty: "
+            f"{record.inference_explanation} {detail}"
+        )
     return _record_item(
         record,
         key_prefix="gmail-waiting",
-        detail=record.summary or "A direct request has no later bounded reply.",
+        detail=detail,
     )
 
 
@@ -1888,6 +2202,11 @@ def _email_commitment_risk_item(
     today: date,
 ) -> BriefingItem:
     explanation = record.summary or "An explicit sent commitment is at risk."
+    if record.status == "inferred":
+        explanation = (
+            f"Inferred with {record.uncertainty} uncertainty: "
+            f"{record.inference_explanation} {explanation}"
+        )
     return _record_item(
         record,
         key_prefix="gmail-commitment-risk",
@@ -1924,6 +2243,8 @@ def _looking_ahead_item(record: NormalizedRecord) -> BriefingItem:
             if record.all_day
             else f"{when:%A, %B %-d at %-I:%M %p}."
         )
+    if record.preparation is not None:
+        detail += f" Preparation: {record.preparation}"
     return _record_item(record, key_prefix="ahead", detail=detail)
 
 
@@ -1933,11 +2254,25 @@ def _record_item(
     key_prefix: str,
     detail: str,
 ) -> BriefingItem:
+    if record.status == "inferred":
+        content_kind = BriefingContentKind.INFERRED_CONCLUSION
+    elif record.kind in {
+        RecordKind.WAITING_ITEM,
+        RecordKind.COMMITMENT,
+        RecordKind.PREPARATION_ITEM,
+    }:
+        content_kind = BriefingContentKind.EXPLICIT_DETECTION
+    else:
+        content_kind = BriefingContentKind.AUTHORITATIVE_FACT
     return BriefingItem(
         key=f"{key_prefix}:{record.id}",
         headline=_display_title(record),
         detail=detail + _association_detail(record),
         sources=_source_links(record),
+        content_kind=content_kind,
+        inference_explanation=record.inference_explanation,
+        uncertainty=record.uncertainty,
+        sort_at=record.start_at,
     )
 
 

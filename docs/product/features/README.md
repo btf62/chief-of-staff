@@ -15,3 +15,4 @@ when creating a specification.
 | [Daily Briefing v1](daily-briefing-v1.md) | First usable product | Accepted |
 | [Deterministic Explicit Detection v1](deterministic-explicit-detection-v1.md) | Milestone 7 | Accepted |
 | [Contextual Action Classification v1](contextual-action-classification-v1.md) | Milestone 8 | Accepted |
+| [Ranking and Briefing Composition v1](ranking-and-briefing-composition-v1.md) | Milestone 9 | Accepted |

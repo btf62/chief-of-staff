@@ -4,10 +4,10 @@
 - **Owner:** Brad
 - **Last updated:** 2026-07-25
 
-This document describes the implemented Milestone 3 deterministic
-reduced-briefing pipeline. It supports safe development and evaluation with
-synthetic records only. It does not authorize live source access, hosted
-inference, external writes, private fixtures, or unattended scheduling.
+This document describes the deterministic briefing pipeline through the
+Milestone 9 synthetic gate. It supports safe development and evaluation with
+synthetic records. It does not authorize live source access, hosted inference,
+external writes, private fixtures, or unattended scheduling.
 
 ## Run the synthetic briefing
 
@@ -28,6 +28,16 @@ Run the complete quality gate with:
 make check
 ```
 
+Generate the private Milestone 9 representative review artifacts with:
+
+```text
+make ranking-eval
+```
+
+That command uses static synthetic connectors only. It writes mode-`0600`
+artifacts under ignored `.local/milestone-9/review/` and makes no provider,
+live connector, credential, or external-write call.
+
 ## Implemented flow
 
 The reduced pipeline:
@@ -47,16 +57,20 @@ The reduced pipeline:
    inference. Routine working-location signals remain available as context but
    are suppressed from visible sections unless explicit evidence makes them
    material.
-8. Selects factual items using visible deterministic priority inputs and
-   applies the lighter non-workday presentation policy.
+8. Applies correction and disposition state before explainable ranking.
+   Qualitative priority bands retain source-backed factors, avoid treating
+   overdue state or source priority as final judgment, and use a documented
+   deterministic fallback for unresolved qualitative ties.
 9. Synthesizes only timestamp-obvious schedule implications: confirmed span,
    overlaps, back-to-back events, transitions of 15 minutes or less, and
    tomorrow-morning sequences. `ONL` may be expanded to the approved
    `Online Campus` label when every event in a sequence contains that alias.
    On a non-workday, an unusually early or tightly sequenced next-day block
    informs a concise preparation cutoff in the Chief of Staff Note.
-10. Builds a structured plan in the canonical Daily Briefing order, omitting
-    content sections without material content and appending Source Coverage.
+10. Builds a structured plan that separates source facts, explicit
+    detections, inferred conclusions, recommendations, and presentation
+    synthesis; retains duplicate suppression, conflicts, note inputs, and
+    coverage warnings; omits immaterial sections; and appends Source Coverage.
 11. Renders Markdown and validates provenance, duplicate keys, section order,
     coverage placement, section item limits, the 150-word note limit, and the
     1,000-word briefing maximum.
@@ -76,8 +90,8 @@ apparently trustworthy result.
 
 Every briefing item retains its authoritative source name, source record
 identifier, and display link when supplied. Priority recommendations expose
-the deterministic facts used to include them; there is no hidden composite
-score.
+qualitative bands and the deterministic facts used to include them; there is
+no hidden composite score.
 
 On a non-workday, the reduced composer omits task-driven outcomes, Up Next,
 Important Tasks, and focus-block recommendations. It retains current Calendar
@@ -90,9 +104,10 @@ Coverage. An explicit invocation override may classify that date as a workday.
   memory.
 - The bounded live Calendar trial is complete and stopped; these commands do
   not use its authorization or make live requests.
-- The reduced composer does not infer people waiting, commitments at risk, or
-  a recommended focus block.
-- The pipeline does not yet apply the Milestone 2 correction state during
-  briefing composition.
+- Contextual inferences appear only after their separate task, sensitivity,
+  correction, and precision-first gates; this pipeline does not create them.
+- Milestone 9 uses deterministic templates. `priority_comparison` and
+  `briefing_section_synthesis` remain unselected future inference tasks.
 - Invocation is manual and output is printed to standard output.
-- The demonstration is not a product-acceptance claim.
+- The synthetic gate is not product acceptance. Brad's review of the
+  representative briefings remains the Milestone 9 acceptance gate.

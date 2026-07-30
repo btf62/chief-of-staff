@@ -35,7 +35,10 @@ Brad reviewed the category-specific results and selected OpenAI
 authorization is consumed, the adapter remains disabled by default, and
 routine hosted inference and private-data egress remain unauthorized. No
 model is selected for ranking or synthesis. Personal Gmail and Google Drive
-remain deferred and unauthorized.
+remain deferred and unauthorized. Milestone 9's deterministic ranking,
+structured plan, canonical composition, and 26-scenario synthetic gate are
+implemented. Brad's review of the private representative briefings remains
+the milestone acceptance gate.
 Design acceptance authorizes implementation within the accepted scope; it does
 not mean the complete Daily Briefing has passed operational acceptance.
 
@@ -55,6 +58,8 @@ not mean the complete Daily Briefing has passed operational acceptance.
   — precision-first Milestone 7 commitment and preparation rules
 - [Contextual Action Classification v1](product/features/contextual-action-classification-v1.md)
   — accepted Milestone 8 task contract and task-specific Luna selection
+- [Ranking and Briefing Composition v1](product/features/ranking-and-briefing-composition-v1.md)
+  — deterministic Milestone 9 ranking, planning, and composition contract
 - [Future ideas](product/future-ideas.md) — valuable ideas explicitly outside
   current implementation scope
 
