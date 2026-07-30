@@ -34,3 +34,4 @@ decisions.
 | [ADR-0005](0005-adopt-oauth-and-macos-keychain.md) | Adopt OAuth and macOS Keychain for Connector Credentials | Accepted | 2026-07-25 |
 | [ADR-0006](0006-adopt-provider-neutral-inference-with-openai.md) | Adopt a Provider-Neutral Inference Boundary with OpenAI as the Initial Provider | Accepted | 2026-07-25 |
 | [ADR-0007](0007-remove-asana-from-product-scope.md) | Remove Asana from Product Scope | Accepted | 2026-07-28 |
+| [ADR-0008](0008-adopt-flask-local-web-interface.md) | Adopt Flask and Waitress for the Local Web Interface | Accepted | 2026-07-30 |

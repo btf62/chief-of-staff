@@ -9,6 +9,9 @@ No strict versioning scheme is promised before a distributable product exists.
 
 ### Added
 
+- ADR-0008, selecting exact-pinned Flask and Waitress releases for a
+  server-rendered, loopback-only local web interface within the existing
+  Python and SQLite boundary.
 - An accepted Ranking and Briefing Composition v1 specification, explainable
   qualitative priority bands with source-backed factors and deterministic tie
   behavior, correction-before-ranking, and untrusted priority-instruction

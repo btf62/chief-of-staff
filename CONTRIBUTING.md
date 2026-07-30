@@ -24,11 +24,13 @@ together after the new minor line is evaluated.
 The project uses the standard-library `venv` module and pip dependency groups.
 The ignored `.venv/` directory is the default local environment. Runtime
 dependencies belong in `project.dependencies`; development-only tools belong
-in the `dev` dependency group in `pyproject.toml`. The official OpenAI Python
-SDK is the only third-party runtime dependency. It is exact-pinned to the
-version evaluated for the bounded Milestone 8 Responses transport; do not add
-a general AI framework or change the pin without provider-boundary and
-fresh-install validation.
+in the `dev` dependency group in `pyproject.toml`. Direct runtime dependencies
+are exact-pinned: the OpenAI SDK to the version evaluated for the bounded
+Milestone 8 Responses transport, and Flask and Waitress to the releases
+verified for the local web boundary in
+[ADR-0008](docs/decisions/0008-adopt-flask-local-web-interface.md). Do not add
+a general AI or frontend framework or change these pins without the applicable
+boundary and fresh-install validation.
 
 Create or refresh the environment:
 

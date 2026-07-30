@@ -4,7 +4,7 @@
 
 This is a documentation-first repository with an accepted Version 1 design
 baseline for Daily Briefing v1. The product requirements, feature
-specification, architecture, and ADR-0001 through ADR-0007 are accepted.
+specification, architecture, and ADR-0001 through ADR-0008 are accepted.
 Milestones 0 through 4 are complete. Milestone 5 has completed the accepted
 Todoist connector, one combined Calendar-and-Todoist trial, and one explicitly
 approved complete-retrieval and workday-quality validation. Jira has completed
@@ -97,7 +97,7 @@ The Version 1 design-readiness requirements have been met:
 2. The Product Requirements and Daily Briefing v1 specification are accepted.
 3. Data, privacy, security, agency, and source-authority constraints are
    recorded.
-4. The Architecture Overview and ADR-0001 through ADR-0007 are accepted.
+4. The Architecture Overview and ADR-0001 through ADR-0008 are accepted.
 5. The implementation roadmap defines milestone dependencies, deliverables,
    acceptance gates, and exclusions.
 

@@ -12,7 +12,9 @@ license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Brad Files" }]
 dependencies = [
+  "Flask==3.1.3",
   "openai==2.46.0",
+  "waitress==3.0.2",
 ]
 
 [dependency-groups]

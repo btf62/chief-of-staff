@@ -457,9 +457,8 @@ this trust gate. No model is selected for `priority_comparison` or
 - **Intended user-visible outcome:** Brad can read the briefing, understand why
   each conclusion appeared, and correct or disposition local conclusions so
   materially unchanged mistakes do not recur.
-- **Dependencies:** Milestone 9 and a documented local-web framework and
-  interaction choice made when this milestone begins, unless an earlier
-  implementation need requires it.
+- **Dependencies:** Milestone 9 and
+  [ADR-0008](decisions/0008-adopt-flask-local-web-interface.md).
 - **Principal deliverables:**
   - Read the briefing.
   - Inspect source evidence and inference explanations.

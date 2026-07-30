@@ -1,7 +1,7 @@
 # Architecture Overview
 
 - **Status:** Accepted
-- **Version:** 8
+- **Version:** 9
 - **Owner:** Brad
 - **Last updated:** 2026-07-30
 
@@ -10,7 +10,7 @@ This document defines the technical architecture required for
 system boundaries, information flow, security constraints, and decisions that
 must precede implementation. It establishes the initial execution, runtime,
 deployment, persistence, data-lifecycle, and interaction direction while
-deferring scheduler and specific web framework choices.
+deferring only the scheduler choice.
 
 The architecture is subordinate to the accepted
 [Product Vision](../product/vision.md) and
@@ -125,7 +125,7 @@ imply separate services.
 | Briefing composer | Produce the canonical briefing from selected structured content | Must obey presentation and agency budgets |
 | Policy and output validator | Check provenance, privacy, duplication, confidence disclosures, length, and external-write boundaries | May reject or downgrade output |
 | Evaluation harness | Run deterministic, connector, inference, regression, and end-to-end scenarios | Uses synthetic, redacted, or access-controlled data |
-| User interface boundary | Present briefing output and correction controls | Uses a lightweight local web interface; specific framework and interaction design remain open |
+| User interface boundary | Present briefing output and correction controls | Uses Flask, server-rendered Jinja templates, local CSS, and Waitress on IPv4 loopback under ADR-0008 |
 
 Each boundary should expose structured inputs and outputs so deterministic
 logic, language-model judgment, persistence, and presentation can be tested
@@ -636,12 +636,14 @@ Scheduled invocation must report:
 
 The delivery boundary returns a structured briefing, rendered presentation,
 coverage report, and correction controls through a lightweight local web
-interface. The specific framework and detailed interaction design remain open.
-Command-line tools may support development and operations but are not the
-intended final user experience. No delivery mechanism may send externally
-without an explicitly authorized policy, and the local interface must not be
-exposed beyond the local machine or a trusted network without a separate
-security decision.
+interface. Under
+[ADR-0008](../decisions/0008-adopt-flask-local-web-interface.md), Flask and
+Jinja render that interface in the existing process and Waitress serves it
+only on IPv4 loopback. Command-line tools may support development and
+operations but are not the intended final user experience. No delivery
+mechanism may send externally without an explicitly authorized policy, and
+the local interface must not be exposed beyond IPv4 loopback without a
+separate security decision.
 
 ## 12. Evaluation and Testing Architecture
 
@@ -748,12 +750,17 @@ all model use crosses a provider-neutral boundary, OpenAI is the initial hosted
 provider, evidence egress is minimized and tiered by sensitivity, outputs are
 schema-validated, and hosted failure degrades explicitly.
 
+The local web boundary is resolved by
+[ADR-0008](../decisions/0008-adopt-flask-local-web-interface.md): Flask and
+server-rendered Jinja templates use local CSS and minimal progressive
+enhancement in the existing Python process, while Waitress serves the
+application only on `127.0.0.1`.
+
 | Decision | Why it matters | Required timing |
 | --- | --- | --- |
 | Connector-specific accounts and scopes | Determines the exact authority, sensitivity, registration, refresh, and revocation behavior for each source | In each connector specification before authorization is enabled |
 | Connector-specific cache exceptions | Determines whether a source needs narrowly bounded persistence beyond the transient default | In each connector specification before its cache is enabled |
 | Model selection for each additional inference task | Determines accepted quality, cost, latency, and exact provider behavior within the evaluated task boundary | Before model use for that task |
-| Local web framework and interaction design | Determines presentation and the required correction loop within the accepted local web direction | Before completing the usable v1 experience |
 | Scheduling mechanism | Determines morning reliability and host requirements | Before scheduled delivery |
 
 ### Minimum ADR status
@@ -765,16 +772,15 @@ implementation are now accepted:
 2. Persistence and data lifecycle — ADR-0004
 3. Connector authentication and secrets — ADR-0005
 4. Inference and provider boundary — ADR-0006
+5. Local web framework and serving boundary — ADR-0008
 
 No additional cross-cutting minimum ADR is currently identified. Connector-
 specific specifications, inference-task specifications, evaluated model
 selection, and other decisions in the table above remain required before their
 affected capabilities are implemented.
 
-The local web framework, detailed interaction design, and scheduling mechanism
-require decisions before those portions of v1 are implemented, but they need
-not block deterministic domain, connector-contract, or evaluation work if the
-boundaries remain replaceable.
+The scheduling mechanism still requires a decision before scheduled delivery
+is implemented, but it need not block on-demand product work.
 
 ### Contradictions and unresolved dependencies
 
@@ -783,8 +789,8 @@ documents. The following dependencies remain unresolved:
 
 - Connector-specific cache needs must be justified and assigned a bounded
   retention and deletion policy before caching is enabled.
-- The correction loop and local web direction are required for v1, but the
-  specific framework and detailed interaction design remain open.
+- The accepted local web framework and serving boundary still require
+  Milestone 10 implementation and Brad's browser review.
 - Connector account scopes, OAuth registration details, retrieval windows,
   freshness thresholds, and source-specific authorization behavior remain to
   be defined in connector specifications.
