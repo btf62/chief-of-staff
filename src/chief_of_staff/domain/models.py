@@ -106,6 +106,22 @@ class ConnectorDomain(StrEnum):
     UNCLASSIFIED = "unclassified"
 
 
+class ScheduledOutcome(StrEnum):
+    """Privacy-safe terminal or gate result for one scheduled occurrence."""
+
+    FULL_SUCCESS = "full_success"
+    REDUCED_SUCCESS = "reduced_success"
+    ALREADY_COMPLETED = "already_completed"
+    INELIGIBLE_DAY = "ineligible_day"
+    BEFORE_WINDOW = "before_window"
+    MISSED_AFTER_CUTOFF = "missed_after_cutoff"
+    INSUFFICIENT_SOURCES = "insufficient_sources"
+    CREDENTIAL_ATTENTION_REQUIRED = "credential_attention_required"
+    TRANSIENT_FAILURE = "transient_failure"
+    CONFIGURATION_FAILURE = "configuration_failure"
+    TRIAL_COMPLETE = "trial_complete"
+
+
 @dataclass(frozen=True, slots=True)
 class ConnectorRun:
     """Retrieval metadata without raw source payloads."""
@@ -344,6 +360,51 @@ class StateInspection:
     briefing_presentations: int
     briefing_items: int
     briefing_archived_facts: int
+    scheduled_trials: int
+    scheduled_occurrences: int
+
+
+@dataclass(frozen=True, slots=True)
+class ScheduledTrial:
+    """Non-secret configuration and lifecycle for one bounded trial."""
+
+    id: str
+    timezone: str
+    eligible_weekdays: tuple[int, ...]
+    trigger_hour: int
+    trigger_minute: int
+    cutoff_hour: int
+    cutoff_minute: int
+    first_eligible_date: date
+    final_eligible_date: date
+    maximum_eligible_dates: int
+    enabled: bool
+    application_version: str
+    created_at: datetime
+    updated_at: datetime
+    completed_at: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ScheduledOccurrence:
+    """Bounded non-content result for one local scheduled date."""
+
+    trial_id: str
+    occurrence_date: date
+    idempotency_key: str
+    scheduled_for: datetime
+    actual_start_at: datetime
+    eligibility_decision: str
+    outcome: ScheduledOutcome
+    trial_ordinal: int | None
+    application_version: str
+    updated_at: datetime
+    briefing_run_id: str | None = None
+    source_health_json: str = "{}"
+    aggregate_counts_json: str = "{}"
+    duration_ms: int | None = None
+    notification_result: str | None = None
+    diagnostic_category: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

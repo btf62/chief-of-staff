@@ -35,6 +35,9 @@ from chief_of_staff.domain.models import (
     OAuthClientMetadata,
     RecurrenceAction,
     RecurrenceDecision,
+    ScheduledOccurrence,
+    ScheduledOutcome,
+    ScheduledTrial,
     SourceEvidence,
     StateInspection,
 )
@@ -74,6 +77,9 @@ __all__ = (
     "OAuthClientMetadata",
     "RecurrenceAction",
     "RecurrenceDecision",
+    "ScheduledOccurrence",
+    "ScheduledOutcome",
+    "ScheduledTrial",
     "SourceEvidence",
     "StateInspection",
 )

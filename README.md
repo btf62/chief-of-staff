@@ -65,7 +65,7 @@ synthetic acceptance metrics. He explicitly approved the package on
 2026-07-30, accepting Milestone 11 and the on-demand Daily Briefing v1 MVP.
 Commit `900a3b66d40bb3596e7ebee6ab801f5321050801` is the final correction
 included in that accepted boundary. Scheduled generation and all other
-deferred capabilities remain outside the accepted MVP. Milestone 12 is now a
+deferred capabilities remain outside the accepted MVP. Milestone 12 is now an
 accepted bounded-trial implementation for Scheduled Morning Generation.
 Routine unattended operation after seven eligible dates remains unaccepted.
 
@@ -150,6 +150,24 @@ make briefing
 
 See the [on-demand briefing runbook](docs/operations/runbooks/on-demand-briefing.md)
 for output locations, partial-coverage behavior, and safe failure handling.
+
+## Operate the bounded scheduled trial
+
+Milestone 12 adds an exact user-level macOS LaunchAgent, deterministic
+eligibility and catch-up policy, Calendar-plus-action-source sufficiency,
+private-safe notifications, and a self-limiting seven-eligible-date trial.
+Preview or inspect it without retrieving source records:
+
+```text
+make scheduled-dry-run
+make scheduled-readiness
+make scheduled-status
+```
+
+Installation, notification testing, disablement, re-enablement, removal, and
+the mandatory post-trial stop are documented in the
+[Scheduled Morning Generation runbook](docs/operations/runbooks/scheduled-morning-generation.md).
+Routine unattended operation after the trial remains unaccepted.
 
 ## Open the local briefing
 

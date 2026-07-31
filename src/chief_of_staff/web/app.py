@@ -213,6 +213,7 @@ def create_app(
                 "home.html",
                 briefing=None,
                 sections=(),
+                scheduled_status=_scheduled_status_view(state_store),
                 status=request.args.get("status"),
             )
         return render_template(
@@ -232,6 +233,7 @@ def create_app(
             ),
             historical_disclosure=_web_historical_disclosure(briefing),
             coverage=_coverage_view(briefing),
+            scheduled_status=_scheduled_status_view(state_store),
             status=request.args.get("status"),
         )
 
@@ -638,6 +640,34 @@ def _coverage_view(
         }
         for item in briefing.coverage
     )
+
+
+def _scheduled_status_view(state_store: StateStore) -> dict[str, object] | None:
+    """Return non-content trial health for the local status surface."""
+
+    trial = state_store.get_scheduled_trial("scheduled-morning-v1")
+    if trial is None:
+        return None
+    occurrences = state_store.list_scheduled_occurrences(trial.id)
+    latest = None if not occurrences else occurrences[-1]
+    return {
+        "enabled": trial.enabled,
+        "completed": trial.completed_at is not None,
+        "first_date": trial.first_eligible_date,
+        "final_date": trial.final_eligible_date,
+        "recorded_dates": len(
+            {
+                item.occurrence_date
+                for item in occurrences
+                if item.trial_ordinal is not None
+                and item.outcome.value not in {"before_window", "ineligible_day"}
+            }
+        ),
+        "maximum_dates": trial.maximum_eligible_dates,
+        "latest_outcome": (
+            None if latest is None else latest.outcome.value.replace("_", " ")
+        ),
+    }
 
 
 def _generation_mode_display(

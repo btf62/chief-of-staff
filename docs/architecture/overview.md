@@ -1,7 +1,7 @@
 # Architecture Overview
 
 - **Status:** Accepted
-- **Version:** 13
+- **Version:** 14
 - **Owner:** Brad
 - **Last updated:** 2026-07-31
 
@@ -15,7 +15,10 @@ invocation direction.
 The on-demand Daily Briefing v1 implementation within this architecture was
 accepted on 2026-07-30. On 2026-07-31, Brad accepted the user-level LaunchAgent
 and connector-continuity decisions for a self-limiting seven-eligible-date
-trial. Routine unattended operation after the trial, deferred connectors,
+trial. The bounded scheduling adapter, local state, exact-scope Calendar
+refresh path, private-safe notification, and reversible user LaunchAgent are
+implemented behind the accepted activation gates. Routine unattended
+operation after the trial, deferred connectors,
 routine hosted inference, remote access, and external mutation remain outside
 the accepted boundary.
 
@@ -716,7 +719,9 @@ The local deployment boundary includes:
 - macOS Keychain for connector credentials and secret values
 - macOS Keychain for the OpenAI API key
 - On-demand execution
-- A replaceable scheduled-invocation adapter
+- A replaceable scheduled-invocation adapter implemented as the exact
+  current-user LaunchAgent
+  `org.northridge.chief-of-staff.scheduled-morning`
 - Local structured logs with redaction
 - Health checks for persistence, configuration, and connector availability
 - Connector-level failure and freshness visibility
@@ -738,6 +743,12 @@ Operational documentation should eventually cover:
 - Correction-state inspection and deletion
 - Log rotation and redaction review
 - Health checks and missed-run recovery
+
+The bounded adapter records its seven-date policy and non-content occurrence
+outcomes through forward-only migration `0012`. The LaunchAgent supplies only
+the trigger; the application enforces local-date eligibility, the 11:00 a.m.
+cutoff, source sufficiency, idempotency, no whole-run retry, and the terminal
+trial boundary before retrieval.
 
 Connector, persistence, inference, composer, and delivery boundaries should
 remain portable from Brad's current Mac to a future always-on Mac mini with

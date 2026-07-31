@@ -26,7 +26,11 @@ from chief_of_staff.connectors.google_calendar import (
     GoogleCalendarListRequest,
     GoogleCalendarPage,
 )
-from chief_of_staff.domain import AuthorizationStatus, CredentialHealth
+from chief_of_staff.domain import (
+    AuthorizationStatus,
+    ConnectorAuthorizationMetadata,
+    CredentialHealth,
+)
 from chief_of_staff.persistence import StateStore
 
 GOOGLE_CALENDAR_EVENTS_ENDPOINT: Final = (
@@ -60,6 +64,17 @@ class CalendarUrlOpener(Protocol):
         """Open one GET request."""
 
 
+class GoogleCalendarAuthorizationRefresher(Protocol):
+    """Refresh one expired exact-scope Calendar authorization."""
+
+    def refresh_authorization(
+        self,
+        *,
+        account_reference: str,
+    ) -> ConnectorAuthorizationMetadata:
+        """Rotate Calendar credentials without broadening the grant."""
+
+
 def _open_url(
     request: urllib.request.Request,
     *,
@@ -80,6 +95,11 @@ class StoredGoogleCalendarAuthorizationProvider:
 
     state_store: StateStore
     keychain: MacOSKeychain
+    refresher: GoogleCalendarAuthorizationRefresher | None = field(
+        default=None,
+        repr=False,
+        compare=False,
+    )
     clock: Callable[[], datetime] = field(
         default=lambda: datetime.now(UTC),
         repr=False,
@@ -91,6 +111,34 @@ class StoredGoogleCalendarAuthorizationProvider:
         account_reference: str,
     ) -> CalendarAuthorization:
         metadata = self.state_store.get_connector_authorization("google_calendar")
+        access_present = bool(
+            metadata is not None
+            and self.keychain.exists(
+                KeychainSecretReference(
+                    service=metadata.credential_service,
+                    account=metadata.access_token_account,
+                )
+            )
+        )
+        if (
+            metadata is not None
+            and metadata.account_reference == account_reference
+            and metadata.granted_scope == GOOGLE_CALENDAR_EVENTS_OWNED_READONLY_SCOPE
+            and metadata.authorization_status is AuthorizationStatus.AUTHORIZED
+            and (metadata.token_expires_at <= self.clock() or not access_present)
+            and metadata.refresh_token_account is not None
+            and metadata.refresh_health is CredentialHealth.HEALTHY
+            and self.refresher is not None
+        ):
+            metadata = self.refresher.refresh_authorization(
+                account_reference=account_reference,
+            )
+            access_present = self.keychain.exists(
+                KeychainSecretReference(
+                    service=metadata.credential_service,
+                    account=metadata.access_token_account,
+                )
+            )
         if (
             metadata is None
             or metadata.account_reference != account_reference
@@ -98,14 +146,13 @@ class StoredGoogleCalendarAuthorizationProvider:
             or metadata.authorization_status is not AuthorizationStatus.AUTHORIZED
             or metadata.credential_health is not CredentialHealth.HEALTHY
             or metadata.token_expires_at <= self.clock()
+            or not access_present
         ):
             raise CalendarAuthorizationUnavailable
         reference = KeychainSecretReference(
             service=metadata.credential_service,
             account=metadata.access_token_account,
         )
-        if not self.keychain.exists(reference):
-            raise CalendarAuthorizationUnavailable
         return CalendarAuthorization(
             account_reference=metadata.account_reference,
             granted_scopes=frozenset({metadata.granted_scope}),

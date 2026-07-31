@@ -26,6 +26,9 @@ from chief_of_staff.domain import (
     ConnectorStatus,
     CoverageStatus,
     DispositionKind,
+    ScheduledOccurrence,
+    ScheduledOutcome,
+    ScheduledTrial,
     SourceEvidence,
 )
 from chief_of_staff.persistence import (
@@ -1129,6 +1132,63 @@ def test_no_briefing_empty_history_long_content_and_private_fields_are_safe(
         assert "commitment-evidence" not in html
     finally:
         close_application(long_app)
+
+
+def test_home_exposes_only_non_content_scheduled_trial_status(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "scheduled-status.sqlite3"
+    _seed_database(path)
+    with Database.open(path) as database:
+        store = StateStore(database)
+        store.save_scheduled_trial(
+            ScheduledTrial(
+                id="scheduled-morning-v1",
+                timezone="America/New_York",
+                eligible_weekdays=(0, 1, 2, 3, 5, 6),
+                trigger_hour=7,
+                trigger_minute=0,
+                cutoff_hour=11,
+                cutoff_minute=0,
+                first_eligible_date=date(2026, 8, 1),
+                final_eligible_date=date(2026, 8, 8),
+                maximum_eligible_dates=7,
+                enabled=True,
+                application_version="0.0.0",
+                created_at=NOW,
+                updated_at=NOW,
+            )
+        )
+        store.save_scheduled_occurrence(
+            ScheduledOccurrence(
+                trial_id="scheduled-morning-v1",
+                occurrence_date=date(2026, 8, 1),
+                idempotency_key="scheduled_morning:2026-08-01",
+                scheduled_for=NOW,
+                actual_start_at=NOW,
+                eligibility_decision="approved_window_execution_completed",
+                outcome=ScheduledOutcome.REDUCED_SUCCESS,
+                trial_ordinal=1,
+                application_version="0.0.0",
+                updated_at=NOW,
+                source_health_json='{"Calendar":"healthy"}',
+            )
+        )
+    app = create_app(path, session_secret=b"s" * 32, testing=True)
+    try:
+        html = _get(app.test_client(), "/").get_data(as_text=True)
+        assert "Scheduled morning status" in html
+        assert "1 of" in html
+        assert "reduced success" in html
+        assert (
+            "Calendar"
+            not in html.split("Scheduled morning status", 1)[1].split(
+                "Daily Briefing",
+                1,
+            )[0]
+        )
+    finally:
+        close_application(app)
 
 
 def test_print_and_temporal_styles_preserve_written_structure() -> None:

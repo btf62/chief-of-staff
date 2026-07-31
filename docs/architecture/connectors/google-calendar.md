@@ -1,14 +1,15 @@
 # Google Calendar Connector
 
 - **Status:** Accepted
-- **Version:** 2
+- **Version:** 3
 - **Owner:** Brad
 - **Last updated:** 2026-07-26
 
 This specification defines the implemented read-only Google Calendar
-connector and the explicitly approved bounded live trial that completed
-Milestone 4. It does not authorize continuing live access, broader Calendar
-access, another account, or another connector.
+connector, the explicitly approved bounded live trial that completed
+Milestone 4, and the exact-scope refresh continuity accepted for Milestone 12.
+It does not authorize broader Calendar access, another account, another
+connector, or routine operation after the bounded scheduled trial.
 
 ## Source authority
 
@@ -74,8 +75,12 @@ The implemented authorization follows
 - PKCE using `S256`.
 - Explicit account selection and a Brad-confirmed account identity.
 - Exact-scope validation after token exchange.
-- No offline access or refresh token for the bounded trial.
-- OAuth client secret and access token stored only in macOS Keychain.
+- The original Milestone 4 trial requested no offline access.
+- The separately accepted Milestone 12 attended flow may request
+  `access_type=offline` and must receive a refresh credential without changing
+  the exact scope or account.
+- OAuth client secret, access token, and any refresh token stored only in
+  macOS Keychain.
 - Non-secret OAuth project, client, account, scope, expiry, health, and
   Keychain lookup metadata stored in SQLite.
 
@@ -129,8 +134,11 @@ other authoritative materiality evidence may make a status signal visible.
 - A later page fails after earlier events were retrieved: retain those events
   and report `partial`.
 - The first page fails: `unavailable`.
-- Authorization is missing, expired, revoked, or scope-mismatched:
-  `unauthorized`, distinct from an empty calendar.
+- Authorization is missing, revoked, scope-mismatched, or expired without a
+  healthy accepted refresh credential: `unauthorized`, distinct from an empty
+  calendar.
+- An expired access credential with a healthy accepted Keychain refresh
+  credential may be refreshed once within the exact existing grant.
 - A malformed event: omit it and report `partial`.
 - A repeated page token or the 100-page safety limit: stop and report
   `partial`.
@@ -160,7 +168,11 @@ follows
 Synthetic contract and integration tests demonstrate:
 
 - Exact read-only scope enforcement.
-- State and PKCE authorization parameters without offline access.
+- State and PKCE authorization parameters for both the original access-only
+  flow and the separately accepted exact-scope offline-access flow.
+- Keychain-only refresh storage, exact-scope refresh validation, preservation
+  of a non-rotated Google refresh token, and automatic refresh only after
+  access expiry.
 - Keychain-only secret handling.
 - Authorized, expired, missing, and unauthorized behavior.
 - Empty-calendar distinction.
@@ -179,9 +191,14 @@ external-link retrieval, or Calendar mutation.
 
 ## Bounded live-trial authorization
 
-Brad explicitly approved one bounded trial subject to this specification. The
-trial is complete, and the mandatory stop is in effect.
+Brad's original Milestone 4 trial is complete. On 2026-07-31, Brad separately
+approved one attended reauthorization for Milestone 12 using the same account,
+Northridge-controlled OAuth project, and exact read-only scope, with the
+refresh credential retained in Keychain for the seven-eligible-date scheduled
+trial.
 
-No further Calendar retrieval, reauthorization, token refresh, account change,
-scope change, secondary-calendar access, or additional live connector is
-authorized without a new explicit approval.
+That narrow approval does not authorize a live retrieval merely to test
+installation. It does not authorize an account or scope change, secondary-
+calendar access, another connector, repeated interactive authorization, or
+routine Calendar operation after the scheduled trial. The scheduled command
+cannot open an OAuth browser flow.

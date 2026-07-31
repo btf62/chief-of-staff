@@ -53,10 +53,10 @@ responsive and print presentations, partial-source behavior, privacy and
 no-write boundaries, and all 14 synthetic metrics. Milestones 1–11 and the
 on-demand Daily Briefing v1 MVP are therefore complete and accepted. Commit
 `900a3b66d40bb3596e7ebee6ab801f5321050801` is the final correction included
-in the accepted boundary. Scheduled generation and other deferred
-capabilities remain unauthorized. Milestone 12 Scheduled Morning Generation
-is accepted for implementation and a self-limiting seven-eligible-date trial;
-routine unattended operation afterward remains unaccepted.
+in the accepted boundary. Milestone 12 Scheduled Morning Generation is
+implemented for an accepted self-limiting seven-eligible-date trial; live
+activation remains subject to its documented setup gates. Other deferred
+capabilities and routine unattended operation afterward remain unauthorized.
 
 ## Index
 
@@ -133,6 +133,9 @@ routine unattended operation afterward remains unaccepted.
   procedures
 - [Run the on-demand briefing](operations/runbooks/on-demand-briefing.md) —
   supported local command and safe operating behavior
+- [Operate Scheduled Morning Generation](operations/runbooks/scheduled-morning-generation.md)
+  — bounded-trial readiness, installation, status, notifications,
+  disablement, removal, and post-trial stop
 - [Milestone 8 live-evaluation gate](operations/milestone-8-live-evaluation-gate.md)
   — accepted and exercised OpenAI project, retention, cost, request, and
   synthetic-comparison boundary plus Brad's task-specific selection

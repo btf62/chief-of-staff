@@ -24,6 +24,9 @@ from chief_of_staff.domain import (
     NormalizedJiraIssueLink,
     NormalizedSourceTask,
     RecurrenceAction,
+    ScheduledOccurrence,
+    ScheduledOutcome,
+    ScheduledTrial,
     SourceEvidence,
 )
 from chief_of_staff.persistence import (
@@ -142,7 +145,20 @@ def test_fresh_database_applies_all_migrations_and_enforces_foreign_keys(
     with Database.open(tmp_path / "state.sqlite3") as database:
         inspection = StateStore(database).inspect_state()
 
-        assert inspection.schema_versions == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
+        assert inspection.schema_versions == (
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+        )
         assert database.connection.execute("PRAGMA foreign_keys").fetchone()[0] == 1
 
 
@@ -170,7 +186,7 @@ def test_database_upgrades_from_first_migration_and_is_idempotent(
             "SELECT version FROM schema_migrations ORDER BY version"
         )
     ]
-    assert upgraded_versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    assert upgraded_versions == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
     connection.close()
 
 
@@ -194,7 +210,7 @@ def test_database_upgrades_from_every_supported_existing_schema(
             "SELECT version FROM schema_migrations ORDER BY version"
         )
     )
-    assert versions == tuple(range(1, 12))
+    assert versions == tuple(range(1, 13))
     assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
     connection.close()
 
@@ -768,6 +784,96 @@ def test_pruning_run_metadata_preserves_correction_evidence(
         )
 
 
+def test_scheduled_trial_and_occurrence_are_inspectable_non_content_state(
+    tmp_path: Path,
+) -> None:
+    with Database.open(tmp_path / "scheduled.sqlite3") as database:
+        store = StateStore(database)
+        trial = ScheduledTrial(
+            id="scheduled-morning-v1",
+            timezone="America/New_York",
+            eligible_weekdays=(0, 1, 2, 3, 5, 6),
+            trigger_hour=7,
+            trigger_minute=0,
+            cutoff_hour=11,
+            cutoff_minute=0,
+            first_eligible_date=date(2026, 8, 1),
+            final_eligible_date=date(2026, 8, 8),
+            maximum_eligible_dates=7,
+            enabled=True,
+            application_version="0.0.0",
+            created_at=NOW,
+            updated_at=NOW,
+        )
+        store.save_scheduled_trial(trial)
+        occurrence = ScheduledOccurrence(
+            trial_id=trial.id,
+            occurrence_date=date(2026, 8, 1),
+            idempotency_key="scheduled_morning:2026-08-01",
+            scheduled_for=datetime(2026, 8, 1, 11, 0, tzinfo=UTC),
+            actual_start_at=datetime(2026, 8, 1, 11, 1, tzinfo=UTC),
+            eligibility_decision="approved_window_execution_completed",
+            outcome=ScheduledOutcome.REDUCED_SUCCESS,
+            trial_ordinal=1,
+            application_version="0.0.0",
+            updated_at=datetime(2026, 8, 1, 11, 2, tzinfo=UTC),
+            source_health_json='{"Calendar":"healthy"}',
+            aggregate_counts_json='{"briefing_words":500}',
+            duration_ms=1000,
+            notification_result="delivered",
+        )
+        store.save_scheduled_occurrence(occurrence)
+        store.save_scheduled_occurrence(occurrence)
+
+        assert store.get_scheduled_trial(trial.id) == trial
+        assert (
+            store.get_scheduled_occurrence(
+                trial.id,
+                occurrence.occurrence_date,
+            )
+            == occurrence
+        )
+        assert store.list_scheduled_occurrences(trial.id) == (occurrence,)
+        inspection = store.inspect_state()
+        assert inspection.scheduled_trials == 1
+        assert inspection.scheduled_occurrences == 1
+        assert not store.delete_empty_scheduled_trial(trial.id)
+        with pytest.raises(ValueError, match="terminal scheduled occurrence"):
+            store.save_scheduled_occurrence(
+                ScheduledOccurrence(
+                    trial_id=occurrence.trial_id,
+                    occurrence_date=occurrence.occurrence_date,
+                    idempotency_key=occurrence.idempotency_key,
+                    scheduled_for=occurrence.scheduled_for,
+                    actual_start_at=occurrence.actual_start_at,
+                    eligibility_decision=occurrence.eligibility_decision,
+                    outcome=ScheduledOutcome.FULL_SUCCESS,
+                    trial_ordinal=occurrence.trial_ordinal,
+                    application_version=occurrence.application_version,
+                    updated_at=occurrence.updated_at,
+                )
+            )
+
+        rollback_trial = ScheduledTrial(
+            id="scheduled-install-rollback",
+            timezone=trial.timezone,
+            eligible_weekdays=trial.eligible_weekdays,
+            trigger_hour=trial.trigger_hour,
+            trigger_minute=trial.trigger_minute,
+            cutoff_hour=trial.cutoff_hour,
+            cutoff_minute=trial.cutoff_minute,
+            first_eligible_date=trial.first_eligible_date,
+            final_eligible_date=trial.final_eligible_date,
+            maximum_eligible_dates=trial.maximum_eligible_dates,
+            enabled=True,
+            application_version=trial.application_version,
+            created_at=trial.created_at,
+            updated_at=trial.updated_at,
+        )
+        store.save_scheduled_trial(rollback_trial)
+        assert store.delete_empty_scheduled_trial(rollback_trial.id)
+
+
 def test_reset_removes_product_state_but_preserves_migrations(tmp_path: Path) -> None:
     with Database.open(tmp_path / "reset.sqlite3") as database:
         store = StateStore(database)
@@ -788,6 +894,7 @@ def test_reset_removes_product_state_but_preserves_migrations(tmp_path: Path) ->
             9,
             10,
             11,
+            12,
         )
         assert inspection.connector_runs == 0
         assert inspection.briefing_runs == 0
@@ -796,6 +903,8 @@ def test_reset_removes_product_state_but_preserves_migrations(tmp_path: Path) ->
         assert inspection.disposition_events == 0
         assert inspection.oauth_clients == 0
         assert inspection.connector_authorizations == 0
+        assert inspection.scheduled_trials == 0
+        assert inspection.scheduled_occurrences == 0
 
 
 def test_timezone_naive_timestamps_and_oversized_excerpts_are_rejected(

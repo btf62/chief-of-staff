@@ -66,7 +66,7 @@ APPROVED_CONNECTORS: Final = (
         GOOGLE_CALENDAR_EVENTS_OWNED_READONLY_SCOPE,
         (
             "python -m chief_of_staff.live_cli authorize "
-            "--account-identity <approved-work-account>"
+            "--account-identity <approved-work-account> --refreshable"
         ),
     ),
     ApprovedConnector(

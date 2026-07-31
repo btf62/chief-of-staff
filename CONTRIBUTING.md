@@ -10,10 +10,11 @@ credentials, begin another connector, enable scheduling, or modify an
 external system without new explicit approval. Do not begin a later milestone
 before its dependencies and acceptance gate are satisfied.
 
-Milestone 12 Scheduled Morning Generation is accepted for implementation and a
+Milestone 12 Scheduled Morning Generation is implemented for an accepted
 self-limiting seven-eligible-date trial under its exact host, schedule,
-source-sufficiency, authorization, notification, and validation gates. Routine
-unattended operation after the trial is not authorized.
+source-sufficiency, authorization, notification, and validation gates. Live
+activation remains a gated operator action. Routine unattended operation
+after the trial is not authorized.
 
 ## Python environment
 

@@ -49,7 +49,7 @@ identifiers, private source records, or provider payloads.
 The project-owned forms of the recovery commands are:
 
 ```text
-.venv/bin/python -m chief_of_staff.live_cli authorize --account-identity <approved-work-account>
+.venv/bin/python -m chief_of_staff.live_cli authorize --account-identity <approved-work-account> --refreshable
 .venv/bin/python -m chief_of_staff.todoist_live_cli authorize
 .venv/bin/python -m chief_of_staff.jira_live_cli authorize
 .venv/bin/python -m chief_of_staff.gmail_live_cli authorize --account-identity <approved-work-account>
@@ -142,12 +142,15 @@ content are transient, and persistence begins only after every required source
 has completed successfully. Do not delete `.local/state.sqlite3` merely to stop
 or recover a run.
 
-The application does not schedule another run, remain resident, or modify an
-external system.
+The on-demand command does not schedule another run, remain resident, or
+modify an external system. The separately accepted bounded schedule is
+operated only through the
+[Scheduled Morning Generation runbook](scheduled-morning-generation.md).
 
-Changing refresh-token authority remains outside this runbook. The unexecuted
-options are recorded in
+Calendar, Work Gmail, and Todoist refresh authority remains limited to the
+exact accounts and scopes accepted in
 [ADR-0009](../../decisions/0009-choose-connector-authorization-continuity.md).
+Jira remains short-lived without `offline_access`.
 
 ## Understand time and historical modes
 

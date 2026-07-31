@@ -565,7 +565,7 @@ in the accepted boundary.
 
 ## Milestone 12 — Scheduled Morning Generation
 
-- **Status:** Implementation authorized — bounded seven-eligible-date trial
+- **Status:** Implementation complete — bounded trial activation pending
 - **Intended user-visible outcome:** Chief of Staff can generate one reliable
   morning briefing automatically on approved days without duplicate runs,
   silent failures, unexpected authorization expansion, or dependence on Brad
@@ -589,12 +589,13 @@ in the accepted boundary.
   - Existing local-web, archive, retention, correction, and deletion behavior.
   - Disablement, removal, update-health, and future Mac mini migration plans.
 - **Acceptance gate:** The accepted decisions and ADRs authorize
-  implementation. Synthetic tests must cover schedule, sleep/wake,
-  daylight-saving,
-  idempotency, duplicate, reduced-source, failure, notification, privacy,
-  retention, and removal behavior. The installed trial must stop retrieval
-  after seven eligible dates. Brad must review the bounded results before
-  routine unattended use is accepted.
+  implementation. The synthetic gate now covers schedule, sleep/wake,
+  daylight-saving, idempotency, duplicate, reduced-source, failure,
+  notification, privacy, retention, and removal behavior. All 414 repository
+  tests, the inference and ranking evaluations, the Milestone 11 evaluation,
+  Markdown validation, and wheel packaging pass. The installed trial must stop
+  retrieval after seven eligible dates. Brad must review the bounded results
+  before routine unattended use is accepted.
 - **Explicitly excluded work:** Personal Gmail, Google Drive, new connectors,
   external-source mutations, routine hosted inference, public or remote web
   access, multi-user operation, mobile applications, analytics dashboards,
@@ -607,4 +608,6 @@ read-only scope, existing Gmail and Todoist refresh paths, short-lived Jira
 without `offline_access`, private-safe notifications, and a seven-date trial.
 Implementation, one bounded Calendar authorization exercise, and trial
 activation are authorized. Routine unattended operation after the trial is
-not accepted.
+not accepted. The implementation and synthetic validation gates are complete;
+the attended Calendar continuity check and reversible LaunchAgent activation
+remain.

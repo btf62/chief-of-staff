@@ -2,7 +2,7 @@
 
 - **Status:** Draft
 - **Owner:** TBD
-- **Last updated:** 2026-07-30
+- **Last updated:** 2026-07-31
 
 This directory is the authoritative location for operational policies and
 deployment documentation. The deployment model is now established; operational
@@ -24,8 +24,8 @@ requires each policy or procedure.
 
 Step-by-step operational procedures belong in
 [the runbooks directory](runbooks/README.md). The accepted on-demand workflow
-has a runbook; no unattended or scheduled deployment runbook exists because
-that operating mode remains unapproved.
+and the self-limiting Milestone 12 scheduled trial each have an operating
+runbook. Routine unattended operation after the trial remains unaccepted.
 
 ## Implemented foundations
 
@@ -48,3 +48,6 @@ that operating mode remains unapproved.
 - [On-demand briefing runbook](runbooks/on-demand-briefing.md) — normal
   connector-health, generation, local-interface, historical-lineage, and
   human-acceptance workflow
+- [Scheduled Morning Generation runbook](runbooks/scheduled-morning-generation.md)
+  — seven-date trial readiness, exact user LaunchAgent, safe status and
+  notifications, disablement, removal, and mandatory post-trial review

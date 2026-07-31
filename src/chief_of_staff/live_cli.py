@@ -50,6 +50,7 @@ def main(arguments: list[str] | None = None) -> int:
     authorize_parser = subparsers.add_parser("authorize")
     authorize_parser.add_argument("--account-reference", default="primary-user")
     authorize_parser.add_argument("--account-identity", required=True)
+    authorize_parser.add_argument("--refreshable", action="store_true")
 
     subparsers.add_parser("status")
     subparsers.add_parser("trial")
@@ -104,6 +105,7 @@ def main(arguments: list[str] | None = None) -> int:
             ).authorize_interactively(
                 account_reference=parsed.account_reference,
                 confirmed_account_identity=parsed.account_identity,
+                request_refresh=parsed.refreshable,
             )
             client = state_store.get_oauth_client(authorization_metadata.connector)
             if client is None:
@@ -118,6 +120,12 @@ def main(arguments: list[str] | None = None) -> int:
                     "credential_health": authorization_metadata.credential_health.value,
                     "granted_scope": authorization_metadata.granted_scope,
                     "oauth_project_id": client.oauth_project_id,
+                    "refresh_credential": (
+                        "healthy"
+                        if authorization_metadata.refresh_token_account is not None
+                        and authorization_metadata.refresh_health is not None
+                        else "not configured"
+                    ),
                     "token_expires_at": authorization_metadata.token_expires_at,
                 }
             )
@@ -192,6 +200,10 @@ def _print_status(state_store: StateStore, keychain: MacOSKeychain) -> None:
                 "granted_scope": authorization.granted_scope,
                 "last_used_at": authorization.last_used_at,
                 "token_expires_at": authorization.token_expires_at,
+                "refresh_credential": _refresh_health(
+                    authorization,
+                    keychain,
+                ),
             }
         )
     _print_json(payload)
@@ -206,6 +218,27 @@ def _print_json(payload: dict[str, object]) -> None:
             sort_keys=True,
         )
     )
+
+
+def _refresh_health(
+    authorization: object,
+    keychain: MacOSKeychain,
+) -> str:
+    from chief_of_staff.domain import ConnectorAuthorizationMetadata
+
+    if not isinstance(authorization, ConnectorAuthorizationMetadata):
+        return "not configured"
+    if authorization.refresh_token_account is None:
+        return "not configured"
+    reference = KeychainSecretReference(
+        service=authorization.credential_service,
+        account=authorization.refresh_token_account,
+    )
+    if not keychain.exists(reference):
+        return "missing"
+    if authorization.refresh_health is None:
+        return "unknown"
+    return authorization.refresh_health.value
 
 
 def _json_default(value: object) -> str:

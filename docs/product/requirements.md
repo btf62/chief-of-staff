@@ -52,7 +52,7 @@ and its connector-specific access, privacy, and retention boundaries.
 | Phase | Intended outcome | Status |
 | --- | --- | --- |
 | [Daily Briefing v1](features/daily-briefing-v1.md) | A trusted daily starting point that clarifies today's outcomes, commitments, preparation, relationships, and approaching work | Accepted |
-| [Scheduled Morning Generation v1](features/scheduled-morning-generation-v1.md) | One reliable automatic morning invocation on approved days | Accepted — bounded trial implementation authorized |
+| [Scheduled Morning Generation v1](features/scheduled-morning-generation-v1.md) | One reliable automatic morning invocation on approved days | Accepted — bounded trial implemented; activation gated |
 
 ## Cross-feature requirements
 
@@ -109,5 +109,5 @@ Detailed feature specifications belong in the
 This PRD is accepted as the Version 1 design contract. On 2026-07-30, Brad
 separately accepted the implemented on-demand Daily Briefing v1 MVP after the
 human-review gate in the [roadmap](../roadmap.md). That operational acceptance
-does not authorize deferred sources, scheduled generation, routine hosted
-inference, or external writes.
+does not authorize deferred sources, routine scheduled generation after the
+bounded Milestone 12 trial, routine hosted inference, or external writes.

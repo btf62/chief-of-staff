@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Final, Protocol
 
 from chief_of_staff.auth.keychain import (
+    KeychainSecretNotFound,
     KeychainSecretReference,
     MacOSKeychain,
 )
@@ -62,6 +63,7 @@ class OAuthTokenResponse:
     access_token: str = field(repr=False)
     granted_scope: str
     expires_in_seconds: int
+    refresh_token: str | None = field(default=None, repr=False)
 
 
 class OAuthTokenClient(Protocol):
@@ -78,6 +80,15 @@ class OAuthTokenClient(Protocol):
     ) -> OAuthTokenResponse:
         """Exchange one code without logging request or response content."""
 
+    def refresh(
+        self,
+        *,
+        client_id: str,
+        client_secret: str,
+        refresh_token: str,
+    ) -> OAuthTokenResponse:
+        """Refresh the exact approved grant without logging secrets."""
+
 
 class GoogleOAuthTokenClient:
     """Minimal Google token endpoint client for installed applications."""
@@ -91,7 +102,7 @@ class GoogleOAuthTokenClient:
         code_verifier: str,
         redirect_uri: str,
     ) -> OAuthTokenResponse:
-        form = urllib.parse.urlencode(
+        return self._token_request(
             {
                 "client_id": client_id,
                 "client_secret": client_secret,
@@ -99,8 +110,34 @@ class GoogleOAuthTokenClient:
                 "code_verifier": code_verifier,
                 "grant_type": "authorization_code",
                 "redirect_uri": redirect_uri,
-            }
-        ).encode()
+            },
+            require_scope=True,
+        )
+
+    def refresh(
+        self,
+        *,
+        client_id: str,
+        client_secret: str,
+        refresh_token: str,
+    ) -> OAuthTokenResponse:
+        return self._token_request(
+            {
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token,
+            },
+            require_scope=False,
+        )
+
+    def _token_request(
+        self,
+        parameters: dict[str, str],
+        *,
+        require_scope: bool,
+    ) -> OAuthTokenResponse:
+        form = urllib.parse.urlencode(parameters).encode()
         request = urllib.request.Request(  # noqa: S310 - fixed HTTPS endpoint
             GOOGLE_OAUTH_EXCHANGE_ENDPOINT,
             data=form,
@@ -130,16 +167,19 @@ class GoogleOAuthTokenClient:
         access_token = payload.get("access_token")
         scope = payload.get("scope")
         expires_in = payload.get("expires_in")
+        refresh_token = payload.get("refresh_token")
         if (
             not isinstance(access_token, str)
             or not access_token
-            or not isinstance(scope, str)
             or not isinstance(expires_in, int)
             or isinstance(expires_in, bool)
             or expires_in <= 0
+            or not (refresh_token is None or isinstance(refresh_token, str))
         ):
             raise OAuthError("Google OAuth token response omitted required fields")
-        if frozenset(scope.split()) != frozenset(
+        if require_scope and not isinstance(scope, str):
+            raise OAuthError("Google OAuth token response omitted required fields")
+        if isinstance(scope, str) and frozenset(scope.split()) != frozenset(
             {GOOGLE_CALENDAR_EVENTS_OWNED_READONLY_SCOPE}
         ):
             raise OAuthError("Google granted scopes do not match the approved scope")
@@ -147,6 +187,7 @@ class GoogleOAuthTokenClient:
             access_token=access_token,
             granted_scope=GOOGLE_CALENDAR_EVENTS_OWNED_READONLY_SCOPE,
             expires_in_seconds=expires_in,
+            refresh_token=refresh_token,
         )
 
 
@@ -266,7 +307,7 @@ class GoogleOAuthClientImporter:
 
 @dataclass(frozen=True, slots=True)
 class GoogleInstalledAppOAuth:
-    """Open a bounded system-browser flow and persist only the access token."""
+    """Open or refresh one exact-scope grant using Keychain-only secrets."""
 
     keychain: MacOSKeychain
     state_store: StateStore
@@ -292,6 +333,7 @@ class GoogleInstalledAppOAuth:
         account_reference: str,
         confirmed_account_identity: str,
         timeout_seconds: int = 300,
+        request_refresh: bool = False,
     ) -> ConnectorAuthorizationMetadata:
         """Authorize the confirmed account through a loopback callback."""
 
@@ -318,6 +360,7 @@ class GoogleInstalledAppOAuth:
                 state=state,
                 code_challenge=challenge,
                 account_identity=confirmed_account_identity,
+                request_refresh=request_refresh,
             )
             self.browser_opener(authorization_url)
             deadline = time.monotonic() + timeout_seconds
@@ -345,11 +388,63 @@ class GoogleInstalledAppOAuth:
             code_verifier=code_verifier,
             redirect_uri=redirect_uri,
         )
+        client_secret = ""
+        if request_refresh and token.refresh_token is None:
+            raise OAuthError("Google did not issue the required refresh credential")
         return self._store_authorization(
             client=client,
             account_reference=account_reference,
             confirmed_account_identity=confirmed_account_identity,
             token=token,
+        )
+
+    def refresh_authorization(
+        self,
+        *,
+        account_reference: str,
+    ) -> ConnectorAuthorizationMetadata:
+        """Refresh an existing exact-scope grant and rotate Keychain values."""
+
+        metadata = self.state_store.get_connector_authorization(
+            GOOGLE_CALENDAR_CONNECTOR
+        )
+        client = self.state_store.get_oauth_client(GOOGLE_CALENDAR_CONNECTOR)
+        if (
+            metadata is None
+            or client is None
+            or metadata.account_reference != account_reference
+            or metadata.granted_scope != GOOGLE_CALENDAR_EVENTS_OWNED_READONLY_SCOPE
+            or metadata.authorization_status is not AuthorizationStatus.AUTHORIZED
+            or metadata.refresh_token_account is None
+            or metadata.refresh_health is not CredentialHealth.HEALTHY
+        ):
+            raise OAuthError("Google Calendar refresh metadata is unavailable")
+        client_reference = KeychainSecretReference(
+            service=client.credential_service,
+            account=client.client_secret_account,
+        )
+        refresh_reference = KeychainSecretReference(
+            service=metadata.credential_service,
+            account=metadata.refresh_token_account,
+        )
+        try:
+            client_secret = self.keychain.read(client_reference)
+            refresh_token = self.keychain.read(refresh_reference)
+        except KeychainSecretNotFound:
+            raise OAuthError("Google Calendar refresh credential is missing") from None
+        token = self.token_client.refresh(
+            client_id=client.oauth_client_id,
+            client_secret=client_secret,
+            refresh_token=refresh_token,
+        )
+        client_secret = ""
+        refresh_token = ""
+        return self._store_authorization(
+            client=client,
+            account_reference=metadata.account_reference,
+            confirmed_account_identity=metadata.account_identity,
+            token=token,
+            authorized_at=metadata.authorized_at,
         )
 
     def _store_authorization(
@@ -359,13 +454,43 @@ class GoogleInstalledAppOAuth:
         account_reference: str,
         confirmed_account_identity: str,
         token: OAuthTokenResponse,
+        authorized_at: datetime | None = None,
     ) -> ConnectorAuthorizationMetadata:
         now = self.clock()
         access_token_reference = KeychainSecretReference(
             service=KEYCHAIN_SERVICE,
             account=f"{GOOGLE_CALENDAR_CONNECTOR}:access-token:{account_reference}",
         )
+        existing = self.state_store.get_connector_authorization(
+            GOOGLE_CALENDAR_CONNECTOR
+        )
+        refresh_token_reference = (
+            KeychainSecretReference(
+                service=KEYCHAIN_SERVICE,
+                account=(
+                    f"{GOOGLE_CALENDAR_CONNECTOR}:refresh-token:{account_reference}"
+                ),
+            )
+            if token.refresh_token is not None
+            else (
+                None
+                if existing is None
+                or existing.account_reference != account_reference
+                or existing.refresh_token_account is None
+                else KeychainSecretReference(
+                    service=existing.credential_service,
+                    account=existing.refresh_token_account,
+                )
+            )
+        )
+        access_preexisted = self.keychain.exists(access_token_reference)
+        refresh_preexisted = (
+            refresh_token_reference is not None
+            and self.keychain.exists(refresh_token_reference)
+        )
         self.keychain.store(access_token_reference, token.access_token)
+        if refresh_token_reference is not None and token.refresh_token is not None:
+            self.keychain.store(refresh_token_reference, token.refresh_token)
         metadata = ConnectorAuthorizationMetadata(
             connector=GOOGLE_CALENDAR_CONNECTOR,
             account_reference=account_reference,
@@ -373,19 +498,28 @@ class GoogleInstalledAppOAuth:
             granted_scope=token.granted_scope,
             credential_service=access_token_reference.service,
             access_token_account=access_token_reference.account,
-            refresh_token_account=None,
+            refresh_token_account=(
+                None
+                if refresh_token_reference is None
+                else refresh_token_reference.account
+            ),
             authorization_status=AuthorizationStatus.AUTHORIZED,
             credential_health=CredentialHealth.HEALTHY,
-            refresh_health=None,
+            refresh_health=(
+                None if refresh_token_reference is None else CredentialHealth.HEALTHY
+            ),
             token_expires_at=now + timedelta(seconds=token.expires_in_seconds),
-            authorized_at=now,
+            authorized_at=now if authorized_at is None else authorized_at,
             updated_at=now,
             connector_instance_id=GOOGLE_CALENDAR_PRIMARY_INSTANCE,
         )
         try:
             self.state_store.save_connector_authorization(metadata)
         except BaseException:
-            self.keychain.delete(access_token_reference)
+            if not access_preexisted:
+                self.keychain.delete(access_token_reference)
+            if refresh_token_reference is not None and not refresh_preexisted:
+                self.keychain.delete(refresh_token_reference)
             raise
         return metadata
 
@@ -397,21 +531,23 @@ def _authorization_url(
     state: str,
     code_challenge: str,
     account_identity: str,
+    request_refresh: bool = False,
 ) -> str:
-    query = urllib.parse.urlencode(
-        {
-            "client_id": client_id,
-            "code_challenge": code_challenge,
-            "code_challenge_method": "S256",
-            "include_granted_scopes": "false",
-            "login_hint": account_identity,
-            "prompt": "select_account consent",
-            "redirect_uri": redirect_uri,
-            "response_type": "code",
-            "scope": GOOGLE_CALENDAR_EVENTS_OWNED_READONLY_SCOPE,
-            "state": state,
-        }
-    )
+    parameters = {
+        "client_id": client_id,
+        "code_challenge": code_challenge,
+        "code_challenge_method": "S256",
+        "include_granted_scopes": "false",
+        "login_hint": account_identity,
+        "prompt": "select_account consent",
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": GOOGLE_CALENDAR_EVENTS_OWNED_READONLY_SCOPE,
+        "state": state,
+    }
+    if request_refresh:
+        parameters["access_type"] = "offline"
+    query = urllib.parse.urlencode(parameters)
     return f"{GOOGLE_AUTHORIZATION_ENDPOINT}?{query}"
 
 

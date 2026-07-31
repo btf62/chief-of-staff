@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Owner:** Brad
-- **Last updated:** 2026-07-30
+- **Last updated:** 2026-07-31
 
 This document describes the implemented Milestone 10 local interface under
 [ADR-0008](../decisions/0008-adopt-flask-local-web-interface.md). It does not
@@ -84,6 +84,12 @@ background service, login item, worker, or scheduled process.
 
 The local interface never invokes a connector. When no completed briefing
 exists, it directs Brad to run `make briefing` in Terminal and refresh.
+
+When a Scheduled Morning trial exists, the home page also shows its enabled or
+completed state, accepted date boundary, count of recorded eligible dates, and
+latest safe outcome. This view contains no connector content, account
+identity, credential value, or source record. It remains a read-only status
+surface; opening the interface never triggers a scheduled or on-demand run.
 
 ## Time and print presentation
 

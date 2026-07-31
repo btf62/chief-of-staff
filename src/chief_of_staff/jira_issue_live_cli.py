@@ -9,6 +9,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from chief_of_staff.auth import (
+    GoogleInstalledAppOAuth,
     KeychainSecretReference,
     MacOSKeychain,
     TodoistInstalledAppOAuth,
@@ -82,6 +83,10 @@ def _calendar_connector(
         authorization_provider=StoredGoogleCalendarAuthorizationProvider(
             state_store=state_store,
             keychain=keychain,
+            refresher=GoogleInstalledAppOAuth(
+                state_store=state_store,
+                keychain=keychain,
+            ),
         ),
         transport=GoogleCalendarHttpTransport(
             keychain=keychain,

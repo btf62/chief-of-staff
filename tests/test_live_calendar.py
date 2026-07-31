@@ -119,6 +119,7 @@ def _save_authorization(
     store: StateStore,
     *,
     expires_at: datetime = NOW + timedelta(hours=1),
+    refreshable: bool = False,
 ) -> ConnectorAuthorizationMetadata:
     metadata = ConnectorAuthorizationMetadata(
         connector=GOOGLE_CALENDAR_CONNECTOR,
@@ -129,10 +130,14 @@ def _save_authorization(
         access_token_account=(
             f"{GOOGLE_CALENDAR_CONNECTOR}:access-token:{ACCOUNT_REFERENCE}"
         ),
-        refresh_token_account=None,
+        refresh_token_account=(
+            f"{GOOGLE_CALENDAR_CONNECTOR}:refresh-token:{ACCOUNT_REFERENCE}"
+            if refreshable
+            else None
+        ),
         authorization_status=AuthorizationStatus.AUTHORIZED,
         credential_health=CredentialHealth.HEALTHY,
-        refresh_health=None,
+        refresh_health=(CredentialHealth.HEALTHY if refreshable else None),
         token_expires_at=expires_at,
         authorized_at=NOW,
         updated_at=NOW,
@@ -205,6 +210,7 @@ class _FakeTokenClient:
     received_code: str | None = None
     received_verifier: str | None = None
     received_redirect_uri: str | None = None
+    received_refresh_token: str | None = None
 
     def exchange_code(
         self,
@@ -220,6 +226,18 @@ class _FakeTokenClient:
         self.received_code = code
         self.received_verifier = code_verifier
         self.received_redirect_uri = redirect_uri
+        return self.response
+
+    def refresh(
+        self,
+        *,
+        client_id: str,
+        client_secret: str,
+        refresh_token: str,
+    ) -> OAuthTokenResponse:
+        assert client_id == CLIENT_ID
+        assert client_secret == "synthetic-client-secret"
+        self.received_refresh_token = refresh_token
         return self.response
 
 
@@ -305,6 +323,78 @@ def test_installed_oauth_uses_exact_scope_state_pkce_and_keychain(
     assert token_client.received_verifier is not None
     assert access_token in runner.items.values()
     assert access_token.encode() not in database_path.read_bytes()
+
+
+def test_refreshable_oauth_uses_offline_access_and_refreshes_exact_scope(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "state.sqlite3"
+    keychain, runner = _keychain()
+    keychain.store(
+        KeychainSecretReference(
+            KEYCHAIN_SERVICE,
+            "google_calendar:client-secret",
+        ),
+        "synthetic-client-secret",
+    )
+    refresh_token = "synthetic-refresh-value"
+    token_client = _FakeTokenClient(
+        OAuthTokenResponse(
+            access_token="synthetic-initial-access",
+            granted_scope=GOOGLE_CALENDAR_EVENTS_OWNED_READONLY_SCOPE,
+            expires_in_seconds=3600,
+            refresh_token=refresh_token,
+        )
+    )
+    browser = _CallbackBrowser()
+
+    with Database.open(database_path) as database:
+        store = StateStore(database)
+        _save_client(store)
+        oauth = GoogleInstalledAppOAuth(
+            keychain=keychain,
+            state_store=store,
+            token_client=token_client,
+            clock=lambda: NOW,
+            browser_opener=browser,
+        )
+        metadata = oauth.authorize_interactively(
+            account_reference=ACCOUNT_REFERENCE,
+            confirmed_account_identity=ACCOUNT_IDENTITY,
+            timeout_seconds=5,
+            request_refresh=True,
+        )
+        assert metadata.refresh_token_account is not None
+        assert metadata.refresh_health is CredentialHealth.HEALTHY
+        assert browser.authorization_url is not None
+        query = urllib.parse.parse_qs(
+            urllib.parse.urlsplit(browser.authorization_url).query
+        )
+        assert query["access_type"] == ["offline"]
+        assert query["scope"] == [GOOGLE_CALENDAR_EVENTS_OWNED_READONLY_SCOPE]
+
+        token_client.response = OAuthTokenResponse(
+            access_token="synthetic-refreshed-access",
+            granted_scope=GOOGLE_CALENDAR_EVENTS_OWNED_READONLY_SCOPE,
+            expires_in_seconds=3600,
+        )
+        refreshed = GoogleInstalledAppOAuth(
+            keychain=keychain,
+            state_store=store,
+            token_client=token_client,
+            clock=lambda: NOW + timedelta(hours=2),
+            browser_opener=browser,
+        ).refresh_authorization(account_reference=ACCOUNT_REFERENCE)
+
+        assert refreshed.granted_scope == (GOOGLE_CALENDAR_EVENTS_OWNED_READONLY_SCOPE)
+        assert refreshed.refresh_token_account == metadata.refresh_token_account
+        assert refreshed.token_expires_at == NOW + timedelta(hours=3)
+
+    assert browser.callback_thread is not None
+    browser.callback_thread.join(timeout=5)
+    assert token_client.received_refresh_token == refresh_token
+    assert refresh_token in runner.items.values()
+    assert refresh_token.encode() not in database_path.read_bytes()
 
 
 @dataclass(slots=True)
@@ -488,6 +578,84 @@ def test_stored_authorization_distinguishes_expired_and_missing_keychain(
         )
         with pytest.raises(CalendarAuthorizationUnavailable):
             expired_provider.get_calendar_authorization(ACCOUNT_REFERENCE)
+
+
+@dataclass(slots=True)
+class _FakeCalendarRefresher:
+    store: StateStore
+    refreshed_at: datetime
+    called: bool = False
+
+    def refresh_authorization(
+        self,
+        *,
+        account_reference: str,
+    ) -> ConnectorAuthorizationMetadata:
+        self.called = True
+        metadata = self.store.get_connector_authorization(GOOGLE_CALENDAR_CONNECTOR)
+        assert metadata is not None
+        assert account_reference == metadata.account_reference
+        refreshed = ConnectorAuthorizationMetadata(
+            connector=metadata.connector,
+            account_reference=metadata.account_reference,
+            account_identity=metadata.account_identity,
+            granted_scope=metadata.granted_scope,
+            credential_service=metadata.credential_service,
+            access_token_account=metadata.access_token_account,
+            refresh_token_account=metadata.refresh_token_account,
+            authorization_status=metadata.authorization_status,
+            credential_health=CredentialHealth.HEALTHY,
+            refresh_health=CredentialHealth.HEALTHY,
+            token_expires_at=self.refreshed_at + timedelta(hours=1),
+            authorized_at=metadata.authorized_at,
+            updated_at=self.refreshed_at,
+        )
+        self.store.save_connector_authorization(refreshed)
+        return refreshed
+
+
+def test_stored_authorization_refreshes_expired_exact_scope_once(
+    tmp_path: Path,
+) -> None:
+    keychain, _runner = _keychain()
+    checked_at = NOW + timedelta(hours=2)
+    with Database.open(tmp_path / "state.sqlite3") as database:
+        store = StateStore(database)
+        _save_client(store)
+        metadata = _save_authorization(
+            store,
+            expires_at=NOW + timedelta(hours=1),
+            refreshable=True,
+        )
+        keychain.store(
+            KeychainSecretReference(
+                metadata.credential_service,
+                metadata.access_token_account,
+            ),
+            "synthetic-access-value",
+        )
+        assert metadata.refresh_token_account is not None
+        keychain.store(
+            KeychainSecretReference(
+                metadata.credential_service,
+                metadata.refresh_token_account,
+            ),
+            "synthetic-refresh-value",
+        )
+        refresher = _FakeCalendarRefresher(store, checked_at)
+        provider = StoredGoogleCalendarAuthorizationProvider(
+            state_store=store,
+            keychain=keychain,
+            refresher=refresher,
+            clock=lambda: checked_at,
+        )
+
+        authorization = provider.get_calendar_authorization(ACCOUNT_REFERENCE)
+
+        assert refresher.called
+        assert authorization.granted_scopes == frozenset(
+            {GOOGLE_CALENDAR_EVENTS_OWNED_READONLY_SCOPE}
+        )
 
 
 @dataclass(slots=True)

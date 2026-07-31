@@ -7,6 +7,9 @@ govern them.
 
 - [Run the On-Demand Daily Briefing](on-demand-briefing.md) — supported local
   command, output locations, partial coverage, and safe failure behavior
+- [Operate Scheduled Morning Generation](scheduled-morning-generation.md) —
+  bounded trial readiness, installation, health, notification, disablement,
+  removal, and post-trial stop
 
 See [operations documentation](../README.md) for governing policies and
 deployment documentation.

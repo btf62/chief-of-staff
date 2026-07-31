@@ -7,6 +7,30 @@
     </p>
   {% endif %}
 
+  {% if scheduled_status %}
+    <details class="coverage scheduled-status">
+      <summary>Scheduled morning status</summary>
+      <p>
+        {% if scheduled_status.completed %}
+          Trial complete.
+        {% elif scheduled_status.enabled %}
+          Trial enabled.
+        {% else %}
+          Trial disabled.
+        {% endif %}
+        {{ scheduled_status.recorded_dates }} of
+        {{ scheduled_status.maximum_dates }} eligible dates recorded.
+      </p>
+      <p>
+        Trial window: {{ scheduled_status.first_date }} through
+        {{ scheduled_status.final_date }}.
+        {% if scheduled_status.latest_outcome %}
+          Latest outcome: {{ scheduled_status.latest_outcome }}.
+        {% endif %}
+      </p>
+    </details>
+  {% endif %}
+
   {% if briefing %}
     <header class="briefing-header">
       <p class="eyebrow">Daily Briefing</p>

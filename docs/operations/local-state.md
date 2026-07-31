@@ -2,7 +2,7 @@
 
 - **Status:** Draft
 - **Owner:** Brad
-- **Last updated:** 2026-07-30
+- **Last updated:** 2026-07-31
 
 This document describes the implemented local-state foundation and minimized
 task-source extensions. It operates within
@@ -60,11 +60,20 @@ The implemented schema stores:
   configuration, provider and model identifiers, sensitivity and validation
   categories, request count, latency, token counts, estimated cost, and safe
   error category.
+- One bounded Scheduled Morning trial policy and one non-content occurrence
+  record per eligible local date: idempotency, eligibility decision, outcome,
+  safe source-health categories, aggregate counts, duration, application
+  version, notification result, and optional successful briefing-run link.
 
 It does not define tables for credentials, tokens, raw response pages,
 continuation cursors, full source payloads, complete message bodies, raw HTML,
 attachments, connector caches, inference prompts, provider responses, or
 inference evidence excerpts.
+
+Scheduled occurrence payloads contain no source titles, message or task
+content, people, account identities, URLs, provider payloads, or secret
+values. A terminal occurrence is immutable. Only a `before_window` observation
+may advance to the date's one terminal result.
 
 ## Briefing archive and historical lineage
 
@@ -122,6 +131,10 @@ The store supports:
 - Pruning bounded connector- and briefing-run metadata.
 - Pruning non-content inference audit metadata by creation time.
 - Resetting all application-owned state while preserving migration history.
+
+Reset includes Scheduled Morning trial and occurrence records. It is a
+destructive local-state operation and is not a supported way to extend or
+restart the bounded trial.
 
 Deleting old run metadata does not delete still-useful correction evidence.
 The relevant connector or briefing reference becomes `NULL`, while the

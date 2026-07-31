@@ -4,7 +4,9 @@
 - **Version:** 1
 - **Owner:** Brad
 - **Last updated:** 2026-07-31
-- **Trial state:** Implementation authorized for seven eligible dates
+- **Trial state:** Live activation authorized for seven eligible dates
+- **Implementation state:** Complete; live activation requires the accepted
+  setup gates
 
 ## Summary
 
@@ -185,6 +187,31 @@ The trial does not convert automatically into permanent scheduling. After
 seven eligible dates, Brad must review the results and explicitly accept,
 extend, revise, or remove scheduled operation. Moving to a Mac mini requires a
 new host-readiness and credential-migration review.
+
+## Implemented operating surface
+
+The accepted implementation provides:
+
+- a deterministic local scheduling policy and application-owned idempotency
+  record;
+- forward-only migration `0012` for bounded non-content trial and occurrence
+  state;
+- one current-user LaunchAgent definition with no `RunAtLoad`, `KeepAlive`, or
+  automatic whole-run retry;
+- retrieval-free readiness, dry-run, status, install, notification-test,
+  disable, enable, and removal commands;
+- exact-scope Calendar refresh continuity through macOS Keychain;
+- source sufficiency requiring Calendar plus Work Gmail or Todoist, with Jira
+  optional;
+- private-safe fixed notifications and a non-content local web status summary;
+  and
+- terminal trial behavior after seven eligible dates.
+
+The
+[Scheduled Morning Generation runbook](../../operations/runbooks/scheduled-morning-generation.md)
+is the authoritative operator procedure. Implementation does not itself
+activate the LaunchAgent, reauthorize Calendar, retrieve a live source, or
+accept routine post-trial use.
 
 ## Related documents
 

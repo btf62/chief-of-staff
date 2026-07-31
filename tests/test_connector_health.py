@@ -116,7 +116,7 @@ def test_preflight_never_retrieves_with_expired_or_missing_access(
     assert not report.can_retrieve
     assert format_health_report(report)[-1] == (
         "Run: python -m chief_of_staff.live_cli authorize "
-        "--account-identity <approved-work-account>"
+        "--account-identity <approved-work-account> --refreshable"
     )
 
 

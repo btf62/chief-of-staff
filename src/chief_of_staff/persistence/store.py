@@ -40,6 +40,9 @@ from chief_of_staff.domain.models import (
     OAuthClientMetadata,
     RecurrenceAction,
     RecurrenceDecision,
+    ScheduledOccurrence,
+    ScheduledOutcome,
+    ScheduledTrial,
     SourceEvidence,
     StateInspection,
 )
@@ -2390,6 +2393,286 @@ class StateStore:
             coverage=coverage,
         )
 
+    def save_scheduled_trial(self, trial: ScheduledTrial) -> None:
+        """Create or update one non-secret bounded scheduling trial."""
+
+        _require_aware(trial.created_at)
+        _require_aware(trial.updated_at)
+        if trial.completed_at is not None:
+            _require_aware(trial.completed_at)
+        if (
+            not trial.eligible_weekdays
+            or any(day < 0 or day > 6 for day in trial.eligible_weekdays)
+            or len(set(trial.eligible_weekdays)) != len(trial.eligible_weekdays)
+        ):
+            raise ValueError("scheduled weekdays must be unique values from 0 to 6")
+        if trial.first_eligible_date > trial.final_eligible_date:
+            raise ValueError("scheduled trial date boundary is invalid")
+        weekdays_json = json.dumps(
+            list(trial.eligible_weekdays),
+            separators=(",", ":"),
+        )
+        with self.database.transaction() as connection:
+            connection.execute(
+                """
+                INSERT INTO scheduled_trials(
+                    id,
+                    timezone,
+                    eligible_weekdays_json,
+                    trigger_hour,
+                    trigger_minute,
+                    cutoff_hour,
+                    cutoff_minute,
+                    first_eligible_date,
+                    final_eligible_date,
+                    maximum_eligible_dates,
+                    enabled,
+                    application_version,
+                    created_at,
+                    updated_at,
+                    completed_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    enabled = excluded.enabled,
+                    application_version = excluded.application_version,
+                    updated_at = excluded.updated_at,
+                    completed_at = excluded.completed_at
+                """,
+                (
+                    trial.id,
+                    trial.timezone,
+                    weekdays_json,
+                    trial.trigger_hour,
+                    trial.trigger_minute,
+                    trial.cutoff_hour,
+                    trial.cutoff_minute,
+                    trial.first_eligible_date.isoformat(),
+                    trial.final_eligible_date.isoformat(),
+                    trial.maximum_eligible_dates,
+                    int(trial.enabled),
+                    trial.application_version,
+                    _serialize_datetime(trial.created_at),
+                    _serialize_datetime(trial.updated_at),
+                    _serialize_optional_datetime(trial.completed_at),
+                ),
+            )
+            row = connection.execute(
+                """
+                SELECT
+                    timezone,
+                    eligible_weekdays_json,
+                    trigger_hour,
+                    trigger_minute,
+                    cutoff_hour,
+                    cutoff_minute,
+                    first_eligible_date,
+                    final_eligible_date,
+                    maximum_eligible_dates
+                FROM scheduled_trials
+                WHERE id = ?
+                """,
+                (trial.id,),
+            ).fetchone()
+            if row is None or (
+                str(row["timezone"]) != trial.timezone
+                or str(row["eligible_weekdays_json"]) != weekdays_json
+                or int(row["trigger_hour"]) != trial.trigger_hour
+                or int(row["trigger_minute"]) != trial.trigger_minute
+                or int(row["cutoff_hour"]) != trial.cutoff_hour
+                or int(row["cutoff_minute"]) != trial.cutoff_minute
+                or str(row["first_eligible_date"])
+                != trial.first_eligible_date.isoformat()
+                or str(row["final_eligible_date"])
+                != trial.final_eligible_date.isoformat()
+                or int(row["maximum_eligible_dates"]) != trial.maximum_eligible_dates
+            ):
+                raise ValueError("an existing scheduled trial has different policy")
+
+    def get_scheduled_trial(self, trial_id: str) -> ScheduledTrial | None:
+        """Return one non-content trial configuration."""
+
+        row = self.database.connection.execute(
+            "SELECT * FROM scheduled_trials WHERE id = ?",
+            (trial_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        weekdays = json.loads(str(row["eligible_weekdays_json"]))
+        if not isinstance(weekdays, list) or any(
+            not isinstance(value, int) or isinstance(value, bool) for value in weekdays
+        ):
+            raise ValueError("stored scheduled weekdays are invalid")
+        return ScheduledTrial(
+            id=str(row["id"]),
+            timezone=str(row["timezone"]),
+            eligible_weekdays=tuple(weekdays),
+            trigger_hour=int(row["trigger_hour"]),
+            trigger_minute=int(row["trigger_minute"]),
+            cutoff_hour=int(row["cutoff_hour"]),
+            cutoff_minute=int(row["cutoff_minute"]),
+            first_eligible_date=date.fromisoformat(str(row["first_eligible_date"])),
+            final_eligible_date=date.fromisoformat(str(row["final_eligible_date"])),
+            maximum_eligible_dates=int(row["maximum_eligible_dates"]),
+            enabled=bool(row["enabled"]),
+            application_version=str(row["application_version"]),
+            created_at=_parse_datetime(str(row["created_at"])),
+            updated_at=_parse_datetime(str(row["updated_at"])),
+            completed_at=_parse_optional_datetime(
+                None if row["completed_at"] is None else str(row["completed_at"])
+            ),
+        )
+
+    def delete_empty_scheduled_trial(self, trial_id: str) -> bool:
+        """Roll back an unstarted trial when service installation fails."""
+
+        with self.database.transaction() as connection:
+            cursor = connection.execute(
+                """
+                DELETE FROM scheduled_trials
+                WHERE id = ?
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM scheduled_occurrences
+                      WHERE trial_id = scheduled_trials.id
+                  )
+                """,
+                (trial_id,),
+            )
+        return cursor.rowcount == 1
+
+    def save_scheduled_occurrence(
+        self,
+        occurrence: ScheduledOccurrence,
+    ) -> None:
+        """Upsert one bounded non-content status row for a scheduled date."""
+
+        _require_aware(occurrence.scheduled_for)
+        _require_aware(occurrence.actual_start_at)
+        _require_aware(occurrence.updated_at)
+        for field_name, value, maximum in (
+            ("source health", occurrence.source_health_json, 4000),
+            ("aggregate counts", occurrence.aggregate_counts_json, 1000),
+        ):
+            parsed = json.loads(value)
+            if not isinstance(parsed, dict) or len(value) > maximum:
+                raise ValueError(
+                    f"scheduled {field_name} must be a bounded JSON object"
+                )
+        with self.database.transaction() as connection:
+            existing = connection.execute(
+                """
+                SELECT *
+                FROM scheduled_occurrences
+                WHERE trial_id = ? AND occurrence_date = ?
+                """,
+                (
+                    occurrence.trial_id,
+                    occurrence.occurrence_date.isoformat(),
+                ),
+            ).fetchone()
+            if existing is not None:
+                existing_occurrence = _scheduled_occurrence_from_row(existing)
+                if existing_occurrence == occurrence:
+                    return
+                if str(existing["idempotency_key"]) != occurrence.idempotency_key:
+                    raise ValueError(
+                        "scheduled occurrence idempotency key is immutable"
+                    )
+                if (
+                    ScheduledOutcome(str(existing["outcome"]))
+                    is not ScheduledOutcome.BEFORE_WINDOW
+                ):
+                    raise ValueError("terminal scheduled occurrence is immutable")
+            connection.execute(
+                """
+                INSERT INTO scheduled_occurrences(
+                    trial_id,
+                    occurrence_date,
+                    idempotency_key,
+                    scheduled_for,
+                    actual_start_at,
+                    eligibility_decision,
+                    outcome,
+                    briefing_run_id,
+                    source_health_json,
+                    aggregate_counts_json,
+                    duration_ms,
+                    trial_ordinal,
+                    application_version,
+                    notification_result,
+                    diagnostic_category,
+                    updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(trial_id, occurrence_date) DO UPDATE SET
+                    actual_start_at = excluded.actual_start_at,
+                    eligibility_decision = excluded.eligibility_decision,
+                    outcome = excluded.outcome,
+                    briefing_run_id = excluded.briefing_run_id,
+                    source_health_json = excluded.source_health_json,
+                    aggregate_counts_json = excluded.aggregate_counts_json,
+                    duration_ms = excluded.duration_ms,
+                    trial_ordinal = excluded.trial_ordinal,
+                    application_version = excluded.application_version,
+                    notification_result = excluded.notification_result,
+                    diagnostic_category = excluded.diagnostic_category,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    occurrence.trial_id,
+                    occurrence.occurrence_date.isoformat(),
+                    occurrence.idempotency_key,
+                    _serialize_datetime(occurrence.scheduled_for),
+                    _serialize_datetime(occurrence.actual_start_at),
+                    occurrence.eligibility_decision,
+                    occurrence.outcome.value,
+                    occurrence.briefing_run_id,
+                    occurrence.source_health_json,
+                    occurrence.aggregate_counts_json,
+                    occurrence.duration_ms,
+                    occurrence.trial_ordinal,
+                    occurrence.application_version,
+                    occurrence.notification_result,
+                    occurrence.diagnostic_category,
+                    _serialize_datetime(occurrence.updated_at),
+                ),
+            )
+
+    def get_scheduled_occurrence(
+        self,
+        trial_id: str,
+        occurrence_date: date,
+    ) -> ScheduledOccurrence | None:
+        """Return one non-content scheduled occurrence."""
+
+        row = self.database.connection.execute(
+            """
+            SELECT *
+            FROM scheduled_occurrences
+            WHERE trial_id = ? AND occurrence_date = ?
+            """,
+            (trial_id, occurrence_date.isoformat()),
+        ).fetchone()
+        return None if row is None else _scheduled_occurrence_from_row(row)
+
+    def list_scheduled_occurrences(
+        self,
+        trial_id: str,
+    ) -> tuple[ScheduledOccurrence, ...]:
+        """Return bounded trial occurrences in local-date order."""
+
+        rows = self.database.connection.execute(
+            """
+            SELECT *
+            FROM scheduled_occurrences
+            WHERE trial_id = ?
+            ORDER BY occurrence_date
+            """,
+            (trial_id,),
+        ).fetchall()
+        return tuple(_scheduled_occurrence_from_row(row) for row in rows)
+
     def delete_local_conclusion(
         self,
         *,
@@ -2598,6 +2881,11 @@ class StateStore:
                 connection,
                 "briefing_archived_facts",
             ),
+            scheduled_trials=_table_count(connection, "scheduled_trials"),
+            scheduled_occurrences=_table_count(
+                connection,
+                "scheduled_occurrences",
+            ),
         )
 
     def delete_disposition_history(self, conclusion_id: str) -> int:
@@ -2676,6 +2964,8 @@ class StateStore:
         """Delete all application state while preserving schema history."""
 
         with self.database.transaction() as connection:
+            connection.execute("DELETE FROM scheduled_occurrences")
+            connection.execute("DELETE FROM scheduled_trials")
             connection.execute("DELETE FROM inference_audits")
             connection.execute("DELETE FROM conclusion_tombstones")
             connection.execute("DELETE FROM disposition_events")
@@ -2868,6 +3158,39 @@ def _disposition_from_row(row: sqlite3.Row) -> DispositionEvent:
     )
 
 
+def _scheduled_occurrence_from_row(row: sqlite3.Row) -> ScheduledOccurrence:
+    return ScheduledOccurrence(
+        trial_id=str(row["trial_id"]),
+        occurrence_date=date.fromisoformat(str(row["occurrence_date"])),
+        idempotency_key=str(row["idempotency_key"]),
+        scheduled_for=_parse_datetime(str(row["scheduled_for"])),
+        actual_start_at=_parse_datetime(str(row["actual_start_at"])),
+        eligibility_decision=str(row["eligibility_decision"]),
+        outcome=ScheduledOutcome(str(row["outcome"])),
+        trial_ordinal=(
+            None if row["trial_ordinal"] is None else int(row["trial_ordinal"])
+        ),
+        application_version=str(row["application_version"]),
+        updated_at=_parse_datetime(str(row["updated_at"])),
+        briefing_run_id=(
+            None if row["briefing_run_id"] is None else str(row["briefing_run_id"])
+        ),
+        source_health_json=str(row["source_health_json"]),
+        aggregate_counts_json=str(row["aggregate_counts_json"]),
+        duration_ms=(None if row["duration_ms"] is None else int(row["duration_ms"])),
+        notification_result=(
+            None
+            if row["notification_result"] is None
+            else str(row["notification_result"])
+        ),
+        diagnostic_category=(
+            None
+            if row["diagnostic_category"] is None
+            else str(row["diagnostic_category"])
+        ),
+    )
+
+
 def _conclusion_projection_from_row(row: sqlite3.Row) -> ConclusionProjection:
     return ConclusionProjection(
         conclusion_id=str(row["conclusion_id"]),
@@ -2940,6 +3263,10 @@ def _table_count(connection: sqlite3.Connection, table: str) -> int:
         "briefing_items": "SELECT COUNT(*) AS count FROM briefing_items",
         "briefing_archived_facts": (
             "SELECT COUNT(*) AS count FROM briefing_archived_facts"
+        ),
+        "scheduled_trials": "SELECT COUNT(*) AS count FROM scheduled_trials",
+        "scheduled_occurrences": (
+            "SELECT COUNT(*) AS count FROM scheduled_occurrences"
         ),
     }
     query = queries.get(table)

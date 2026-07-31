@@ -9,6 +9,9 @@ No strict versioning scheme is promised before a distributable product exists.
 
 ### Changed
 
+- Scheduled generation now requires repository context, Calendar, and at least
+  one of Work Gmail or Todoist; Jira remains optional, and repeated terminal
+  outcomes cannot trigger a whole-run retry.
 - Brad accepted the Milestone 12 operating decisions, exact source-sufficiency
   and connector-continuity boundaries, user-level LaunchAgent architecture,
   and implementation of a self-limiting seven-eligible-date trial.
@@ -25,6 +28,14 @@ No strict versioning scheme is promised before a distributable product exists.
 
 ### Added
 
+- A self-limiting Scheduled Morning Generation implementation with
+  `America/New_York` eligibility and cutoff policy, immutable date
+  idempotency, migration `0012`, private-safe notifications, local status,
+  reversible current-user LaunchAgent management, exact-scope Calendar refresh
+  continuity, synthetic tests, and an operator runbook.
+- A passing 414-test repository gate, existing inference and ranking
+  evaluations, Milestone 11 evaluation, Markdown validation, dry-run package,
+  and clean wheel-install verification for the bounded scheduler.
 - An accepted Milestone 12 Scheduled Morning Generation specification, macOS
   scheduling ADR, connector-authorization boundary, and nine-decision
   checklist. Routine unattended operation after the trial remains unaccepted.

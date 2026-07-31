@@ -58,6 +58,7 @@ class InsufficientBriefingEvidence(RuntimeError):
 class OnDemandBriefingReport:
     """Safe operational result for one successful full or reduced briefing."""
 
+    briefing_run_id: str
     briefing_path: Path
     review_path: Path | None
     briefing_word_count: int
@@ -82,6 +83,9 @@ class OnDemandBriefingRunner:
     review_directory: Path
     briefing_date_override: date | None = None
     timezone: str = "America/New_York"
+    invocation_mode: str = "on_demand"
+    run_id_prefix: str = "on-demand"
+    require_calendar_and_action_source: bool = False
     clock: Callable[[], datetime] = field(
         default=lambda: datetime.now(UTC),
         repr=False,
@@ -96,12 +100,12 @@ class OnDemandBriefingRunner:
             self.briefing_date_override
             or started_at.astimezone(ZoneInfo(self.timezone)).date()
         )
-        run_id = f"on-demand-{uuid.uuid4().hex}"
+        run_id = f"{self.run_id_prefix}-{uuid.uuid4().hex}"
         context = resolve_context(
             run_id=run_id,
             briefing_date=briefing_date,
             timezone=self.timezone,
-            invocation_mode="on_demand",
+            invocation_mode=self.invocation_mode,
             lookahead_days=7,
             generated_at=started_at,
             as_of=started_at,
@@ -145,6 +149,17 @@ class OnDemandBriefingRunner:
             if source != "repository_context"
             and coverage.status in {CoverageStatus.COMPLETE, CoverageStatus.PARTIAL}
         )
+        source_statuses = {
+            coverage.source: coverage.status for coverage in useful_sources
+        }
+        if self.require_calendar_and_action_source and not (
+            "google_calendar" in source_statuses
+            and ("gmail" in source_statuses or "todoist" in source_statuses)
+        ):
+            raise InsufficientBriefingEvidence(
+                "Scheduled generation requires Calendar and at least one "
+                "approved action source."
+            )
         if not useful_sources:
             raise InsufficientBriefingEvidence(
                 "No approved external source completed; no briefing was archived."
@@ -304,6 +319,7 @@ class OnDemandBriefingRunner:
                     )
         degraded = self._degraded_reports(result.plan.coverage)
         return OnDemandBriefingReport(
+            briefing_run_id=run_id,
             briefing_path=briefing_path,
             review_path=review_path,
             briefing_word_count=result.rendered.word_count,
