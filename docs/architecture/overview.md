@@ -1,21 +1,23 @@
 # Architecture Overview
 
 - **Status:** Accepted
-- **Version:** 12
+- **Version:** 13
 - **Owner:** Brad
-- **Last updated:** 2026-07-30
+- **Last updated:** 2026-07-31
 
 This document defines the technical architecture required for
 [Daily Briefing v1](../product/features/daily-briefing-v1.md). It establishes
 system boundaries, information flow, security constraints, and decisions that
 must precede implementation. It establishes the initial execution, runtime,
-deployment, persistence, data-lifecycle, and interaction direction while
-deferring only the scheduler choice.
+deployment, persistence, data-lifecycle, interaction, and bounded scheduled-
+invocation direction.
 
 The on-demand Daily Briefing v1 implementation within this architecture was
-accepted on 2026-07-30. That acceptance does not select or authorize a
-scheduler, deferred connector, routine hosted inference, remote access, or
-external mutation.
+accepted on 2026-07-30. On 2026-07-31, Brad accepted the user-level LaunchAgent
+and connector-continuity decisions for a self-limiting seven-eligible-date
+trial. Routine unattended operation after the trial, deferred connectors,
+routine hosted inference, remote access, and external mutation remain outside
+the accepted boundary.
 
 The architecture is subordinate to the accepted
 [Product Vision](../product/vision.md) and
@@ -779,7 +781,7 @@ application only on `127.0.0.1`.
 | Connector-specific accounts and scopes | Determines the exact authority, sensitivity, registration, refresh, and revocation behavior for each source | In each connector specification before authorization is enabled |
 | Connector-specific cache exceptions | Determines whether a source needs narrowly bounded persistence beyond the transient default | In each connector specification before its cache is enabled |
 | Model selection for each additional inference task | Determines accepted quality, cost, latency, and exact provider behavior within the evaluated task boundary | Before model use for that task |
-| Scheduling mechanism | Determines morning reliability and host requirements | Before scheduled delivery |
+| Scheduling mechanism | Resolved by ADR-0010 for the bounded Milestone 12 trial | Accepted before implementation |
 
 ### Minimum ADR status
 
@@ -797,9 +799,8 @@ MVP. Connector-specific specifications, inference-task specifications,
 evaluated model selection, and other decisions in the table above remain
 required before their affected capabilities are implemented.
 
-ADR-0009 and ADR-0010 are proposed dependencies for Milestone 12. They do not
-block accepted on-demand operation, but they must be resolved before scheduled
-delivery is implemented.
+ADR-0009 and ADR-0010 are accepted for Milestone 12's bounded trial. They do
+not authorize routine operation after the seven eligible dates.
 
 ### Contradictions and unresolved dependencies
 
@@ -812,9 +813,9 @@ documents. The following dependencies remain unresolved:
   explicit authorization despite the task-specific Luna selection.
 - Deferred sources require their own accepted specifications and authorization
   before they may enter product scope.
-- Scheduled morning generation requires a separately approved host,
-  scheduling policy, failure behavior, and authorization-continuity decision.
-  The proposed direction and unresolved choices are in
+- Scheduled morning generation must remain within the accepted host, schedule,
+  cutoff, source-sufficiency, notification, authorization-continuity, and
+  seven-date boundary recorded in
   [ADR-0010](../decisions/0010-choose-scheduled-morning-generation-mechanism.md),
   [ADR-0009](../decisions/0009-choose-connector-authorization-continuity.md),
   and the

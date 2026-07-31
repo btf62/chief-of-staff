@@ -1,7 +1,7 @@
 # ADR-0010: Choose the Scheduled Morning Generation Mechanism
 
-- **Status:** Proposed
-- **Date:** 2026-07-30
+- **Status:** Accepted
+- **Date:** 2026-07-31
 - **Owners:** Brad
 
 ## Context
@@ -26,8 +26,8 @@ login Keychain is usable, the network is available, or the Mac is awake. See
 and Apple's
 [Mac keychain technote](https://developer.apple.com/documentation/Technotes/tn3137-on-mac-keychains).
 
-This ADR chooses no installed service. It records the proposed direction for
-Brad's review.
+This ADR records the accepted scheduling mechanism for a bounded trial. Routine
+unattended operation after the trial remains unaccepted.
 
 ## Decision drivers
 
@@ -62,10 +62,13 @@ authorized here. See
 and Apple's
 [helper executable guidance](https://developer.apple.com/documentation/servicemanagement/updating-helper-executables-from-earlier-versions-of-macos).
 
-## Proposed decision
+## Decision
 
-Use a user-level macOS `launchd` LaunchAgent with a calendar trigger to invoke
-one bounded, foreground scheduled-generation command and then exit.
+Use a user-level macOS `launchd` LaunchAgent in Brad's logged-in GUI session
+with calendar triggers at 7:00 a.m. on Monday through Thursday, Saturday, and
+Sunday. It invokes one bounded scheduled-generation command and then exits.
+Friday has no trigger. The LaunchAgent uses neither `KeepAlive` nor an
+always-running worker.
 
 The application—not `launchd`—would remain authoritative for:
 
@@ -79,9 +82,17 @@ The application—not `launchd`—would remain authoritative for:
 - safe diagnostics and outcome notification; and
 - success, reduced success, missed, and failed state.
 
-The exact host, weekdays, time, missed-run policy, reduced-source threshold,
-notification, installation form, and connector authorization continuity
-remain unresolved. Therefore this ADR remains `Proposed`.
+The current primary Mac is the approved bounded-trial host. The application
+may catch up a sleep-delayed invocation only through 11:00 a.m.
+`America/New_York`; afterward it records a miss without retrieving sources.
+Application-owned state makes retrieval inert after seven eligible scheduled
+dates. A private-safe macOS notification and non-content local status record
+surface outcomes.
+
+Installation uses an idempotent, reversible user-owned property list with
+exact absolute paths, no secrets, a safe environment allowlist, restrictive
+file creation, and private or deliberately discarded process output. A future
+Mac mini remains a separately reviewed host migration.
 
 ## Why this direction
 
@@ -96,7 +107,7 @@ An always-awake Mac mini is a promising later host, not a competing timer. The
 same one-shot LaunchAgent and application safety contract should migrate
 without changing product semantics.
 
-## Consequences if accepted
+## Consequences
 
 - Milestone 12 becomes macOS-specific for its first scheduler.
 - The scheduler remains a thin invocation layer; product behavior stays in the
@@ -108,8 +119,11 @@ without changing product semantics.
 - A dedicated Mac mini can improve availability later but requires a separate
   migration and host-readiness gate.
 - Installation and removal must be explicit, reversible, and testable.
-- No LaunchAgent, plist, app service, or persistent process may be installed
-  until Brad accepts this ADR and the decision checklist.
+- Installation may proceed only after the implementation, synthetic gate,
+  repository-cleanliness check, connector-health check, and exact Calendar
+  continuity exercise required by Milestone 12.
+- The installed trial remains self-limiting after seven eligible dates and
+  cannot become routine operation without Brad's further approval.
 
 ## Dependencies
 
@@ -119,6 +133,6 @@ without changing product semantics.
 
 ## Current implementation status
 
-Proposed only. No scheduler, LaunchAgent, plist, persistent timer, wake
-schedule, notification, OAuth flow, credential refresh, connector retrieval,
-or unattended operation was created by this decision record.
+Accepted for implementation and the bounded trial. This decision record alone
+does not install a scheduler, change a credential, retrieve a source, or
+accept routine unattended operation after the trial.

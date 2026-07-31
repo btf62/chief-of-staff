@@ -1,7 +1,7 @@
 # ADR-0009: Choose Connector Authorization Continuity
 
-- **Status:** Proposed
-- **Date:** 2026-07-30
+- **Status:** Accepted
+- **Date:** 2026-07-31
 - **Owners:** Brad
 
 ## Context
@@ -69,25 +69,37 @@ authorization change for those connectors, but unattended use still requires
 explicit Milestone 12 approval, safe failure behavior, bounded retry, and
 verification under the selected user LaunchAgent context.
 
-## Proposed direction
+## Decision
 
-No authorization change is selected yet.
+For the bounded Milestone 12 trial:
 
-Continue graceful omission as the safe operational baseline. The recommended
-starting direction is to review refreshable Calendar authorization under the
-unchanged read-only scope, retain short-lived Jira authorization initially,
-and omit Jira honestly when it expires. Jira `offline_access` should be
-considered only if the missing coverage materially reduces scheduled briefing
-value. Brad has not selected these recommendations.
+- Google Calendar receives one bounded reauthorization for provider-supported
+  refresh capability under the unchanged exact scope
+  `https://www.googleapis.com/auth/calendar.events.owned.readonly`.
+- Work Gmail may use only its existing approved work account,
+  `gmail.readonly` scope, and Keychain refresh path.
+- Todoist may use only its existing approved account, `data:read` scope, and
+  Keychain refresh path.
+- Jira retains its existing short-lived `read:jira-work` grant without
+  `offline_access`. Scheduled mode omits Jira before retrieval when its
+  credential is unusable and never opens an interactive Jira authorization
+  flow.
+- A scheduled run requires repository context, usable Google Calendar
+  coverage, and at least one usable source from Work Gmail or Todoist. Jira is
+  optional.
+- Normal bounded Gmail partial coverage is an honest reduced success.
+- No other account, scope, connector, source, durable authorization, or
+  interactive authorization from scheduled mode is approved.
 
-Brad must also decide whether a deterministically valid reduced-source
-briefing counts as scheduled success and whether any source—especially
-Calendar—is mandatory.
+The Calendar reauthorization remains a separate bounded live setup step after
+the implementation and validation commits are pushed. Access and refresh
+secrets remain only in macOS Keychain; SQLite records only safe metadata and
+Keychain references.
 
-## Consequences if accepted
+## Consequences
 
-- Connector continuity and authorization authority will be decided
-  explicitly rather than by implementation accident.
+- Connector continuity and authorization authority are explicit rather than
+  left to implementation accident.
 - Reduced-source briefing behavior remains necessary under every option.
 - A refreshable option would require separate approval, documentation,
   credential lifecycle tests, and a bounded live authorization exercise.
@@ -101,23 +113,15 @@ Calendar—is mandatory.
 
 ## Milestone 12 dependency
 
-Milestone 12 implementation must not begin until Brad decides:
-
-1. Whether Google Calendar should receive refreshable authorization.
-2. Whether Jira remains short-lived and omitted when expired or requests
-   `offline_access`.
-3. Which reduced-source combinations count as scheduled success.
-
-These choices belong in the
-[Milestone 12 decision checklist](../product/features/scheduled-morning-generation-decision-checklist.md)
-and require separate authorization before any credential change. Gmail and
-Todoist differ because their accepted connector designs already include
-refresh credentials; Milestone 12 approval would still need to verify those
-existing paths under the selected scheduled user context, but it would not
-create a new scope or credential type for either connector.
+Brad resolved the blocking choices in the
+[Milestone 12 decision checklist](../product/features/scheduled-morning-generation-decision-checklist.md).
+This acceptance authorizes implementation and the explicitly bounded
+authorization setup above. It does not accept routine unattended operation
+after the seven-date trial.
 
 ## Current implementation status
 
-This proposal is unexecuted. It does not request refresh credentials, broaden
-OAuth scopes, reauthorize an account, alter authorization persistence, or
-authorize unattended refresh.
+The decision is accepted but not yet exercised. No credential was changed by
+accepting this record. Calendar reauthorization and scheduled use remain
+subject to the implementation, validation, and bounded setup gates in
+Milestone 12.

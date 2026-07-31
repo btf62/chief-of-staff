@@ -55,8 +55,8 @@ on-demand Daily Briefing v1 MVP are therefore complete and accepted. Commit
 `900a3b66d40bb3596e7ebee6ab801f5321050801` is the final correction included
 in the accepted boundary. Scheduled generation and other deferred
 capabilities remain unauthorized. Milestone 12 Scheduled Morning Generation
-is now a proposed design and authorization gate, not an authorized
-implementation.
+is accepted for implementation and a self-limiting seven-eligible-date trial;
+routine unattended operation afterward remains unaccepted.
 
 ## Index
 
@@ -77,7 +77,7 @@ implementation.
 - [Ranking and Briefing Composition v1](product/features/ranking-and-briefing-composition-v1.md)
   — deterministic Milestone 9 ranking, planning, and composition contract
 - [Scheduled Morning Generation v1](product/features/scheduled-morning-generation-v1.md)
-  — proposed Milestone 12 automatic-invocation contract
+  — accepted Milestone 12 bounded-trial automatic-invocation contract
 - [Milestone 12 decision checklist](product/features/scheduled-morning-generation-decision-checklist.md)
   — the nine choices Brad must make before implementation
 - [Future ideas](product/future-ideas.md) — valuable ideas explicitly outside
@@ -110,9 +110,9 @@ implementation.
 - [Decision records](decisions/README.md) — architecture and significant
   product decisions
 - [ADR-0009: Connector Authorization Continuity](decisions/0009-choose-connector-authorization-continuity.md)
-  — proposed Milestone 12 credential-continuity dependency
+  — accepted Milestone 12 credential-continuity boundary
 - [ADR-0010: Scheduled Morning Generation Mechanism](decisions/0010-choose-scheduled-morning-generation-mechanism.md)
-  — proposed macOS scheduling direction
+  — accepted user-level macOS LaunchAgent decision
 
 ### Delivery and operations
 

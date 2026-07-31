@@ -53,9 +53,12 @@ synthetic acceptance metrics. He explicitly approved the package, completing
 Milestone 11 and accepting the on-demand Daily Briefing v1 MVP. Commit
 `900a3b66d40bb3596e7ebee6ab801f5321050801` is the final correction in the
 accepted boundary. Milestones 1 through 11 are complete and accepted.
-Milestone 12 Scheduled Morning Generation is proposed for design and
-authorization review only. No host, schedule, catch-up policy, authorization
-change, notification, or implementation is approved.
+Milestone 12 Scheduled Morning Generation is accepted for implementation and
+a bounded seven-eligible-date trial on Brad's current primary Mac. The accepted
+schedule is 7:00 a.m. `America/New_York` on Monday through Thursday, Saturday,
+and Sunday, with catch-up only through 11:00 a.m. The trial must become inert
+after seven eligible dates. Routine unattended operation after the trial is
+not accepted.
 Personal Gmail and Google Drive remain deferred and unauthorized.
 
 ## Working rules
@@ -132,10 +135,13 @@ modify an external system, or begin a deferred milestone without new explicit
 approval. Acceptance does not authorize unattended operation or expand any
 connector, credential, inference, agency, or retention boundary. Record
 material new product or architecture decisions before implementing them.
-Milestone 12 documentation may be refined, but no scheduler, LaunchAgent,
-plist, persistent timer, wake schedule, notification path, credential change,
-or unattended operation may be implemented or installed until Brad approves
-the proposed specification, ADRs, decision checklist, and bounded trial.
+Milestone 12 implementation, one exact-scope refreshable Calendar
+reauthorization, installation of the accepted user LaunchAgent, and activation
+of the bounded trial are authorized only through the documented synthetic,
+validation, clean-repository, connector-health, and host-verification gates.
+No always-running timer, wake schedule, Jira `offline_access`, Personal Gmail,
+Drive, hosted inference, external write, added source, or routine operation
+after the trial is authorized.
 
 ## Validation
 

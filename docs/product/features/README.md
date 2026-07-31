@@ -20,7 +20,7 @@ distinct; scheduled generation is not part of the accepted MVP.
 | [Deterministic Explicit Detection v1](deterministic-explicit-detection-v1.md) | Milestone 7 | Accepted |
 | [Contextual Action Classification v1](contextual-action-classification-v1.md) | Milestone 8 | Accepted |
 | [Ranking and Briefing Composition v1](ranking-and-briefing-composition-v1.md) | Milestone 9 | Accepted |
-| [Scheduled Morning Generation v1](scheduled-morning-generation-v1.md) | Milestone 12 | Proposed — design and authorization review pending |
+| [Scheduled Morning Generation v1](scheduled-morning-generation-v1.md) | Milestone 12 | Accepted — bounded trial implementation authorized |
 
-The blocking choices for the proposed scheduled feature are isolated in the
+The accepted choices for the bounded scheduled trial are recorded in the
 [Milestone 12 decision checklist](scheduled-morning-generation-decision-checklist.md).

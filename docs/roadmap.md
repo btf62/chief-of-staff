@@ -1,9 +1,9 @@
 # Daily Briefing v1 Implementation Roadmap
 
 - **Status:** Accepted
-- **Version:** 13
+- **Version:** 14
 - **Owner:** Brad
-- **Last updated:** 2026-07-30
+- **Last updated:** 2026-07-31
 
 This roadmap sequences implementation of the accepted
 [Daily Briefing v1](product/features/daily-briefing-v1.md) design. Milestones 0
@@ -565,18 +565,18 @@ in the accepted boundary.
 
 ## Milestone 12 — Scheduled Morning Generation
 
-- **Status:** Proposed — design and authorization review pending
+- **Status:** Implementation authorized — bounded seven-eligible-date trial
 - **Intended user-visible outcome:** Chief of Staff can generate one reliable
   morning briefing automatically on approved days without duplicate runs,
   silent failures, unexpected authorization expansion, or dependence on Brad
   manually opening Terminal.
-- **Dependencies:** Accepted Milestone 11; an approved
+- **Dependencies:** Accepted Milestone 11; the accepted
   [Scheduled Morning Generation v1](product/features/scheduled-morning-generation-v1.md)
   specification; accepted decisions for
   [connector authorization continuity](decisions/0009-choose-connector-authorization-continuity.md)
   and the
   [scheduling mechanism](decisions/0010-choose-scheduled-morning-generation-mechanism.md);
-  Brad's completed
+  Brad's accepted
   [decision checklist](product/features/scheduled-morning-generation-decision-checklist.md);
   and a suitable approved host.
 - **Principal deliverables:**
@@ -588,16 +588,23 @@ in the accepted boundary.
   - Private non-content diagnostics and approved outcome notification.
   - Existing local-web, archive, retention, correction, and deletion behavior.
   - Disablement, removal, update-health, and future Mac mini migration plans.
-- **Acceptance gate:** Brad approves every checklist decision and both proposed
-  ADRs; synthetic tests cover schedule, sleep/wake, daylight-saving,
+- **Acceptance gate:** The accepted decisions and ADRs authorize
+  implementation. Synthetic tests must cover schedule, sleep/wake,
+  daylight-saving,
   idempotency, duplicate, reduced-source, failure, notification, privacy,
-  retention, and removal behavior; then a separately approved bounded
-  scheduled trial succeeds before unattended use.
+  retention, and removal behavior. The installed trial must stop retrieval
+  after seven eligible dates. Brad must review the bounded results before
+  routine unattended use is accepted.
 - **Explicitly excluded work:** Personal Gmail, Google Drive, new connectors,
   external-source mutations, routine hosted inference, public or remote web
   access, multi-user operation, mobile applications, analytics dashboards,
   and autonomous email or Calendar actions.
 
-Milestone 12 is the next candidate milestone, not an authorized
-implementation. No target host, scheduled days, exact time, missed-run policy,
-authorization change, or notification method has been selected.
+Brad approved the current primary Mac, Monday–Thursday plus Saturday and
+Sunday, 7:00 a.m. `America/New_York`, catch-up through 11:00 a.m., the exact
+source-sufficiency rule, refreshable Calendar continuity under the unchanged
+read-only scope, existing Gmail and Todoist refresh paths, short-lived Jira
+without `offline_access`, private-safe notifications, and a seven-date trial.
+Implementation, one bounded Calendar authorization exercise, and trial
+activation are authorized. Routine unattended operation after the trial is
+not accepted.

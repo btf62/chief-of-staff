@@ -9,6 +9,9 @@ No strict versioning scheme is promised before a distributable product exists.
 
 ### Changed
 
+- Brad accepted the Milestone 12 operating decisions, exact source-sufficiency
+  and connector-continuity boundaries, user-level LaunchAgent architecture,
+  and implementation of a self-limiting seven-eligible-date trial.
 - Brad accepted Milestone 11 and the on-demand Daily Briefing v1 MVP after
   reviewing the corrected historical behavior, responsive and print
   presentations, partial-source operation, privacy and no-write boundaries,
@@ -22,9 +25,9 @@ No strict versioning scheme is promised before a distributable product exists.
 
 ### Added
 
-- A proposed Milestone 12 Scheduled Morning Generation specification,
-  macOS scheduling ADR, connector-authorization dependency, and concise
-  nine-decision checklist; no scheduler or unattended operation is authorized.
+- An accepted Milestone 12 Scheduled Morning Generation specification, macOS
+  scheduling ADR, connector-authorization boundary, and nine-decision
+  checklist. Routine unattended operation after the trial remains unaccepted.
 - A private mode-`0600` Milestone 11 synthetic acceptance package covering
   representative day shapes, every single-source outage, historical lineage,
   safe source-title handling, responsive browser captures, print/PDF review,
