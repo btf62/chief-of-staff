@@ -56,8 +56,8 @@ experience with all required local dispositions, inspectable history,
 recurrence controls, and transactional deletion. Brad reviewed the actual
 interface at normal browser zoom, a successful five-source July 30 briefing,
 the correction controls and evidence links, and the four-page PDF rendering,
-then accepted the milestone. Milestone 11 operational hardening is authorized
-and complete. Brad reviewed the corrected historical replay and
+then accepted the milestone. Milestone 11 operational hardening is complete
+and accepted. Brad reviewed the corrected historical replay and
 reconstruction, preserved `America/New_York` times and lineage, native
 560-pixel and 1280-pixel browser presentations, three-page print artifact,
 partial-source behavior, privacy and no-write boundaries, and all 14
@@ -65,7 +65,9 @@ synthetic acceptance metrics. He explicitly approved the package on
 2026-07-30, accepting Milestone 11 and the on-demand Daily Briefing v1 MVP.
 Commit `900a3b66d40bb3596e7ebee6ab801f5321050801` is the final correction
 included in that accepted boundary. Scheduled generation and all other
-deferred capabilities remain outside the accepted MVP.
+deferred capabilities remain outside the accepted MVP. Milestone 12 is now a
+proposed design and authorization gate for Scheduled Morning Generation; it
+does not authorize installation or unattended operation.
 
 ## Repository map
 

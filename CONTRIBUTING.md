@@ -10,6 +10,11 @@ credentials, begin another connector, enable scheduling, or modify an
 external system without new explicit approval. Do not begin a later milestone
 before its dependencies and acceptance gate are satisfied.
 
+Milestone 12 Scheduled Morning Generation is proposed for design and
+authorization review only. Documentation corrections are permitted when
+explicitly requested; no scheduler, LaunchAgent, credential change, or
+unattended operation is authorized.
+
 ## Python environment
 
 The project supports CPython 3.14.x. The `.python-version` file selects the

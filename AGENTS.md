@@ -53,6 +53,9 @@ synthetic acceptance metrics. He explicitly approved the package, completing
 Milestone 11 and accepting the on-demand Daily Briefing v1 MVP. Commit
 `900a3b66d40bb3596e7ebee6ab801f5321050801` is the final correction in the
 accepted boundary. Milestones 1 through 11 are complete and accepted.
+Milestone 12 Scheduled Morning Generation is proposed for design and
+authorization review only. No host, schedule, catch-up policy, authorization
+change, notification, or implementation is approved.
 Personal Gmail and Google Drive remain deferred and unauthorized.
 
 ## Working rules
@@ -129,6 +132,10 @@ modify an external system, or begin a deferred milestone without new explicit
 approval. Acceptance does not authorize unattended operation or expand any
 connector, credential, inference, agency, or retention boundary. Record
 material new product or architecture decisions before implementing them.
+Milestone 12 documentation may be refined, but no scheduler, LaunchAgent,
+plist, persistent timer, wake schedule, notification path, credential change,
+or unattended operation may be implemented or installed until Brad approves
+the proposed specification, ADRs, decision checklist, and bounded trial.
 
 ## Validation
 

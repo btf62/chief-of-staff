@@ -1,7 +1,7 @@
 # Daily Briefing v1 Implementation Roadmap
 
 - **Status:** Accepted
-- **Version:** 12
+- **Version:** 13
 - **Owner:** Brad
 - **Last updated:** 2026-07-30
 
@@ -42,8 +42,8 @@ boundaries.
 - Use synthetic data before approved live data.
 - Add one connector at a time.
 - Keep deterministic processing independently testable.
-- Treat Work Gmail as the final MVP input gate; do not expand into Personal
-  Gmail or Google Drive before MVP validation.
+- Treat Work Gmail as the final accepted MVP input. Personal Gmail and Google
+  Drive remain post-MVP, deferred, and unauthorized until separately scoped.
 - Do not implement dashboards, Rock RMS, Church Online Platform, analytics,
   external actions, or multi-user behavior.
 - Update documentation and ADRs when implementation reveals a material
@@ -563,23 +563,41 @@ Briefing v1 MVP. Commit
 `900a3b66d40bb3596e7ebee6ab801f5321050801` is the final correction included
 in the accepted boundary.
 
-## Deferred Milestone — Scheduled Morning Generation
+## Milestone 12 — Scheduled Morning Generation
 
-- **Status:** Deferred
-- **Intended user-visible outcome:** After the on-demand briefing is
-  trustworthy, Brad can receive reliable morning generation without manually
-  invoking it.
-- **Dependencies:** Milestone 11, a suitable awake and connected host, and a
-  separately reviewed operational design.
+- **Status:** Proposed — design and authorization review pending
+- **Intended user-visible outcome:** Chief of Staff can generate one reliable
+  morning briefing automatically on approved days without duplicate runs,
+  silent failures, unexpected authorization expansion, or dependence on Brad
+  manually opening Terminal.
+- **Dependencies:** Accepted Milestone 11; an approved
+  [Scheduled Morning Generation v1](product/features/scheduled-morning-generation-v1.md)
+  specification; accepted decisions for
+  [connector authorization continuity](decisions/0009-choose-connector-authorization-continuity.md)
+  and the
+  [scheduling mechanism](decisions/0010-choose-scheduled-morning-generation-mechanism.md);
+  Brad's completed
+  [decision checklist](product/features/scheduled-morning-generation-decision-checklist.md);
+  and a suitable approved host.
 - **Principal deliverables:**
-  - Scheduler selection.
-  - Host-reliability expectations.
-  - Missed-run handling.
-  - Duplicate-run prevention.
-  - Operational monitoring.
-- **Acceptance gate:** Scheduling, recovery, idempotency, monitoring, privacy,
-  and host-failure behavior are documented, tested, and accepted before
-  unattended use.
-- **Explicitly excluded work:** Scheduling before on-demand trust is
-  established, silent missed runs, duplicate briefing replacement, and an
-  assumption that Brad's current Mac is always awake.
+  - Reviewed host, weekday, time, timezone, daylight-saving, and wake behavior.
+  - A thin, reversible scheduler invoking the accepted one-shot pipeline.
+  - Missed-run, catch-up, retry, idempotency, and duplicate prevention.
+  - Connector preflight and approved authorization-continuity behavior.
+  - Honest reduced-source success and complete-failure behavior.
+  - Private non-content diagnostics and approved outcome notification.
+  - Existing local-web, archive, retention, correction, and deletion behavior.
+  - Disablement, removal, update-health, and future Mac mini migration plans.
+- **Acceptance gate:** Brad approves every checklist decision and both proposed
+  ADRs; synthetic tests cover schedule, sleep/wake, daylight-saving,
+  idempotency, duplicate, reduced-source, failure, notification, privacy,
+  retention, and removal behavior; then a separately approved bounded
+  scheduled trial succeeds before unattended use.
+- **Explicitly excluded work:** Personal Gmail, Google Drive, new connectors,
+  external-source mutations, routine hosted inference, public or remote web
+  access, multi-user operation, mobile applications, analytics dashboards,
+  and autonomous email or Calendar actions.
+
+Milestone 12 is the next candidate milestone, not an authorized
+implementation. No target host, scheduled days, exact time, missed-run policy,
+authorization change, or notification method has been selected.

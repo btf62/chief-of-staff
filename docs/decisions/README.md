@@ -36,3 +36,4 @@ decisions.
 | [ADR-0007](0007-remove-asana-from-product-scope.md) | Remove Asana from Product Scope | Accepted | 2026-07-28 |
 | [ADR-0008](0008-adopt-flask-local-web-interface.md) | Adopt Flask and Waitress for the Local Web Interface | Accepted | 2026-07-30 |
 | [ADR-0009](0009-choose-connector-authorization-continuity.md) | Choose Connector Authorization Continuity | Proposed | 2026-07-30 |
+| [ADR-0010](0010-choose-scheduled-morning-generation-mechanism.md) | Choose the Scheduled Morning Generation Mechanism | Proposed | 2026-07-30 |

@@ -1,9 +1,9 @@
 # Product Requirements
 
 - **Status:** Accepted
-- **Version:** 5
+- **Version:** 6
 - **Owner:** Brad
-- **Last updated:** 2026-07-28
+- **Last updated:** 2026-07-30
 
 ## Responsibility
 
@@ -52,6 +52,7 @@ and its connector-specific access, privacy, and retention boundaries.
 | Phase | Intended outcome | Status |
 | --- | --- | --- |
 | [Daily Briefing v1](features/daily-briefing-v1.md) | A trusted daily starting point that clarifies today's outcomes, commitments, preparation, relationships, and approaching work | Accepted |
+| [Scheduled Morning Generation v1](features/scheduled-morning-generation-v1.md) | One reliable automatic morning invocation on approved days | Proposed — design and authorization review pending |
 
 ## Cross-feature requirements
 
@@ -77,6 +78,7 @@ All product capabilities must:
 | Deterministic Explicit Detection v1 | [Specification](features/deterministic-explicit-detection-v1.md) | Accepted |
 | Contextual Action Classification v1 | [Specification](features/contextual-action-classification-v1.md) | Accepted |
 | Ranking and Briefing Composition v1 | [Specification](features/ranking-and-briefing-composition-v1.md) | Accepted |
+| Scheduled Morning Generation v1 | [Specification](features/scheduled-morning-generation-v1.md) | Proposed |
 
 Detailed feature specifications belong in the
 [feature specifications directory](features/README.md).
@@ -99,6 +101,9 @@ Detailed feature specifications belong in the
 - Personal Gmail and Google Drive in the accepted on-demand MVP.
 - Sources not included in the active MVP input set.
 - Ideas explicitly deferred in [future ideas](future-ideas.md).
+- Scheduled generation unless and until Milestone 12's design,
+  authorization-continuity, host, operating-policy, and bounded-trial gates
+  are accepted.
 
 ## Acceptance
 

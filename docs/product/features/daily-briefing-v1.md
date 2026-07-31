@@ -1,7 +1,7 @@
 # Feature: Daily Briefing v1
 
 - **Status:** Accepted
-- **Version:** 12
+- **Version:** 13
 - **Owner:** Brad
 - **Last updated:** 2026-07-30
 
@@ -697,8 +697,11 @@ boundary.
 
 The following questions require later product or architecture decisions:
 
-- On which approved days, at what time, and on which host should a future
-  scheduled briefing run?
+- Scheduled invocation decisions are owned by the proposed
+  [Scheduled Morning Generation v1](scheduled-morning-generation-v1.md)
+  specification and its
+  [decision checklist](scheduled-morning-generation-decision-checklist.md);
+  they remain unresolved.
 - Where should private one-off workday exceptions be maintained operationally?
 - How should the accepted bounded Work Gmail retrieval evolve after the MVP
   trial without reducing precision or expanding access implicitly?

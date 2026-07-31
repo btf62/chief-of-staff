@@ -1,7 +1,7 @@
 # Architecture Overview
 
 - **Status:** Accepted
-- **Version:** 11
+- **Version:** 12
 - **Owner:** Brad
 - **Last updated:** 2026-07-30
 
@@ -792,13 +792,14 @@ implementation are now accepted:
 4. Inference and provider boundary — ADR-0006
 5. Local web framework and serving boundary — ADR-0008
 
-No additional cross-cutting minimum ADR is currently identified. Connector-
-specific specifications, inference-task specifications, evaluated model
-selection, and other decisions in the table above remain required before their
-affected capabilities are implemented.
+No additional cross-cutting minimum ADR is required for the accepted on-demand
+MVP. Connector-specific specifications, inference-task specifications,
+evaluated model selection, and other decisions in the table above remain
+required before their affected capabilities are implemented.
 
-The scheduling mechanism still requires a decision before scheduled delivery
-is implemented, but it need not block on-demand product work.
+ADR-0009 and ADR-0010 are proposed dependencies for Milestone 12. They do not
+block accepted on-demand operation, but they must be resolved before scheduled
+delivery is implemented.
 
 ### Contradictions and unresolved dependencies
 
@@ -813,6 +814,11 @@ documents. The following dependencies remain unresolved:
   before they may enter product scope.
 - Scheduled morning generation requires a separately approved host,
   scheduling policy, failure behavior, and authorization-continuity decision.
+  The proposed direction and unresolved choices are in
+  [ADR-0010](../decisions/0010-choose-scheduled-morning-generation-mechanism.md),
+  [ADR-0009](../decisions/0009-choose-connector-authorization-continuity.md),
+  and the
+  [Milestone 12 decision checklist](../product/features/scheduled-morning-generation-decision-checklist.md).
 
 ## Related Documents
 
@@ -828,3 +834,5 @@ documents. The following dependencies remain unresolved:
 - [ADR-0004: SQLite and Bounded Local Data Lifecycle](../decisions/0004-adopt-sqlite-and-bounded-local-data-lifecycle.md)
 - [ADR-0005: OAuth and macOS Keychain](../decisions/0005-adopt-oauth-and-macos-keychain.md)
 - [ADR-0006: Provider-Neutral Inference with OpenAI](../decisions/0006-adopt-provider-neutral-inference-with-openai.md)
+- [ADR-0009: Connector Authorization Continuity](../decisions/0009-choose-connector-authorization-continuity.md)
+- [ADR-0010: Scheduled Morning Generation Mechanism](../decisions/0010-choose-scheduled-morning-generation-mechanism.md)
