@@ -8,6 +8,10 @@ questions without duplicating the top-level PRD or governing foundations.
 Use [`../../../templates/feature-spec.md`](../../../templates/feature-spec.md)
 when creating a specification.
 
+The on-demand Daily Briefing v1 MVP passed its human acceptance gate on
+2026-07-30. Feature-specification acceptance and operational acceptance remain
+distinct; scheduled generation is not part of the accepted MVP.
+
 ## Feature index
 
 | Feature | Milestone | Status |

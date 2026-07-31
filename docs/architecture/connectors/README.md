@@ -64,8 +64,8 @@ decisions for each future connector specification.
 
 | Source | Planned specification |
 | --- | --- |
-| Personal Gmail | Deferred until after MVP validation; future instance remains within `gmail.md` |
-| Approved Google Drive content | Deferred until after MVP validation; specification not yet created |
+| Personal Gmail | Post-MVP, deferred, and unauthorized; future instance remains within `gmail.md` |
+| Approved Google Drive content | Post-MVP, deferred, and unauthorized; specification not yet created |
 
 Each future specification should implement the common read-only connector
 contract in the [Architecture Overview](../overview.md#4-connector-model)

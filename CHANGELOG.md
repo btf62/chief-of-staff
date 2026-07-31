@@ -9,6 +9,10 @@ No strict versioning scheme is promised before a distributable product exists.
 
 ### Changed
 
+- Brad accepted Milestone 11 and the on-demand Daily Briefing v1 MVP after
+  reviewing the corrected historical behavior, responsive and print
+  presentations, partial-source operation, privacy and no-write boundaries,
+  and all 14 synthetic acceptance metrics.
 - Historical replay and reconstruction now project UTC-normalized archived
   instants into the briefing's recorded IANA timezone before local-day
   classification, display, ranking, schedule-gap, and focus-window logic.

@@ -7,7 +7,8 @@ identifying priorities, commitments, and useful signals.
 
 ## Status
 
-**Phase:** Milestones 1–10 complete and accepted; Milestone 11 awaits review
+**Phase:** Milestones 1–11 and the on-demand Daily Briefing v1 MVP are complete
+and accepted
 
 The Python, local-state, deterministic briefing, repository connector, and
 read-only Google Calendar foundations are complete. An explicitly approved,
@@ -56,9 +57,15 @@ recurrence controls, and transactional deletion. Brad reviewed the actual
 interface at normal browser zoom, a successful five-source July 30 briefing,
 the correction controls and evidence links, and the four-page PDF rendering,
 then accepted the milestone. Milestone 11 operational hardening is authorized
-only through its local and synthetic review gate. Its implementation and
-private synthetic acceptance package are complete, but Brad's final artifact
-review remains required before Milestone 11 or the MVP may be accepted.
+and complete. Brad reviewed the corrected historical replay and
+reconstruction, preserved `America/New_York` times and lineage, native
+560-pixel and 1280-pixel browser presentations, three-page print artifact,
+partial-source behavior, privacy and no-write boundaries, and all 14
+synthetic acceptance metrics. He explicitly approved the package on
+2026-07-30, accepting Milestone 11 and the on-demand Daily Briefing v1 MVP.
+Commit `900a3b66d40bb3596e7ebee6ab801f5321050801` is the final correction
+included in that accepted boundary. Scheduled generation and all other
+deferred capabilities remain outside the accepted MVP.
 
 ## Repository map
 
@@ -124,9 +131,9 @@ lookup, hosted inference, persistence, or external writes. Use
 
 The bounded live-trial procedure is documented separately in
 [First Safe Connector Operations](docs/operations/first-safe-connectors.md).
-The combined-MVP Work Gmail trust gate is complete. Any additional live use
-must remain within an explicit current-task authorization and the unchanged
-connector boundary.
+The combined-MVP Work Gmail trust gate and the on-demand MVP acceptance gate
+are complete. Any additional live use must remain within an explicit
+current-task authorization and the unchanged connector boundary.
 
 ## Run the on-demand briefing
 

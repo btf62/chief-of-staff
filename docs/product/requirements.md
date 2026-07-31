@@ -1,7 +1,7 @@
 # Product Requirements
 
 - **Status:** Accepted
-- **Version:** 4
+- **Version:** 5
 - **Owner:** Brad
 - **Last updated:** 2026-07-28
 
@@ -38,10 +38,11 @@ The active MVP input set is:
 - Jira
 - Approved repository context
 
-Personal Gmail and Google Drive are deferred until after MVP validation. This
-is a sequencing decision, not permanent removal. The multi-account connector
-architecture and preliminary Personal Gmail design remain available for later
-review, but neither source is authorized or required for MVP acceptance.
+Personal Gmail and Google Drive remain deferred after on-demand MVP
+acceptance. This is a sequencing decision, not permanent removal. The
+multi-account connector architecture and preliminary Personal Gmail design
+remain available for later review, but neither source is authorized or part
+of the accepted MVP.
 
 Adding another active MVP source requires an explicit product-scope decision
 and its connector-specific access, privacy, and retention boundaries.
@@ -95,14 +96,14 @@ Detailed feature specifications belong in the
   [Daily Briefing v1 implementation roadmap](../roadmap.md).
 - Rock RMS, Church Online Platform, ministry analytics, dashboards, and
   autonomous actions in Daily Briefing v1.
-- Personal Gmail and Google Drive before MVP validation.
+- Personal Gmail and Google Drive in the accepted on-demand MVP.
 - Sources not included in the active MVP input set.
 - Ideas explicitly deferred in [future ideas](future-ideas.md).
 
 ## Acceptance
 
-This PRD is accepted as the Version 1 design contract. Design acceptance
-authorizes implementation; it does not mean Daily Briefing v1 has passed its
-feature acceptance criteria or is ready for operational use. That judgment
-occurs after implementation and validation through the
-[roadmap](../roadmap.md).
+This PRD is accepted as the Version 1 design contract. On 2026-07-30, Brad
+separately accepted the implemented on-demand Daily Briefing v1 MVP after the
+human-review gate in the [roadmap](../roadmap.md). That operational acceptance
+does not authorize deferred sources, scheduled generation, routine hosted
+inference, or external writes.

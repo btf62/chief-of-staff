@@ -192,7 +192,7 @@ removes dependent archived presentation content and replay facts while
 retaining only the approved minimal recurrence tombstone. See
 [Local State Operations](../local-state.md) for the complete lifecycle.
 
-## Milestone 11 human acceptance
+## Milestone 11 acceptance record
 
 The synthetic acceptance package is regenerated with:
 
@@ -206,6 +206,9 @@ briefings, aggregate metrics, historical comparisons, responsive browser
 captures, and print/PDF evidence. The visual files require an actual browser
 and print review; their presence is part of the gate.
 
-Passing automation does not accept Milestone 11. Brad must review the private
-artifacts and explicitly approve the result before the milestone or MVP is
-marked accepted.
+Passing automation alone does not accept a milestone. On 2026-07-30, Brad
+reviewed and explicitly approved the corrected Milestone 11 package, including
+historical behavior, preserved local times and lineage, browser and print
+presentation, reduced-source behavior, privacy and no-write boundaries, and
+all 14 synthetic metrics. Milestone 11 and the on-demand Daily Briefing v1 MVP
+are accepted.

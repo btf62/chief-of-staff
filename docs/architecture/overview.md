@@ -1,7 +1,7 @@
 # Architecture Overview
 
 - **Status:** Accepted
-- **Version:** 10
+- **Version:** 11
 - **Owner:** Brad
 - **Last updated:** 2026-07-30
 
@@ -11,6 +11,11 @@ system boundaries, information flow, security constraints, and decisions that
 must precede implementation. It establishes the initial execution, runtime,
 deployment, persistence, data-lifecycle, and interaction direction while
 deferring only the scheduler choice.
+
+The on-demand Daily Briefing v1 implementation within this architecture was
+accepted on 2026-07-30. That acceptance does not select or authorize a
+scheduler, deferred connector, routine hosted inference, remote access, or
+external mutation.
 
 The architecture is subordinate to the accepted
 [Product Vision](../product/vision.md) and
@@ -239,10 +244,10 @@ The active MVP requires connectors for:
 - Jira
 - Approved repository context
 
-Personal Gmail and approved Google Drive content are deferred until after MVP
-validation. The connector-instance architecture continues to support a future
-Personal Gmail instance independently from Work Gmail, but deferred sources
-have no MVP authorization, coverage, or acceptance obligation.
+Personal Gmail and approved Google Drive content remain deferred after
+on-demand MVP acceptance. The connector-instance architecture continues to
+support a future Personal Gmail instance independently from Work Gmail, but
+deferred sources have no authorization, coverage, or accepted-MVP obligation.
 
 Connector-specific retrieval rules, permissions, freshness semantics, bounded
 cache exceptions, and failure behavior belong in the
@@ -802,19 +807,12 @@ documents. The following dependencies remain unresolved:
 
 - Connector-specific cache needs must be justified and assigned a bounded
   retention and deletion policy before caching is enabled.
-- The accepted local web framework and serving boundary were implemented and
-  accepted through Milestone 10.
-- Connector account scopes, OAuth registration details, retrieval windows,
-  freshness thresholds, and source-specific authorization behavior remain to
-  be defined in connector specifications.
-- Cross-source actor identity and deduplication require conservative heuristics
-  and representative evaluation data.
-- The product requires precision-first inference evaluation, but its minimum
-  acceptance thresholds remain a product decision.
 - Routine hosted inference and any private-source evidence require a new
   explicit authorization despite the task-specific Luna selection.
-- Scheduled morning delivery depends on the selected host being awake and a
-  scheduler that has not been selected.
+- Deferred sources require their own accepted specifications and authorization
+  before they may enter product scope.
+- Scheduled morning generation requires a separately approved host,
+  scheduling policy, failure behavior, and authorization-continuity decision.
 
 ## Related Documents
 

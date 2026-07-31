@@ -162,13 +162,12 @@ fallback.
 
 Brad accepted the Milestone 10 local interface after reviewing it at normal
 browser zoom with a successful five-source July 30 briefing, its correction
-controls and evidence links, and the four-page PDF rendering. Milestone 11 may
-build on this interface only within its separately approved local and
-synthetic hardening boundary.
+controls and evidence links, and the four-page PDF rendering.
 
 The Milestone 11 synthetic interface review passed at 1280 and 560 CSS pixels
 without horizontal overflow. Its three-page letter-size PDF kept the Chief of
 Staff Note and individual briefing items together, avoided isolated headings,
 and retained readable secondary source links without clipping or overlap.
-These are implementation-gate results only; Brad's final private-artifact
-review remains required before Milestone 11 is accepted.
+On 2026-07-30, Brad reviewed the corrected private package and explicitly
+approved it. That human review—not artifact presence or passing automation
+alone—accepted Milestone 11 and the on-demand Daily Briefing v1 MVP.

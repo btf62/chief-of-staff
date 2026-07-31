@@ -1,7 +1,7 @@
 # Feature: Daily Briefing v1
 
 - **Status:** Accepted
-- **Version:** 11
+- **Version:** 12
 - **Owner:** Brad
 - **Last updated:** 2026-07-30
 
@@ -18,9 +18,9 @@ rather than completeness, and help Brad direct his attention without replacing
 the systems where the underlying records live.
 
 The `Accepted` status approves this specification as the Version 1 design
-contract and authorizes implementation within its boundaries. It does not mean
-the implemented feature has passed the acceptance criteria below or is ready
-for operational use.
+contract. On 2026-07-30, Brad also accepted the implemented on-demand MVP after
+reviewing the corrected Milestone 11 evidence. That acceptance does not
+authorize scheduled generation or any deferred source or agency boundary.
 
 ## User Outcome
 
@@ -48,9 +48,9 @@ The input-complete MVP may read only approved content from these sources:
 | Jira | Jira-managed work, status, ownership, dependencies, and deadlines |
 | Approved repository context | Approved project goals, decisions, requirements, and working context |
 
-Personal Gmail and Google Drive are deferred until after MVP validation. Their
-future designs do not authorize retrieval, coverage claims, persistence, or
-acceptance dependencies in the MVP.
+Personal Gmail and Google Drive remain deferred after on-demand MVP
+acceptance. Their future designs do not authorize retrieval, coverage claims,
+persistence, or acceptance dependencies in the accepted MVP.
 
 Each source remains authoritative for its own records. The briefing may
 interpret and prioritize records across sources, but it must not replace,
@@ -681,27 +681,34 @@ The following sources and capabilities are outside Daily Briefing v1:
 | AC-23 | Todoist titles omit control syntax in display without changing source data; all-day due dates never render as midnight; source priority uses transparent Todoist terminology only when material. |
 | AC-24 | Up Next excludes work more than fourteen days away without explicit current preparation. A Recommended Focus Block requires Calendar margin, distinguishes the available window from the proposed task assignment, uses only source-supported effort estimates, and explicitly leaves unsupported or remaining time unassigned. |
 
+## Acceptance Record
+
+On 2026-07-30, Brad approved the corrected Milestone 11 review package after
+reviewing historical replay and reconstruction, preserved
+`America/New_York` Calendar times and lineage, native 560 × 900 and
+1280-pixel presentations, the three-page print artifact, partial-source
+behavior, privacy and no-write boundaries, and all 14 synthetic acceptance
+metrics. Passing automation alone did not produce acceptance. This approval
+accepted the on-demand Daily Briefing v1 MVP. Commit
+`900a3b66d40bb3596e7ebee6ab801f5321050801` is the final correction in that
+boundary.
+
 ## Open Questions
 
 The following questions require later product or architecture decisions:
 
-- At what time and through which interface should the briefing be delivered?
+- On which approved days, at what time, and on which host should a future
+  scheduled briefing run?
 - Where should private one-off workday exceptions be maintained operationally?
 - How should the accepted bounded Work Gmail retrieval evolve after the MVP
   trial without reducing precision or expanding access implicitly?
 - Which additional representative scenarios are required before deterministic
   sent-commitment detection is trusted for operational use?
 - What freshness threshold applies to each source?
-- How should duplicate or conflicting items across task systems be recognized?
+- Which additional conservative associations across task systems would add
+  value without weakening the accepted duplicate and conflict controls?
 - How should non-Todoist inference confidence be represented without adding
   visual noise?
-- Through what interface should Brad inspect, correct, or disposition
-  recommendations?
-- How should local correction state be retained, secured, synchronized, and
-  reconciled with later source changes?
-- What representative evaluation corpus and minimum precision threshold should
-  be required before implementation acceptance?
-- What approved source scopes and access boundaries are required?
 
 Do not resolve these questions through implementation assumptions. Record
 significant answers in the Product Requirements, technical architecture, or an

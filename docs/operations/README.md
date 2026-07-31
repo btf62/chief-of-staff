@@ -23,8 +23,9 @@ requires each policy or procedure.
 ## Runbooks
 
 Step-by-step operational procedures belong in
-[the runbooks directory](runbooks/README.md). No deployment runbook exists
-because the system is not deployed or approved for operational use.
+[the runbooks directory](runbooks/README.md). The accepted on-demand workflow
+has a runbook; no unattended or scheduled deployment runbook exists because
+that operating mode remains unapproved.
 
 ## Implemented foundations
 

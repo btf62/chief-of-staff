@@ -47,12 +47,14 @@ Milestone 10's secure loopback-only reading and local correction experience is
 complete and accepted. Brad reviewed the actual interface at normal browser
 zoom, a successful five-source July 30 briefing, the correction controls and
 evidence links, and its four-page PDF rendering. Milestone 11 operational
-hardening is now in progress through its local and synthetic review gate;
-the implementation and private synthetic acceptance package are complete, but
-Brad's final artifact review remains required before the milestone or MVP may
-be accepted.
-Design acceptance authorizes implementation within the accepted scope; it does
-not mean the complete Daily Briefing has passed operational acceptance.
+hardening is complete and accepted. On 2026-07-30, Brad reviewed and explicitly
+approved the corrected historical behavior, preserved local times and lineage,
+responsive and print presentations, partial-source behavior, privacy and
+no-write boundaries, and all 14 synthetic metrics. Milestones 1–11 and the
+on-demand Daily Briefing v1 MVP are therefore complete and accepted. Commit
+`900a3b66d40bb3596e7ebee6ab801f5321050801` is the final correction included
+in the accepted boundary. Scheduled generation and other deferred
+capabilities remain unauthorized.
 
 ## Index
 

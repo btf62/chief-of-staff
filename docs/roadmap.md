@@ -1,7 +1,7 @@
 # Daily Briefing v1 Implementation Roadmap
 
 - **Status:** Accepted
-- **Version:** 11
+- **Version:** 12
 - **Owner:** Brad
 - **Last updated:** 2026-07-30
 
@@ -23,7 +23,10 @@ low reasoning for `contextual_action_classification` only, completing
 Milestone 8. Brad reviewed and accepted Milestone 9's corrected
 representative briefings after its deterministic ranking, structured plan,
 composition, and 26-scenario synthetic evaluation passed. Personal Gmail and
-Google Drive are deferred until after MVP validation.
+Google Drive remain deferred and unauthorized. Brad accepted Milestones 10 and
+11 after reviewing the local interface and corrected operational-hardening
+package. Milestones 1 through 11 and the on-demand Daily Briefing v1 MVP are
+complete and accepted.
 Dates and estimates remain intentionally omitted until implementation
 evidence supports them.
 
@@ -503,8 +506,7 @@ good,” explicitly accepting Milestone 10.
 
 ## Milestone 11 — Acceptance and Operational Hardening
 
-- **Status:** Implementation and synthetic gate complete — awaiting Brad's
-  artifact review
+- **Status:** Complete and accepted
 - **Intended user-visible outcome:** Brad can rely on an on-demand Daily
   Briefing v1 within its disclosed source coverage and privacy boundaries.
 - **Dependencies:** Milestone 10, approved live connector access, and an
@@ -550,9 +552,16 @@ metrics passed, including 26 of 26 ranking scenarios, zero unsupported claims,
 zero false-positive actionable recommendations, and zero provider, live
 connector, authorization-refresh, or external-write operations.
 
-This result completes only the implementation and local/synthetic gate.
-Milestone 11 and the MVP remain unaccepted until Brad reviews the private
-artifacts and explicitly approves them.
+On 2026-07-30, Brad reviewed and explicitly approved the corrected package,
+including historical replay and reconstruction, preserved
+`America/New_York` Calendar times, recorded/replay/reconstruction lineage,
+native 560 × 900 and 1280-pixel browser presentations, the three-page print
+artifact, partial-source behavior, privacy and no-write boundaries, and all 14
+synthetic metrics. Passing automation alone did not produce acceptance.
+Brad's approval completed Milestone 11 and accepted the on-demand Daily
+Briefing v1 MVP. Commit
+`900a3b66d40bb3596e7ebee6ab801f5321050801` is the final correction included
+in the accepted boundary.
 
 ## Deferred Milestone — Scheduled Morning Generation
 

@@ -2,14 +2,12 @@
 
 ## Current scope
 
-The Version 1 design baseline and Milestones 1–10 are complete and accepted.
-Milestone 11 implementation and its private synthetic gate are complete;
-Brad's final artifact review remains pending. Contributions may correct
-authoritative documentation or the non-live Milestone 11 implementation when
-explicitly authorized. Do not repeat live retrieval, make a provider call,
-broaden an authorization boundary, refresh credentials, begin another
-connector, enable scheduling, modify an external system, or treat Milestone 11
-as accepted without new explicit approval. Do not begin a later milestone
+The Version 1 design baseline, Milestones 1–11, and the on-demand Daily
+Briefing v1 MVP are complete and accepted. Contributions may maintain the
+accepted on-demand product only when explicitly authorized. Do not repeat live
+retrieval, make a provider call, broaden an authorization boundary, refresh
+credentials, begin another connector, enable scheduling, or modify an
+external system without new explicit approval. Do not begin a later milestone
 before its dependencies and acceptance gate are satisfied.
 
 ## Python environment

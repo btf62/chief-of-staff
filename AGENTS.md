@@ -44,11 +44,15 @@ briefing presentation, complete local disposition history, recurrence
 projection, and transactional deletion behavior are complete and accepted.
 Brad reviewed the actual interface at normal browser zoom, a successful
 five-source July 30 briefing, the correction controls and evidence links, and
-the four-page PDF rendering. Milestone 11 operational hardening is authorized
-only through its local and synthetic review gate. Its implementation and
-private synthetic acceptance package are complete. Brad's final review of the
-Milestone 11 artifacts remains the acceptance gate, so do not mark the
-milestone accepted or begin deferred work.
+the four-page PDF rendering. Milestone 11 operational hardening is complete
+and accepted. On 2026-07-30, Brad reviewed the corrected historical replay and
+reconstruction, preserved `America/New_York` times and lineage, native
+560-pixel and 1280-pixel browser presentations, three-page print artifact,
+partial-source behavior, privacy and no-write boundaries, and all 14
+synthetic acceptance metrics. He explicitly approved the package, completing
+Milestone 11 and accepting the on-demand Daily Briefing v1 MVP. Commit
+`900a3b66d40bb3596e7ebee6ab801f5321050801` is the final correction in the
+accepted boundary. Milestones 1 through 11 are complete and accepted.
 Personal Gmail and Google Drive remain deferred and unauthorized.
 
 ## Working rules
@@ -118,16 +122,13 @@ have been exercised. Do not repeat live retrieval or provider calls, refresh
 authorization, broaden access, repeat Jira discovery, run an unrelated live
 retrieval, enable routine hosted inference, select a model for another
 inference task, or begin another connector without new explicit approval from
-Brad. Milestone 10 is accepted. Milestone 11 may proceed only within the
-currently approved local and synthetic hardening boundary. Do not perform
-another live retrieval, request or refresh authorization, invoke hosted
-inference, enable scheduling, add a connector, modify an external system, or
-begin a deferred milestone. The implementation and private synthetic gate are
-complete; only corrections within the accepted Milestone 11 boundary may
-proceed without a new approval. Brad's final review of the private Milestone
-11 artifacts remains its acceptance gate. Satisfy that gate before treating
-the MVP as accepted. Record material new product or architecture decisions
-before implementing them.
+Brad. Milestones 1 through 11 and the on-demand Daily Briefing v1 MVP are
+accepted. Do not perform another live retrieval, request or refresh
+authorization, invoke hosted inference, enable scheduling, add a connector,
+modify an external system, or begin a deferred milestone without new explicit
+approval. Acceptance does not authorize unattended operation or expand any
+connector, credential, inference, agency, or retention boundary. Record
+material new product or architecture decisions before implementing them.
 
 ## Validation
 
