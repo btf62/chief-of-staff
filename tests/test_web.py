@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import os
 import re
+import signal
+import stat
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime, timedelta
 from html.parser import HTMLParser
@@ -35,6 +38,7 @@ from chief_of_staff.persistence import (
     Database,
     StateStore,
 )
+from chief_of_staff.web import server as web_server
 from chief_of_staff.web.app import (
     DEFAULT_HOST,
     DEFAULT_PORT,
@@ -388,6 +392,9 @@ def test_supported_server_uses_waitress_loopback_and_debug_off(
     class FakeServer:
         def run(self) -> None:
             captured["ran"] = True
+            pid_path = database_path.parent / "web-server.pid"
+            captured["pid"] = pid_path.read_text(encoding="utf-8").strip()
+            captured["pid_mode"] = stat.S_IMODE(pid_path.stat().st_mode)
 
         def close(self) -> None:
             captured["closed"] = True
@@ -414,8 +421,70 @@ def test_supported_server_uses_waitress_loopback_and_debug_off(
         "debug": False,
         "tracebacks": False,
         "ran": True,
+        "pid": str(os.getpid()),
+        "pid_mode": 0o600,
         "closed": True,
     }
+    assert not (database_path.parent / "web-server.pid").exists()
+
+
+def test_web_stop_signals_only_the_validated_claimed_process(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pid_path = tmp_path / "web-server.pid"
+    pid_path.write_text("4242\n", encoding="utf-8")
+    inspected = iter(
+        (
+            (os.getuid(), "python -m chief_of_staff.web.server"),
+            None,
+        )
+    )
+    signals: list[tuple[int, int]] = []
+    monkeypatch.setattr(web_server, "_inspect_process", lambda _pid: next(inspected))
+    monkeypatch.setattr(
+        web_server,
+        "_send_stop_signal",
+        lambda pid: signals.append((pid, signal.SIGTERM)),
+    )
+
+    result = web_main(["--database", str(tmp_path / "state.sqlite3"), "--stop"])
+
+    assert result == 0
+    assert signals == [(4242, signal.SIGTERM)]
+    assert not pid_path.exists()
+
+
+def test_web_stop_refuses_an_unrelated_process(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pid_path = tmp_path / "web-server.pid"
+    pid_path.write_text("4242\n", encoding="utf-8")
+    monkeypatch.setattr(
+        web_server,
+        "_inspect_process",
+        lambda _pid: (os.getuid(), "python -m unrelated.server"),
+    )
+
+    result = web_main(["--database", str(tmp_path / "state.sqlite3"), "--stop"])
+
+    assert result == 4
+    assert pid_path.exists()
+
+
+def test_web_stop_removes_stale_state_without_signaling(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pid_path = tmp_path / "web-server.pid"
+    pid_path.write_text("4242\n", encoding="utf-8")
+    monkeypatch.setattr(web_server, "_inspect_process", lambda _pid: None)
+
+    result = web_main(["--database", str(tmp_path / "state.sqlite3"), "--stop"])
+
+    assert result == 0
+    assert not pid_path.exists()
 
 
 def test_single_waitress_worker_can_use_the_validated_database(

@@ -78,9 +78,19 @@ a new security decision.
 
 ## Stop
 
-Press Control-C in the foreground terminal. Waitress and the application-owned
-SQLite connection shut down before the command exits. Milestone 10 creates no
-background service, login item, worker, or scheduled process.
+Press Control-C in the foreground terminal, or stop the exact project-owned
+process from another terminal:
+
+```text
+make web-stop
+```
+
+The stop command uses a private mode-`0600` PID file beside the local database,
+verifies the process belongs to the current user and matches the supported
+Chief of Staff server command, and refuses to signal an unrelated process.
+Waitress and the application-owned SQLite connection shut down before the
+command exits. Milestone 10 creates no background service, login item, worker,
+or scheduled web process.
 
 The local interface never invokes a connector. When no completed briefing
 exists, it directs Brad to run `make briefing` in Terminal and refresh.

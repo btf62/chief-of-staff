@@ -58,7 +58,7 @@ seven-eligible-date trial on Brad's current primary Mac from 2026-08-03 through
 2026-08-10. The accepted schedule is 6:00 a.m. `America/New_York` on Monday
 through Thursday, Saturday, and Sunday, with catch-up only through 11:00 a.m.
 The trial must become inert after seven eligible dates. Routine unattended
-operation after the trial is not accepted. The implementation, 416-test
+operation after the trial is not accepted. The implementation, 419-test
 repository gate, Milestone 8 and 9
 evaluations, Milestone 11 evaluation, Markdown validation, and wheel packaging
 are complete. The exact-scope Calendar continuity check, reversible

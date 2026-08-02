@@ -30,6 +30,8 @@ No strict versioning scheme is promised before a distributable product exists.
 
 ### Added
 
+- A safe `make web-stop` command using a private PID file and exact process
+  validation instead of broad process matching.
 - Repository-native `make help`, `make commands`, and bare `make` command
   indexes for everyday, scheduled-trial, and development operations.
 - A self-limiting Scheduled Morning Generation implementation with

@@ -8,7 +8,7 @@ PYTEST := $(VENV)/bin/pytest
 
 .DEFAULT_GOAL := help
 
-.PHONY: help commands bootstrap format format-check lint typecheck test docs-check inference-eval ranking-eval milestone-11-eval demo demo-synthetic briefing web web-open connector-status scheduled-readiness scheduled-dry-run scheduled-install scheduled-update-time scheduled-status scheduled-disable scheduled-enable scheduled-remove scheduled-notify-test check
+.PHONY: help commands bootstrap format format-check lint typecheck test docs-check inference-eval ranking-eval milestone-11-eval demo demo-synthetic briefing web web-open web-stop connector-status scheduled-readiness scheduled-dry-run scheduled-install scheduled-update-time scheduled-status scheduled-disable scheduled-enable scheduled-remove scheduled-notify-test check
 
 help:
 	@printf '%s\n' \
@@ -17,6 +17,7 @@ help:
 		'Everyday use' \
 		'  make web-open              Start the local interface and open it' \
 		'  make web                   Start the local interface' \
+		'  make web-stop              Stop only the local interface process' \
 		'  make briefing              Generate an on-demand live briefing' \
 		'  make connector-status      Inspect connector health' \
 		'  make scheduled-status      Inspect the scheduled trial' \
@@ -97,6 +98,9 @@ web:
 
 web-open:
 	$(VENV_PYTHON) -m chief_of_staff.web.server --open
+
+web-stop:
+	$(VENV_PYTHON) -m chief_of_staff.web.server --stop
 
 connector-status:
 	$(VENV_PYTHON) -m chief_of_staff.operations_cli connector-status

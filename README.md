@@ -190,7 +190,7 @@ make web-open
 ```
 
 It serves only `http://127.0.0.1:8765` by default and runs in the foreground
-until stopped with Control-C. See
+until stopped with Control-C or `make web-stop`. See
 [Local Web Interface Operations](docs/operations/local-web.md) for data
 location, alternate-port behavior, and safe diagnostics.
 
