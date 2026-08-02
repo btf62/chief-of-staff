@@ -59,7 +59,7 @@ def test_payload_has_only_accepted_calendar_schedule_and_no_restart(
     intervals = payload["StartCalendarInterval"]
     assert isinstance(intervals, list)
     assert tuple(item["Weekday"] for item in intervals) == LAUNCHD_WEEKDAYS
-    assert all(item["Hour"] == 7 and item["Minute"] == 0 for item in intervals)
+    assert all(item["Hour"] == 6 and item["Minute"] == 0 for item in intervals)
     assert 5 not in LAUNCHD_WEEKDAYS
 
 

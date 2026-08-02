@@ -9,6 +9,8 @@ No strict versioning scheme is promised before a distributable product exists.
 
 ### Changed
 
+- Brad changed the bounded Milestone 12 trigger from 7:00 to 6:00 a.m.
+  `America/New_York` without resetting or extending the seven-date trial.
 - Scheduled generation now requires repository context, Calendar, and at least
   one of Work Gmail or Todoist; Jira remains optional, and repeated terminal
   outcomes cannot trigger a whole-run retry.

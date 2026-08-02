@@ -8,7 +8,7 @@ identifying priorities, commitments, and useful signals.
 ## Status
 
 **Phase:** Milestones 1–11 and the on-demand Daily Briefing v1 MVP are
-accepted; Milestone 12 implementation and its bounded trial are authorized
+accepted; Milestone 12's bounded scheduled trial is active
 
 The Python, local-state, deterministic briefing, repository connector, and
 read-only Google Calendar foundations are complete. An explicitly approved,
@@ -65,8 +65,8 @@ synthetic acceptance metrics. He explicitly approved the package on
 2026-07-30, accepting Milestone 11 and the on-demand Daily Briefing v1 MVP.
 Commit `900a3b66d40bb3596e7ebee6ab801f5321050801` is the final correction
 included in that accepted boundary. Scheduled generation and all other
-deferred capabilities remain outside the accepted MVP. Milestone 12 is now an
-accepted bounded-trial implementation for Scheduled Morning Generation.
+deferred capabilities remain outside the accepted MVP. Milestone 12 is an
+active bounded-trial implementation for Scheduled Morning Generation.
 Routine unattended operation after seven eligible dates remains unaccepted.
 
 ## Repository map

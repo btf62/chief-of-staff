@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
@@ -872,6 +873,44 @@ def test_scheduled_trial_and_occurrence_are_inspectable_non_content_state(
         )
         store.save_scheduled_trial(rollback_trial)
         assert store.delete_empty_scheduled_trial(rollback_trial.id)
+
+
+def test_unstarted_scheduled_trial_time_can_change_without_resetting_dates(
+    tmp_path: Path,
+) -> None:
+    with Database.open(tmp_path / "scheduled-update.sqlite3") as database:
+        store = StateStore(database)
+        trial = ScheduledTrial(
+            id="scheduled-morning-v1",
+            timezone="America/New_York",
+            eligible_weekdays=(0, 1, 2, 3, 5, 6),
+            trigger_hour=7,
+            trigger_minute=0,
+            cutoff_hour=11,
+            cutoff_minute=0,
+            first_eligible_date=date(2026, 8, 3),
+            final_eligible_date=date(2026, 8, 10),
+            maximum_eligible_dates=7,
+            enabled=True,
+            application_version="old-version",
+            created_at=NOW,
+            updated_at=NOW,
+        )
+        store.save_scheduled_trial(trial)
+        updated = replace(
+            trial,
+            trigger_hour=6,
+            enabled=False,
+            application_version="new-version",
+            updated_at=NOW + timedelta(minutes=1),
+        )
+
+        store.reconfigure_unstarted_scheduled_trial(updated)
+
+        stored = store.get_scheduled_trial(trial.id)
+        assert stored == updated
+        assert stored.first_eligible_date == trial.first_eligible_date
+        assert stored.final_eligible_date == trial.final_eligible_date
 
 
 def test_reset_removes_product_state_but_preserves_migrations(tmp_path: Path) -> None:

@@ -2523,6 +2523,66 @@ class StateStore:
             ),
         )
 
+    def reconfigure_unstarted_scheduled_trial(self, trial: ScheduledTrial) -> None:
+        """Change an unstarted trial's time without resetting its date boundary."""
+
+        _require_aware(trial.updated_at)
+        if not 0 <= trial.trigger_hour <= 23:
+            raise ValueError("scheduled trigger hour is invalid")
+        if not 0 <= trial.trigger_minute <= 59:
+            raise ValueError("scheduled trigger minute is invalid")
+        with self.database.transaction() as connection:
+            existing = connection.execute(
+                "SELECT * FROM scheduled_trials WHERE id = ?",
+                (trial.id,),
+            ).fetchone()
+            if existing is None:
+                raise ValueError("scheduled trial does not exist")
+            occurrence_count = int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM scheduled_occurrences WHERE trial_id = ?",
+                    (trial.id,),
+                ).fetchone()[0]
+            )
+            if occurrence_count or existing["completed_at"] is not None:
+                raise ValueError(
+                    "only an unstarted scheduled trial can be reconfigured"
+                )
+            immutable_values = (
+                ("timezone", trial.timezone),
+                (
+                    "eligible_weekdays_json",
+                    json.dumps(list(trial.eligible_weekdays), separators=(",", ":")),
+                ),
+                ("cutoff_hour", trial.cutoff_hour),
+                ("cutoff_minute", trial.cutoff_minute),
+                ("first_eligible_date", trial.first_eligible_date.isoformat()),
+                ("final_eligible_date", trial.final_eligible_date.isoformat()),
+                ("maximum_eligible_dates", trial.maximum_eligible_dates),
+                ("created_at", _serialize_datetime(trial.created_at)),
+            )
+            if any(existing[column] != value for column, value in immutable_values):
+                raise ValueError("scheduled trial boundary cannot be reconfigured")
+            connection.execute(
+                """
+                UPDATE scheduled_trials
+                SET trigger_hour = ?,
+                    trigger_minute = ?,
+                    enabled = ?,
+                    application_version = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    trial.trigger_hour,
+                    trial.trigger_minute,
+                    int(trial.enabled),
+                    trial.application_version,
+                    _serialize_datetime(trial.updated_at),
+                    trial.id,
+                ),
+            )
+
     def delete_empty_scheduled_trial(self, trial_id: str) -> bool:
         """Roll back an unstarted trial when service installation fails."""
 

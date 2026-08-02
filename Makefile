@@ -6,7 +6,7 @@ RUFF := $(VENV)/bin/ruff
 MYPY := $(VENV)/bin/mypy
 PYTEST := $(VENV)/bin/pytest
 
-.PHONY: bootstrap format format-check lint typecheck test docs-check inference-eval ranking-eval milestone-11-eval demo demo-synthetic briefing web web-open connector-status scheduled-readiness scheduled-dry-run scheduled-install scheduled-status scheduled-disable scheduled-enable scheduled-remove scheduled-notify-test check
+.PHONY: bootstrap format format-check lint typecheck test docs-check inference-eval ranking-eval milestone-11-eval demo demo-synthetic briefing web web-open connector-status scheduled-readiness scheduled-dry-run scheduled-install scheduled-update-time scheduled-status scheduled-disable scheduled-enable scheduled-remove scheduled-notify-test check
 
 bootstrap:
 	$(PYTHON) -m venv $(VENV)
@@ -67,6 +67,9 @@ scheduled-dry-run:
 
 scheduled-install:
 	$(VENV_PYTHON) -m chief_of_staff.scheduled_cli install --confirm-primary-host
+
+scheduled-update-time:
+	$(VENV_PYTHON) -m chief_of_staff.scheduled_cli update-schedule --confirm-trigger-hour 6
 
 scheduled-status:
 	$(VENV_PYTHON) -m chief_of_staff.scheduled_cli status

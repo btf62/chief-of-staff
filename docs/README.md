@@ -53,10 +53,10 @@ responsive and print presentations, partial-source behavior, privacy and
 no-write boundaries, and all 14 synthetic metrics. Milestones 1–11 and the
 on-demand Daily Briefing v1 MVP are therefore complete and accepted. Commit
 `900a3b66d40bb3596e7ebee6ab801f5321050801` is the final correction included
-in the accepted boundary. Milestone 12 Scheduled Morning Generation is
-implemented for an accepted self-limiting seven-eligible-date trial; live
-activation remains subject to its documented setup gates. Other deferred
-capabilities and routine unattended operation afterward remain unauthorized.
+in the accepted boundary. Milestone 12 Scheduled Morning Generation is active
+for an accepted self-limiting seven-eligible-date trial from 2026-08-03 through
+2026-08-10. Other deferred capabilities and routine unattended operation
+afterward remain unauthorized.
 
 ## Index
 
@@ -79,7 +79,7 @@ capabilities and routine unattended operation afterward remain unauthorized.
 - [Scheduled Morning Generation v1](product/features/scheduled-morning-generation-v1.md)
   — accepted Milestone 12 bounded-trial automatic-invocation contract
 - [Milestone 12 decision checklist](product/features/scheduled-morning-generation-decision-checklist.md)
-  — the nine choices Brad must make before implementation
+  — the nine accepted bounded-trial operating choices
 - [Future ideas](product/future-ideas.md) — valuable ideas explicitly outside
   current implementation scope
 

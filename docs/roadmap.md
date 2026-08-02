@@ -602,7 +602,7 @@ in the accepted boundary.
   and autonomous email or Calendar actions.
 
 Brad approved the current primary Mac, Monday–Thursday plus Saturday and
-Sunday, 7:00 a.m. `America/New_York`, catch-up through 11:00 a.m., the exact
+Sunday, 6:00 a.m. `America/New_York`, catch-up through 11:00 a.m., the exact
 source-sufficiency rule, refreshable Calendar continuity under the unchanged
 read-only scope, existing Gmail and Todoist refresh paths, short-lived Jira
 without `offline_access`, private-safe notifications, and a seven-date trial.

@@ -84,7 +84,7 @@ one bounded command and exits; it does not keep Chief of Staff running
 continuously. [ADR-0010](../../decisions/0010-choose-scheduled-morning-generation-mechanism.md)
 records the accepted mechanism.
 
-The LaunchAgent triggers at 7:00 a.m. on Monday through Thursday, Saturday,
+The LaunchAgent triggers at 6:00 a.m. on Monday through Thursday, Saturday,
 and Sunday. Friday is ineligible. The application timezone is the IANA zone
 `America/New_York`, independent of archived UTC storage. A delayed invocation
 may proceed through 11:00 a.m. local time. After that cutoff, it records a
@@ -92,7 +92,7 @@ miss without retrieving sources or generating a briefing.
 
 The trial covers seven eligible scheduled local dates, including eligible
 dates that are missed or fail. Its first date is the first configured
-7:00 a.m. occurrence after installation. After the seventh eligible date, the
+6:00 a.m. occurrence after installation. After the seventh eligible date, the
 scheduled command becomes inert until Brad explicitly accepts or extends
 operation. Routine use should later migrate to an approved always-awake Mac
 mini.

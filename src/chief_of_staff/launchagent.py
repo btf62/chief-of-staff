@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final
 
+from chief_of_staff.scheduling import TRIGGER_HOUR, TRIGGER_MINUTE
+
 LAUNCH_AGENT_LABEL: Final = "org.northridge.chief-of-staff.scheduled-morning"
 LAUNCH_AGENT_FILENAME: Final = f"{LAUNCH_AGENT_LABEL}.plist"
 LAUNCHD_WEEKDAYS: Final = (0, 1, 2, 3, 4, 6)
@@ -45,7 +47,12 @@ def launch_agent_payload(
         ],
         "WorkingDirectory": str(root),
         "StartCalendarInterval": [
-            {"Weekday": weekday, "Hour": 7, "Minute": 0} for weekday in LAUNCHD_WEEKDAYS
+            {
+                "Weekday": weekday,
+                "Hour": TRIGGER_HOUR,
+                "Minute": TRIGGER_MINUTE,
+            }
+            for weekday in LAUNCHD_WEEKDAYS
         ],
         "ProcessType": "Background",
         "KeepAlive": False,

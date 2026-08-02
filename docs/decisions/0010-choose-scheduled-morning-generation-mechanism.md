@@ -65,7 +65,7 @@ and Apple's
 ## Decision
 
 Use a user-level macOS `launchd` LaunchAgent in Brad's logged-in GUI session
-with calendar triggers at 7:00 a.m. on Monday through Thursday, Saturday, and
+with calendar triggers at 6:00 a.m. on Monday through Thursday, Saturday, and
 Sunday. It invokes one bounded scheduled-generation command and then exits.
 Friday has no trigger. The LaunchAgent uses neither `KeepAlive` nor an
 always-running worker.

@@ -53,16 +53,16 @@ synthetic acceptance metrics. He explicitly approved the package, completing
 Milestone 11 and accepting the on-demand Daily Briefing v1 MVP. Commit
 `900a3b66d40bb3596e7ebee6ab801f5321050801` is the final correction in the
 accepted boundary. Milestones 1 through 11 are complete and accepted.
-Milestone 12 Scheduled Morning Generation is implemented for a bounded
-seven-eligible-date trial on Brad's current primary Mac. Live activation
-remains subject to the accepted validation and operator gates. The accepted
-schedule is 7:00 a.m. `America/New_York` on Monday through Thursday, Saturday,
-and Sunday, with catch-up only through 11:00 a.m. The trial must become inert
-after seven eligible dates. Routine unattended operation after the trial is
-not accepted. The implementation, 414-test repository gate, Milestone 8 and 9
+Milestone 12 Scheduled Morning Generation is active for a bounded
+seven-eligible-date trial on Brad's current primary Mac from 2026-08-03 through
+2026-08-10. The accepted schedule is 6:00 a.m. `America/New_York` on Monday
+through Thursday, Saturday, and Sunday, with catch-up only through 11:00 a.m.
+The trial must become inert after seven eligible dates. Routine unattended
+operation after the trial is not accepted. The implementation, 416-test
+repository gate, Milestone 8 and 9
 evaluations, Milestone 11 evaluation, Markdown validation, and wheel packaging
-are complete. The exact-scope attended Calendar continuity check and
-reversible LaunchAgent activation remain.
+are complete. The exact-scope Calendar continuity check, reversible
+LaunchAgent activation, notification test, and disable/re-enable test passed.
 Personal Gmail and Google Drive remain deferred and unauthorized.
 
 ## Working rules

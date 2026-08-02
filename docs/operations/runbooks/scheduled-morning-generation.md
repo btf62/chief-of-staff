@@ -20,7 +20,7 @@ governs the user-level LaunchAgent.
 
 - Host: Brad's current primary Mac
 - Timezone: `America/New_York`
-- Trigger: 7:00 a.m. Monday through Thursday, Saturday, and Sunday
+- Trigger: 6:00 a.m. Monday through Thursday, Saturday, and Sunday
 - Ineligible day: Friday
 - Catch-up: one invocation may proceed through 11:00 a.m.; after that it
   records a miss without retrieving a source
@@ -51,7 +51,7 @@ Scheduled generation requires:
 Shutdown, logout, FileVault startup, a locked or unavailable Keychain, lost
 network access, or a wake after the cutoff can prevent a briefing. The product
 records the safe outcome; it does not promise that a powered-off Mac can run at
-7:00 a.m.
+6:00 a.m.
 
 ## Validate without installing or retrieving
 
@@ -128,8 +128,20 @@ Installation:
 - configures no `RunAtLoad`, `KeepAlive`, or automatic retry; and
 - performs no Calendar, Gmail, Todoist, or Jira retrieval.
 
-The first eligible date is the first configured 7:00 a.m. occurrence strictly
+The first eligible date is the first configured 6:00 a.m. occurrence strictly
 after installation. The command refuses to replace an existing trial.
+
+Before the first eligible date, an explicitly approved trigger-time change can
+be applied without resetting or extending the trial:
+
+```text
+make scheduled-update-time
+```
+
+The update command requires a clean reviewed application version, an unstarted
+trial, and the same host and connector readiness gates. It unloads and replaces
+only the exact LaunchAgent, preserves the accepted first and final dates, and
+leaves the trial enabled only after the replacement is loaded successfully.
 
 ## Verify installation safely
 

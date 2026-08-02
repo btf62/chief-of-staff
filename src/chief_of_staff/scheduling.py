@@ -36,7 +36,7 @@ from chief_of_staff.persistence import StateStore
 TRIAL_ID: Final = "scheduled-morning-v1"
 SCHEDULE_TIMEZONE: Final = "America/New_York"
 ELIGIBLE_WEEKDAYS: Final = (0, 1, 2, 3, 5, 6)
-TRIGGER_HOUR: Final = 7
+TRIGGER_HOUR: Final = 6
 TRIGGER_MINUTE: Final = 0
 CUTOFF_HOUR: Final = 11
 CUTOFF_MINUTE: Final = 0
@@ -176,7 +176,7 @@ def eligible_dates(
 
 
 def first_eligible_date_after_installation(installed_at: datetime) -> date:
-    """Choose the first 7 a.m. occurrence strictly after installation."""
+    """Choose the first 6 a.m. occurrence strictly after installation."""
 
     local = _as_local(installed_at)
     candidate = local.date()
@@ -232,6 +232,33 @@ def set_trial_enabled(
         updated_at=local,
     )
     state_store.save_scheduled_trial(updated)
+    return updated
+
+
+def reconfigure_unstarted_trial(
+    state_store: StateStore,
+    *,
+    now: datetime,
+) -> ScheduledTrial:
+    """Adopt the current accepted time without resetting the trial boundary."""
+
+    trial = state_store.get_scheduled_trial(TRIAL_ID)
+    if trial is None:
+        raise RuntimeError("Scheduled Morning Generation is not installed")
+    if trial.completed_at is not None:
+        raise RuntimeError("the bounded scheduled trial is complete")
+    if state_store.list_scheduled_occurrences(TRIAL_ID):
+        raise RuntimeError("a started scheduled trial cannot be reconfigured")
+    local = _as_local(now)
+    updated = replace(
+        trial,
+        trigger_hour=TRIGGER_HOUR,
+        trigger_minute=TRIGGER_MINUTE,
+        enabled=False,
+        application_version=application_version(),
+        updated_at=local,
+    )
+    state_store.reconfigure_unstarted_scheduled_trial(updated)
     return updated
 
 

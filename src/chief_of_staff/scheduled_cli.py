@@ -58,9 +58,12 @@ from chief_of_staff.scheduling import (
     MAXIMUM_ELIGIBLE_DATES,
     SCHEDULE_TIMEZONE,
     TRIAL_ID,
+    TRIGGER_HOUR,
+    TRIGGER_MINUTE,
     SafeMacOSNotifier,
     application_version,
     create_trial,
+    reconfigure_unstarted_trial,
     run_scheduled_once,
     set_trial_enabled,
 )
@@ -75,6 +78,8 @@ def main(arguments: list[str] | None = None) -> int:
     subparsers.add_parser("dry-run")
     install_parser = subparsers.add_parser("install")
     install_parser.add_argument("--confirm-primary-host", action="store_true")
+    update_parser = subparsers.add_parser("update-schedule")
+    update_parser.add_argument("--confirm-trigger-hour", type=int, required=True)
     subparsers.add_parser("status")
     subparsers.add_parser("disable")
     subparsers.add_parser("enable")
@@ -124,6 +129,38 @@ def main(arguments: list[str] | None = None) -> int:
                     "loaded": manager.loaded(),
                     "maximum_eligible_dates": trial.maximum_eligible_dates,
                     "status": "installed",
+                }
+            )
+            return 0
+        if parsed.command == "update-schedule":
+            if parsed.confirm_trigger_hour != TRIGGER_HOUR:
+                raise RuntimeError("trigger-hour confirmation does not match policy")
+            readiness = _readiness_payload(store, keychain)
+            if not readiness["ready"]:
+                raise RuntimeError("host or connector readiness is incomplete")
+            existing_trial = store.get_scheduled_trial(TRIAL_ID)
+            if existing_trial is None:
+                raise RuntimeError("Scheduled Morning Generation is not installed")
+            if store.list_scheduled_occurrences(TRIAL_ID):
+                raise RuntimeError("a started scheduled trial cannot be reconfigured")
+            manager.disable()
+            trial = reconfigure_unstarted_trial(store, now=datetime.now(UTC))
+            manager.install_and_load()
+            trial = set_trial_enabled(
+                store,
+                enabled=True,
+                now=datetime.now(UTC),
+            )
+            _print_json(
+                {
+                    "enabled": trial.enabled,
+                    "final_eligible_date": trial.final_eligible_date,
+                    "first_eligible_date": trial.first_eligible_date,
+                    "label": LAUNCH_AGENT_LABEL,
+                    "loaded": manager.loaded(),
+                    "status": "schedule_updated",
+                    "trigger_hour": trial.trigger_hour,
+                    "trigger_minute": trial.trigger_minute,
                 }
             )
             return 0
@@ -293,6 +330,8 @@ def _dry_run() -> int:
             "maximum_eligible_dates": MAXIMUM_ELIGIBLE_DATES,
             "persistent_state_changed": False,
             "timezone": SCHEDULE_TIMEZONE,
+            "trigger_hour": TRIGGER_HOUR,
+            "trigger_minute": TRIGGER_MINUTE,
         }
     )
     return 0
@@ -418,6 +457,8 @@ def _status_payload(
                 "first_eligible_date": trial.first_eligible_date,
                 "maximum_eligible_dates": trial.maximum_eligible_dates,
                 "timezone": trial.timezone,
+                "trigger_hour": trial.trigger_hour,
+                "trigger_minute": trial.trigger_minute,
             }
         ),
     }

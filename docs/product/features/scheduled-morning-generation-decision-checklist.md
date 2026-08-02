@@ -13,7 +13,7 @@ They do not accept routine unattended operation after the trial.
 | --- | --- | --- | --- |
 | 1. Target host | Use the current primary Mac for the bounded trial; prefer an approved always-awake Mac mini before routine unattended use. | The current Mac can sleep, travel, power off, or be logged out; a future Mac mini adds migration and maintenance work. | Accepted |
 | 2. Scheduled days | Run Monday–Thursday, Saturday, and Sunday. Friday is ineligible. | The schedule follows Brad's approved work rhythm while preserving Friday as a day off. | Accepted |
-| 3. Scheduled time | Trigger at 7:00 a.m. in `America/New_York`. | An early briefing is more useful but depends on host, network, and credential readiness. | Accepted |
+| 3. Scheduled time | Trigger at 6:00 a.m. in `America/New_York`. | An early briefing is more useful but depends on host, network, and credential readiness. | Accepted; changed from 7:00 a.m. before the first trial date |
 | 4. Missed-run/catch-up policy | Permit one delayed invocation through 11:00 a.m. local time; after that, record a miss without retrieval or generation. | A bounded catch-up tolerates sleep while preventing stale or silent backfill. | Accepted |
 | 5. Reduced-coverage success | Require repository context, usable Calendar coverage, and at least one usable source from Work Gmail or Todoist. Jira is optional. | This permits a useful degraded run without allowing Calendar loss or loss of both primary action sources to appear successful. | Accepted |
 | 6. Google Calendar continuity | Perform one bounded move to refreshable authorization under the unchanged exact read-only Calendar scope. | Continuity improves, but a refresh credential creates longer-lived authority that must remain in Keychain. | Accepted |

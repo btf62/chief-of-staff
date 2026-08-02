@@ -69,8 +69,8 @@ def _briefing(
             briefing_date=date(2026, 8, 1),
             timezone="America/New_York",
             invocation_mode="scheduled_morning",
-            started_at=_local("2026-08-01T07:01:00"),
-            completed_at=_local("2026-08-01T07:02:00"),
+            started_at=_local("2026-08-01T06:01:00"),
+            completed_at=_local("2026-08-01T06:02:00"),
             status=BriefingStatus.SUCCEEDED,
         )
     )
@@ -106,10 +106,10 @@ def test_first_date_is_strictly_after_install_and_skips_friday() -> None:
         _local("2026-07-31T08:00:00")
     ) == date(2026, 8, 1)
     assert first_eligible_date_after_installation(
-        _local("2026-08-03T06:59:00")
+        _local("2026-08-03T05:59:00")
     ) == date(2026, 8, 3)
     assert first_eligible_date_after_installation(
-        _local("2026-08-03T07:00:00")
+        _local("2026-08-03T06:00:00")
     ) == date(2026, 8, 4)
 
 
@@ -121,7 +121,7 @@ def test_seven_dates_exclude_friday_and_keep_dst_local_trigger() -> None:
     assert date(2026, 11, 1) in dates
 
 
-def test_dst_transition_keeps_seven_am_local_idempotency(
+def test_dst_transition_keeps_six_am_local_idempotency(
     tmp_path: Path,
 ) -> None:
     with Database.open(tmp_path / "state.sqlite3") as database:
@@ -134,7 +134,7 @@ def test_dst_transition_keeps_seven_am_local_idempotency(
                 tmp_path,
                 store=store,
             ),
-            now=_local("2026-11-01T06:30:00"),
+            now=_local("2026-11-01T05:30:00"),
         )
         occurrence = store.get_scheduled_occurrence(
             TRIAL_ID,
@@ -144,7 +144,7 @@ def test_dst_transition_keeps_seven_am_local_idempotency(
         assert report.outcome is ScheduledOutcome.BEFORE_WINDOW
         assert occurrence is not None
         scheduled_local = occurrence.scheduled_for.astimezone(LOCAL_ZONE)
-        assert scheduled_local.hour == 7
+        assert scheduled_local.hour == 6
         offset = scheduled_local.utcoffset()
         assert offset is not None
         assert offset.total_seconds() == -5 * 3600
@@ -178,14 +178,14 @@ def test_before_window_can_progress_but_terminal_success_cannot_retry(
             state_store=store,
             preflight=_health,
             generate=generate,
-            now=_local("2026-08-01T06:30:00"),
+            now=_local("2026-08-01T05:30:00"),
             notifier=notifier,
         )
         success = run_scheduled_once(
             state_store=store,
             preflight=_health,
             generate=generate,
-            now=_local("2026-08-01T07:01:00"),
+            now=_local("2026-08-01T06:01:00"),
             notifier=notifier,
         )
         repeated = run_scheduled_once(
@@ -204,6 +204,41 @@ def test_before_window_can_progress_but_terminal_success_cannot_retry(
 
     assert len(notifications) == 1
     assert "Morning briefing is ready." in " ".join(notifications[0])
+
+
+def test_sleep_delayed_wake_runs_once_inside_catch_up_window(
+    tmp_path: Path,
+) -> None:
+    calls = 0
+
+    def generate(
+        _health_report: tuple[ConnectorHealthReport, ...],
+    ) -> OnDemandBriefingReport:
+        nonlocal calls
+        calls += 1
+        return _briefing(tmp_path, store=store)
+
+    with Database.open(tmp_path / "state.sqlite3") as database:
+        store = StateStore(database)
+        store.save_scheduled_trial(create_trial(_local("2026-07-31T08:00:00")))
+
+        delayed = run_scheduled_once(
+            state_store=store,
+            preflight=_health,
+            generate=generate,
+            now=_local("2026-08-01T09:30:00"),
+        )
+        repeated = run_scheduled_once(
+            state_store=store,
+            preflight=_health,
+            generate=generate,
+            now=_local("2026-08-01T09:31:00"),
+        )
+
+        assert delayed.outcome is ScheduledOutcome.FULL_SUCCESS
+        assert delayed.eligibility_decision == "approved_window_execution_completed"
+        assert repeated.outcome is ScheduledOutcome.ALREADY_COMPLETED
+        assert calls == 1
 
 
 def test_cutoff_records_miss_without_preflight_or_generation(
