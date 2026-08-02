@@ -30,6 +30,8 @@ No strict versioning scheme is promised before a distributable product exists.
 
 ### Added
 
+- Repository-native `make help`, `make commands`, and bare `make` command
+  indexes for everyday, scheduled-trial, and development operations.
 - A self-limiting Scheduled Morning Generation implementation with
   `America/New_York` eligibility and cutoff policy, immutable date
   idempotency, migration `0012`, private-safe notifications, local status,

@@ -6,7 +6,49 @@ RUFF := $(VENV)/bin/ruff
 MYPY := $(VENV)/bin/mypy
 PYTEST := $(VENV)/bin/pytest
 
-.PHONY: bootstrap format format-check lint typecheck test docs-check inference-eval ranking-eval milestone-11-eval demo demo-synthetic briefing web web-open connector-status scheduled-readiness scheduled-dry-run scheduled-install scheduled-update-time scheduled-status scheduled-disable scheduled-enable scheduled-remove scheduled-notify-test check
+.DEFAULT_GOAL := help
+
+.PHONY: help commands bootstrap format format-check lint typecheck test docs-check inference-eval ranking-eval milestone-11-eval demo demo-synthetic briefing web web-open connector-status scheduled-readiness scheduled-dry-run scheduled-install scheduled-update-time scheduled-status scheduled-disable scheduled-enable scheduled-remove scheduled-notify-test check
+
+help:
+	@printf '%s\n' \
+		'Chief of Staff commands' \
+		'' \
+		'Everyday use' \
+		'  make web-open              Start the local interface and open it' \
+		'  make web                   Start the local interface' \
+		'  make briefing              Generate an on-demand live briefing' \
+		'  make connector-status      Inspect connector health' \
+		'  make scheduled-status      Inspect the scheduled trial' \
+		'  make scheduled-disable     Pause scheduled generation' \
+		'  make scheduled-enable      Resume scheduled generation' \
+		'  make scheduled-notify-test Send a private-safe test notification' \
+		'' \
+		'Scheduled-trial setup' \
+		'  make scheduled-readiness   Check host and connector readiness' \
+		'  make scheduled-dry-run     Preview policy without retrieving data' \
+		'  make scheduled-install     Install the approved LaunchAgent' \
+		'  make scheduled-update-time Apply the accepted 6 a.m. trigger' \
+		'  make scheduled-remove      Remove the LaunchAgent, preserving history' \
+		'' \
+		'Development and validation' \
+		'  make bootstrap             Create or refresh the development environment' \
+		'  make check                 Run the complete repository gate' \
+		'  make test                  Run tests' \
+		'  make format                Format source files' \
+		'  make format-check          Check source formatting' \
+		'  make lint                  Run lint checks' \
+		'  make typecheck             Run strict type checking' \
+		'  make docs-check            Validate Markdown links and anchors' \
+		'  make inference-eval        Run the inference evaluation' \
+		'  make ranking-eval          Run the ranking evaluation' \
+		'  make milestone-11-eval     Run the Milestone 11 evaluation' \
+		'  make demo                  Generate the connector demonstration' \
+		'  make demo-synthetic        Generate a reduced synthetic demonstration' \
+		'' \
+		'Run make help, make commands, or bare make to display this list.'
+
+commands: help
 
 bootstrap:
 	$(PYTHON) -m venv $(VENV)

@@ -169,6 +169,17 @@ the mandatory post-trial stop are documented in the
 [Scheduled Morning Generation runbook](docs/operations/runbooks/scheduled-morning-generation.md).
 Routine unattended operation after the trial remains unaccepted.
 
+## Command help
+
+From the repository directory, run any of the following to display the
+supported everyday, scheduled-trial, and development commands:
+
+```text
+make help
+make commands
+make
+```
+
 ## Open the local briefing
 
 After a structured briefing has been persisted, start the local interface and
