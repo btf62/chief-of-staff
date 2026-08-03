@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Owner:** Brad
-- **Last updated:** 2026-08-02
+- **Last updated:** 2026-08-03
 
 This runbook operates the self-limiting Milestone 12 trial on Brad's approved
 primary Mac. It does not authorize routine unattended use after the trial,
@@ -166,6 +166,22 @@ Inspect the non-content local state and LaunchAgent health:
 make scheduled-status
 ```
 
+Inspect the application-owned diagnostic history:
+
+```text
+make scheduled-diagnostics
+```
+
+The diagnostic history is stored under the ignored private `.local/` tree as
+JSON Lines. It retains at most two files of 64 KiB each, with mode `0600`, and
+shows only timestamps, trial dates and ordinals, reviewed application
+versions, fixed outcome and error categories, notification delivery status,
+and approved source aliases with health categories. It never stores briefing
+prose, event or task titles, message content, people, links, account
+identities, credential values, briefing paths, or raw exception text. The
+LaunchAgent continues to discard raw standard output and error rather than
+creating a second unbounded or content-bearing log.
+
 Test the fixed private-safe macOS notification:
 
 ```text
@@ -183,6 +199,27 @@ make scheduled-status
 ```
 
 These checks do not retrieve a source or consume an eligible trial date.
+
+## Adopt a reviewed software version during the trial
+
+Every scheduled invocation must match the clean reviewed Git commit recorded
+for the trial. After a normal reviewed, validated, and committed software
+change, adopt that exact clean version without resetting or extending a
+started trial:
+
+```text
+make scheduled-readiness
+make scheduled-adopt-version
+make scheduled-status
+make scheduled-diagnostics
+```
+
+The adoption command acquires the briefing-process lock, requires complete
+host and connector readiness, changes only the recorded application version
+and update time, and preserves the enabled state, first and final dates, and
+all occurrences. It performs no source retrieval and records a content-free
+diagnostic event. A dirty worktree, completed trial, changed scheduling policy,
+or incomplete readiness stops the operation.
 
 ## Understand scheduled outcomes
 

@@ -35,6 +35,7 @@ from chief_of_staff.scheduling import (
     MAXIMUM_ELIGIBLE_DATES,
     TRIAL_ID,
     SafeMacOSNotifier,
+    adopt_reviewed_application_version,
     create_trial,
     eligible_dates,
     first_eligible_date_after_installation,
@@ -428,6 +429,70 @@ def test_application_version_change_stops_before_preflight(
         assert report.outcome is ScheduledOutcome.CONFIGURATION_FAILURE
         assert report.diagnostic_category == "trial_policy_mismatch"
         assert not touched
+
+
+def test_reviewed_version_adoption_preserves_started_trial_and_occurrences(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "chief_of_staff.scheduling.application_version",
+        lambda: "0.0.0+oldversion01.clean",
+    )
+    with Database.open(tmp_path / "state.sqlite3") as database:
+        store = StateStore(database)
+        original = create_trial(_local("2026-07-31T08:00:00"))
+        store.save_scheduled_trial(original)
+        report = run_scheduled_once(
+            state_store=store,
+            preflight=_health,
+            generate=lambda _health_report: _briefing(tmp_path, store=store),
+            now=_local("2026-08-01T07:01:00"),
+        )
+        occurrences_before = store.list_scheduled_occurrences(TRIAL_ID)
+
+        monkeypatch.setattr(
+            "chief_of_staff.scheduling.application_version",
+            lambda: "0.0.0+newversion02.clean",
+        )
+        updated = adopt_reviewed_application_version(
+            store,
+            now=_local("2026-08-03T13:00:00"),
+        )
+
+        assert report.outcome is ScheduledOutcome.FULL_SUCCESS
+        assert updated.application_version == "0.0.0+newversion02.clean"
+        assert updated.first_eligible_date == original.first_eligible_date
+        assert updated.final_eligible_date == original.final_eligible_date
+        assert updated.maximum_eligible_dates == original.maximum_eligible_dates
+        assert updated.enabled == original.enabled
+        assert store.list_scheduled_occurrences(TRIAL_ID) == occurrences_before
+
+
+def test_reviewed_version_adoption_rejects_dirty_repository(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "chief_of_staff.scheduling.application_version",
+        lambda: "0.0.0+oldversion01.clean",
+    )
+    with Database.open(tmp_path / "state.sqlite3") as database:
+        store = StateStore(database)
+        original = create_trial(_local("2026-07-31T08:00:00"))
+        store.save_scheduled_trial(original)
+        monkeypatch.setattr(
+            "chief_of_staff.scheduling.application_version",
+            lambda: "0.0.0+newversion02.dirty",
+        )
+
+        with pytest.raises(RuntimeError, match="clean repository"):
+            adopt_reviewed_application_version(
+                store,
+                now=_local("2026-08-03T13:00:00"),
+            )
+
+        assert store.get_scheduled_trial(TRIAL_ID) == original
 
 
 def test_mandatory_source_policy_and_optional_jira(

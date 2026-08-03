@@ -42,6 +42,12 @@ No strict versioning scheme is promised before a distributable product exists.
 
 ### Added
 
+- A private, content-free scheduled diagnostic log with mode-`0600` files,
+  fixed-size two-file rotation, safe operator inspection, and coverage of
+  failures that occur before an eligible-date occurrence can be persisted.
+- An explicit clean-application-version adoption path that preserves active
+  trial dates, enabled state, and recorded occurrences after a reviewed
+  software change.
 - ADR-0012 and the Milestone 13 roadmap gate for an isolated, read-only
   Personal Gmail integration followed by bounded on-demand and scheduled trust
   reviews.
@@ -59,7 +65,7 @@ No strict versioning scheme is promised before a distributable product exists.
   idempotency, migration `0012`, private-safe notifications, local status,
   reversible current-user LaunchAgent management, exact-scope Calendar refresh
   continuity, synthetic tests, and an operator runbook.
-- A passing 426-test repository gate, existing inference and ranking
+- A passing 432-test repository gate, existing inference and ranking
   evaluations, Milestone 11 evaluation, Markdown validation, dry-run package,
   and clean wheel-install verification for the bounded scheduler.
 - An accepted Milestone 12 Scheduled Morning Generation specification, macOS

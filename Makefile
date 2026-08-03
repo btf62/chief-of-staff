@@ -8,7 +8,7 @@ PYTEST := $(VENV)/bin/pytest
 
 .DEFAULT_GOAL := help
 
-.PHONY: help commands bootstrap format format-check lint typecheck test docs-check inference-eval ranking-eval milestone-11-eval demo demo-synthetic briefing web web-open web-stop connector-status scheduled-readiness scheduled-dry-run scheduled-install scheduled-update-time scheduled-status scheduled-disable scheduled-enable scheduled-remove scheduled-notify-test check
+.PHONY: help commands bootstrap format format-check lint typecheck test docs-check inference-eval ranking-eval milestone-11-eval demo demo-synthetic briefing web web-open web-stop connector-status scheduled-readiness scheduled-dry-run scheduled-install scheduled-update-time scheduled-status scheduled-diagnostics scheduled-adopt-version scheduled-disable scheduled-enable scheduled-remove scheduled-notify-test check
 
 help:
 	@printf '%s\n' \
@@ -21,6 +21,7 @@ help:
 		'  make briefing              Generate an on-demand live briefing' \
 		'  make connector-status      Inspect connector health' \
 		'  make scheduled-status      Inspect the scheduled trial' \
+		'  make scheduled-diagnostics Inspect the bounded private diagnostic log' \
 		'  make scheduled-disable     Pause scheduled generation' \
 		'  make scheduled-enable      Resume scheduled generation' \
 		'  make scheduled-notify-test Send a private-safe test notification' \
@@ -30,6 +31,7 @@ help:
 		'  make scheduled-dry-run     Preview policy without retrieving data' \
 		'  make scheduled-install     Install the approved LaunchAgent' \
 		'  make scheduled-update-time Apply the accepted 6 a.m. trigger' \
+		'  make scheduled-adopt-version Adopt a reviewed version without resetting the trial' \
 		'  make scheduled-remove      Remove the LaunchAgent, preserving history' \
 		'' \
 		'Development and validation' \
@@ -119,6 +121,12 @@ scheduled-update-time:
 
 scheduled-status:
 	$(VENV_PYTHON) -m chief_of_staff.scheduled_cli status
+
+scheduled-diagnostics:
+	$(VENV_PYTHON) -m chief_of_staff.scheduled_cli diagnostics
+
+scheduled-adopt-version:
+	$(VENV_PYTHON) -m chief_of_staff.scheduled_cli adopt-version --confirm-preserve-trial
 
 scheduled-disable:
 	$(VENV_PYTHON) -m chief_of_staff.scheduled_cli disable

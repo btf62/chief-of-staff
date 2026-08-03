@@ -1,12 +1,11 @@
 # Feature: Scheduled Morning Generation v1
 
 - **Status:** Accepted
-- **Version:** 3
+- **Version:** 4
 - **Owner:** Brad
-- **Last updated:** 2026-08-02
+- **Last updated:** 2026-08-03
 - **Trial state:** Live activation authorized for seven eligible dates
-- **Implementation state:** Complete; live activation requires the accepted
-  setup gates
+- **Implementation state:** Complete; bounded live trial active
 
 ## Summary
 
@@ -219,7 +218,10 @@ The accepted implementation provides:
 - source sufficiency requiring Calendar plus Work Gmail or Todoist, with Jira
   optional;
 - private-safe fixed notifications and a non-content local web status summary;
-  and
+- a private, content-free JSON-lines diagnostic log bounded to two mode-`0600`
+  files of at most 64 KiB each;
+- an explicit clean-version adoption command that preserves started-trial
+  dates, state, and recorded occurrences; and
 - terminal trial behavior after seven eligible dates.
 
 The

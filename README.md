@@ -168,6 +168,7 @@ Preview or inspect it without retrieving source records:
 make scheduled-dry-run
 make scheduled-readiness
 make scheduled-status
+make scheduled-diagnostics
 ```
 
 Installation, notification testing, disablement, re-enablement, removal, and

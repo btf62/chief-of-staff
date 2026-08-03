@@ -8,6 +8,7 @@ import sys
 from dataclasses import asdict
 from datetime import UTC, date, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from chief_of_staff.auth import (
     KeychainSecretReference,
@@ -54,6 +55,11 @@ from chief_of_staff.on_demand import (
     OnDemandBriefingRunner,
 )
 from chief_of_staff.persistence import Database, StateStore
+from chief_of_staff.scheduled_diagnostics import (
+    append_scheduled_run_diagnostic,
+    append_version_adoption_diagnostic,
+    scheduled_diagnostic_snapshot,
+)
 from chief_of_staff.scheduling import (
     ELIGIBLE_WEEKDAYS,
     MAXIMUM_ELIGIBLE_DATES,
@@ -62,12 +68,16 @@ from chief_of_staff.scheduling import (
     TRIGGER_HOUR,
     TRIGGER_MINUTE,
     SafeMacOSNotifier,
+    ScheduledExecutionReport,
+    adopt_reviewed_application_version,
     application_version,
     create_trial,
     reconfigure_unstarted_trial,
     run_scheduled_once,
     set_trial_enabled,
 )
+
+DIAGNOSTIC_LOG_PATH = LOCAL_ROOT / "scheduled" / "diagnostic.jsonl"
 
 
 def main(arguments: list[str] | None = None) -> int:
@@ -82,6 +92,9 @@ def main(arguments: list[str] | None = None) -> int:
     update_parser = subparsers.add_parser("update-schedule")
     update_parser.add_argument("--confirm-trigger-hour", type=int, required=True)
     subparsers.add_parser("status")
+    subparsers.add_parser("diagnostics")
+    adoption_parser = subparsers.add_parser("adopt-version")
+    adoption_parser.add_argument("--confirm-preserve-trial", action="store_true")
     subparsers.add_parser("disable")
     subparsers.add_parser("enable")
     subparsers.add_parser("remove")
@@ -91,6 +104,9 @@ def main(arguments: list[str] | None = None) -> int:
 
     if parsed.command == "dry-run":
         return _dry_run()
+    if parsed.command == "diagnostics":
+        _print_json(scheduled_diagnostic_snapshot(DIAGNOSTIC_LOG_PATH))
+        return 0
 
     LOCAL_ROOT.mkdir(parents=True, exist_ok=True, mode=0o700)
     LOCAL_ROOT.chmod(0o700)
@@ -167,6 +183,42 @@ def main(arguments: list[str] | None = None) -> int:
             return 0
         if parsed.command == "status":
             _print_json(_status_payload(store, keychain, manager))
+            return 0
+        if parsed.command == "adopt-version":
+            if not parsed.confirm_preserve_trial:
+                raise RuntimeError(
+                    "version adoption requires explicit trial-preservation confirmation"
+                )
+            readiness = _readiness_payload(store, keychain)
+            if not readiness["ready"]:
+                raise RuntimeError("host or connector readiness is incomplete")
+            with _exclusive_briefing_run(BRIEFING_LOCK_PATH):
+                previous = store.get_scheduled_trial(TRIAL_ID)
+                if previous is None:
+                    raise RuntimeError("Scheduled Morning Generation is not installed")
+                adopted_at = datetime.now(UTC)
+                trial = adopt_reviewed_application_version(
+                    store,
+                    now=adopted_at,
+                )
+                diagnostic_result = _record_version_adoption_diagnostic(
+                    previous_version=previous.application_version,
+                    adopted_at=adopted_at,
+                )
+            _print_json(
+                {
+                    "application_version": trial.application_version,
+                    "diagnostic_log_result": diagnostic_result,
+                    "enabled": trial.enabled,
+                    "final_eligible_date": trial.final_eligible_date,
+                    "first_eligible_date": trial.first_eligible_date,
+                    "loaded": manager.loaded(),
+                    "preserved_occurrences": len(
+                        store.list_scheduled_occurrences(TRIAL_ID)
+                    ),
+                    "status": "reviewed_application_version_adopted",
+                }
+            )
             return 0
         if parsed.command == "disable":
             manager.disable()
@@ -291,14 +343,26 @@ def _run(store: StateStore, keychain: MacOSKeychain) -> int:
                 notifier=SafeMacOSNotifier(),
             )
     except BlockingIOError:
-        _print_json(
-            {
-                "diagnostic_category": "briefing_process_lock_held",
-                "outcome": ScheduledOutcome.TRANSIENT_FAILURE.value,
-            }
+        report = ScheduledExecutionReport(
+            outcome=ScheduledOutcome.TRANSIENT_FAILURE,
+            occurrence_date=datetime.now(ZoneInfo(SCHEDULE_TIMEZONE)).date(),
+            eligibility_decision="briefing_process_lock_held",
+            trial_ordinal=None,
+            diagnostic_category="briefing_process_lock_held",
         )
+        _print_report(report)
         return 3
-    _print_json(asdict(report))
+    except Exception:
+        report = ScheduledExecutionReport(
+            outcome=ScheduledOutcome.CONFIGURATION_FAILURE,
+            occurrence_date=datetime.now(ZoneInfo(SCHEDULE_TIMEZONE)).date(),
+            eligibility_decision="unexpected_scheduler_failure",
+            trial_ordinal=None,
+            diagnostic_category="unexpected_scheduler_failure",
+        )
+        _print_report(report)
+        return 3
+    _print_report(report)
     return (
         0
         if report.outcome
@@ -312,6 +376,42 @@ def _run(store: StateStore, keychain: MacOSKeychain) -> int:
         }
         else 2
     )
+
+
+def _print_report(report: ScheduledExecutionReport) -> None:
+    payload = asdict(report)
+    payload["diagnostic_log_result"] = _record_run_diagnostic(report)
+    _print_json(payload)
+
+
+def _record_run_diagnostic(report: ScheduledExecutionReport) -> str:
+    try:
+        append_scheduled_run_diagnostic(
+            DIAGNOSTIC_LOG_PATH,
+            report=report,
+            recorded_at=datetime.now(UTC),
+            application_version=application_version(),
+        )
+    except OSError, ValueError:
+        return "write_failed"
+    return "recorded"
+
+
+def _record_version_adoption_diagnostic(
+    *,
+    previous_version: str,
+    adopted_at: datetime,
+) -> str:
+    try:
+        append_version_adoption_diagnostic(
+            DIAGNOSTIC_LOG_PATH,
+            previous_version=previous_version,
+            application_version=application_version(),
+            recorded_at=adopted_at,
+        )
+    except OSError, ValueError:
+        return "write_failed"
+    return "recorded"
 
 
 def _dry_run() -> int:

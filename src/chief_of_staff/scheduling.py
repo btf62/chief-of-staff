@@ -262,6 +262,32 @@ def reconfigure_unstarted_trial(
     return updated
 
 
+def adopt_reviewed_application_version(
+    state_store: StateStore,
+    *,
+    now: datetime,
+) -> ScheduledTrial:
+    """Adopt one clean reviewed version without changing a started trial."""
+
+    trial = state_store.get_scheduled_trial(TRIAL_ID)
+    if trial is None:
+        raise RuntimeError("Scheduled Morning Generation is not installed")
+    if trial.completed_at is not None:
+        raise RuntimeError("the bounded scheduled trial is complete")
+    _validate_trial_structure(trial)
+    reviewed_version = application_version()
+    if not reviewed_version.endswith(".clean"):
+        raise RuntimeError("application version adoption requires a clean repository")
+    local = _as_local(now)
+    updated = replace(
+        trial,
+        application_version=reviewed_version,
+        updated_at=local,
+    )
+    state_store.save_scheduled_trial(updated)
+    return updated
+
+
 def run_scheduled_once(
     *,
     state_store: StateStore,
@@ -629,6 +655,12 @@ def _trial_dates(trial: ScheduledTrial) -> tuple[date, ...]:
 
 
 def _validate_trial_policy(trial: ScheduledTrial) -> None:
+    _validate_trial_structure(trial)
+    if trial.application_version != application_version():
+        raise RuntimeError("stored scheduled trial does not match accepted policy")
+
+
+def _validate_trial_structure(trial: ScheduledTrial) -> None:
     dates = _trial_dates(trial)
     if (
         trial.id != TRIAL_ID
@@ -640,7 +672,6 @@ def _validate_trial_policy(trial: ScheduledTrial) -> None:
         or trial.cutoff_minute != CUTOFF_MINUTE
         or trial.maximum_eligible_dates != MAXIMUM_ELIGIBLE_DATES
         or trial.final_eligible_date != dates[-1]
-        or trial.application_version != application_version()
     ):
         raise RuntimeError("stored scheduled trial does not match accepted policy")
 
