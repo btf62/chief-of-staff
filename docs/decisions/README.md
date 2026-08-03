@@ -38,3 +38,4 @@ decisions.
 | [ADR-0009](0009-choose-connector-authorization-continuity.md) | Choose Connector Authorization Continuity | Superseded | 2026-07-31 |
 | [ADR-0010](0010-choose-scheduled-morning-generation-mechanism.md) | Choose the Scheduled Morning Generation Mechanism | Accepted | 2026-07-31 |
 | [ADR-0011](0011-require-durable-authorization-for-scheduled-connectors.md) | Require Durable Authorization for Scheduled Connectors | Accepted | 2026-08-02 |
+| [ADR-0012](0012-add-personal-gmail-as-an-isolated-connector.md) | Add Personal Gmail as an Isolated Connector Instance | Accepted | 2026-08-02 |

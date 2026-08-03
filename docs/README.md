@@ -34,8 +34,9 @@ Brad reviewed the category-specific results and selected OpenAI
 `contextual_action_classification` only, completing Milestone 8. The one-time
 authorization is consumed, the adapter remains disabled by default, and
 routine hosted inference and private-data egress remain unauthorized. No
-model is selected for ranking or synthesis. Personal Gmail and Google Drive
-remain deferred and unauthorized. Milestone 9's deterministic ranking,
+model is selected for ranking or synthesis. Personal Gmail is the accepted
+post-trial Milestone 13 expansion; Google Drive remains deferred and
+unauthorized. Milestone 9's deterministic ranking,
 structured plan, canonical composition, and 26-scenario synthetic gate are
 complete and accepted. Brad reviewed the corrected private representative
 briefings after all scenarios passed with zero unsupported claims or
@@ -55,8 +56,9 @@ on-demand Daily Briefing v1 MVP are therefore complete and accepted. Commit
 `900a3b66d40bb3596e7ebee6ab801f5321050801` is the final correction included
 in the accepted boundary. Milestone 12 Scheduled Morning Generation is active
 for an accepted self-limiting seven-eligible-date trial from 2026-08-03 through
-2026-08-10. Other deferred capabilities and routine unattended operation
-afterward remain unauthorized.
+2026-08-10. Milestone 13 will add an isolated Personal Gmail instance after
+that trial's review and its own trust gates. Other deferred capabilities and
+routine unattended operation afterward remain unauthorized.
 
 ## Index
 
@@ -105,12 +107,14 @@ afterward remain unauthorized.
 - [Jira connector](architecture/connectors/jira.md) — accepted
   resource-restricted project discovery, exact-project enhanced search, and
   completed bounded issue trial
-- [Work Gmail connector](architecture/connectors/gmail.md) — accepted final
-  MVP input boundary; Personal Gmail deferred
+- [Gmail connector instances](architecture/connectors/gmail.md) — accepted
+  Work Gmail boundary and gated Personal Gmail Milestone 13 direction
 - [Decision records](decisions/README.md) — architecture and significant
   product decisions
 - [ADR-0011: Durable Scheduled Connector Authorization](decisions/0011-require-durable-authorization-for-scheduled-connectors.md)
   — accepted refresh-continuity boundary for all approved scheduled connectors
+- [ADR-0012: Isolated Personal Gmail Connector](decisions/0012-add-personal-gmail-as-an-isolated-connector.md)
+  — accepted post-trial Personal Gmail scope and account-isolation decision
 - [ADR-0010: Scheduled Morning Generation Mechanism](decisions/0010-choose-scheduled-morning-generation-mechanism.md)
   — accepted user-level macOS LaunchAgent decision
 

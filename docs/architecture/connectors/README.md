@@ -64,7 +64,7 @@ decisions for each future connector specification.
 
 | Source | Planned specification |
 | --- | --- |
-| Personal Gmail | Post-MVP, deferred, and unauthorized; future instance remains within `gmail.md` |
+| Personal Gmail | Accepted for Milestone 13 as isolated `gmail:personal`; implementation, authorization, and live access gated in `gmail.md` |
 | Approved Google Drive content | Post-MVP, deferred, and unauthorized; specification not yet created |
 
 Each future specification should implement the common read-only connector
@@ -80,3 +80,4 @@ future remote repository access requires a connector-specific decision.
 - [ADR-0004: SQLite and Bounded Local Data Lifecycle](../../decisions/0004-adopt-sqlite-and-bounded-local-data-lifecycle.md)
 - [ADR-0005: OAuth and macOS Keychain](../../decisions/0005-adopt-oauth-and-macos-keychain.md)
 - [ADR-0011: Durable Scheduled Connector Authorization](../../decisions/0011-require-durable-authorization-for-scheduled-connectors.md)
+- [ADR-0012: Isolated Personal Gmail Connector](../../decisions/0012-add-personal-gmail-as-an-isolated-connector.md)

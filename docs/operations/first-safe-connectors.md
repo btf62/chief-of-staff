@@ -444,4 +444,6 @@ operations.
 Live connector retrieval requires explicit current-task authorization. Do not
 broaden any account, scope, source, endpoint, retrieval cap, or operating mode,
 and do not begin another connector without new explicit approval from Brad.
-Personal Gmail and Google Drive remain deferred and unauthorized.
+Personal Gmail is accepted for the later Milestone 13 isolation and trust gate,
+but remains unimplemented and unauthorized for live access. Google Drive
+remains deferred and unauthorized.

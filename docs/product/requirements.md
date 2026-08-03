@@ -1,9 +1,9 @@
 # Product Requirements
 
 - **Status:** Accepted
-- **Version:** 7
+- **Version:** 8
 - **Owner:** Brad
-- **Last updated:** 2026-07-31
+- **Last updated:** 2026-08-02
 
 ## Responsibility
 
@@ -30,7 +30,7 @@ rather than replacing or modifying them. It may maintain bounded, inspectable
 local state so Brad can correct or disposition inferred items and prevent
 repeated false recommendations.
 
-The active MVP input set is:
+The accepted on-demand MVP input set is:
 
 - Google Calendar
 - Work Gmail
@@ -38,11 +38,13 @@ The active MVP input set is:
 - Jira
 - Approved repository context
 
-Personal Gmail and Google Drive remain deferred after on-demand MVP
-acceptance. This is a sequencing decision, not permanent removal. The
-multi-account connector architecture and preliminary Personal Gmail design
-remain available for later review, but neither source is authorized or part
-of the accepted MVP.
+Personal Gmail is the next accepted product-scope expansion after the bounded
+Milestone 12 trial. [Milestone 13](../roadmap.md#milestone-13--personal-gmail-integration)
+will add it as an isolated connector instance only after its access, privacy,
+retrieval, retention, and human-review gates are complete. This decision does
+not add Personal Gmail to the accepted on-demand MVP baseline or authorize
+access during the active scheduled trial. Google Drive remains deferred and
+unauthorized.
 
 Adding another active MVP source requires an explicit product-scope decision
 and its connector-specific access, privacy, and retention boundaries.
@@ -53,6 +55,7 @@ and its connector-specific access, privacy, and retention boundaries.
 | --- | --- | --- |
 | [Daily Briefing v1](features/daily-briefing-v1.md) | A trusted daily starting point that clarifies today's outcomes, commitments, preparation, relationships, and approaching work | Accepted |
 | [Scheduled Morning Generation v1](features/scheduled-morning-generation-v1.md) | One reliable automatic morning invocation on approved days | Accepted — bounded trial implemented; activation gated |
+| [Personal Gmail Integration](../roadmap.md#milestone-13--personal-gmail-integration) | An isolated personal-email input with precision-first conclusions and independent trust gates | Accepted and queued after Milestone 12 review |
 
 ## Cross-feature requirements
 
@@ -98,7 +101,8 @@ Detailed feature specifications belong in the
   [Daily Briefing v1 implementation roadmap](../roadmap.md).
 - Rock RMS, Church Online Platform, ministry analytics, dashboards, and
   autonomous actions in Daily Briefing v1.
-- Personal Gmail and Google Drive in the accepted on-demand MVP.
+- Personal Gmail before the Milestone 13 implementation and acceptance gates,
+  and Google Drive in the accepted on-demand MVP.
 - Sources not included in the active MVP input set.
 - Ideas explicitly deferred in [future ideas](future-ideas.md).
 - Routine scheduled generation after Milestone 12's seven-eligible-date trial
@@ -109,5 +113,6 @@ Detailed feature specifications belong in the
 This PRD is accepted as the Version 1 design contract. On 2026-07-30, Brad
 separately accepted the implemented on-demand Daily Briefing v1 MVP after the
 human-review gate in the [roadmap](../roadmap.md). That operational acceptance
-does not authorize deferred sources, routine scheduled generation after the
-bounded Milestone 12 trial, routine hosted inference, or external writes.
+does not authorize Personal Gmail before its Milestone 13 gates, Google Drive,
+routine scheduled generation after the bounded Milestone 12 trial, routine
+hosted inference, or external writes.

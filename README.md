@@ -8,7 +8,8 @@ identifying priorities, commitments, and useful signals.
 ## Status
 
 **Phase:** Milestones 1–11 and the on-demand Daily Briefing v1 MVP are
-accepted; Milestone 12's bounded scheduled trial is active
+accepted; Milestone 12's bounded scheduled trial is active; Milestone 13
+Personal Gmail Integration is accepted and queued after the trial review
 
 The Python, local-state, deterministic briefing, repository connector, and
 read-only Google Calendar foundations are complete. An explicitly approved,
@@ -41,8 +42,9 @@ and selected OpenAI `gpt-5.6-luna` with low reasoning for
 `contextual_action_classification` only, completing Milestone 8. The adapter
 remains disabled by default, the one-time authorization is consumed, and
 routine hosted inference and private-data egress remain unauthorized. No
-model is selected for ranking or synthesis. Personal Gmail and Google Drive
-remain deferred and unauthorized. Milestone 9 now has explainable
+model is selected for ranking or synthesis. Personal Gmail is now the accepted
+post-trial Milestone 13 expansion; Google Drive remains deferred and
+unauthorized. Milestone 9 now has explainable
 deterministic ranking, an application-owned briefing plan, conservative
 duplicate and conflict handling, canonical composition, and a passing
 26-scenario synthetic gate. Brad reviewed and accepted the corrected private
@@ -68,6 +70,9 @@ included in that accepted boundary. Scheduled generation and all other
 deferred capabilities remain outside the accepted MVP. Milestone 12 is an
 active bounded-trial implementation for Scheduled Morning Generation.
 Routine unattended operation after seven eligible dates remains unaccepted.
+Milestone 13 will add Personal Gmail as an isolated connector instance only
+after the Milestone 12 review and its own synthetic, bounded-live, and human
+trust gates.
 
 ## Repository map
 

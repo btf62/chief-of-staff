@@ -1,7 +1,7 @@
 # Feature: Scheduled Morning Generation v1
 
 - **Status:** Accepted
-- **Version:** 2
+- **Version:** 3
 - **Owner:** Brad
 - **Last updated:** 2026-08-02
 - **Trial state:** Live activation authorized for seven eligible dates
@@ -26,7 +26,9 @@ Brad accepted this specification and the
 for implementation and a self-limiting seven-eligible-date trial on his
 current primary Mac. This acceptance authorizes durable, exact-boundary
 authorization continuity for Calendar, Work Gmail, Todoist, and Jira. It does
-not accept routine unattended operation after the trial.
+not accept routine unattended operation after the trial. Personal Gmail is
+the accepted next connector milestone, but it does not change this trial's
+source set, readiness, success, or failure policy.
 
 ## Problem and evidence
 
@@ -190,6 +192,16 @@ seven eligible dates, Brad must review the results and explicitly accept,
 extend, revise, or remove scheduled operation. Moving to a Mac mini requires a
 new host-readiness and credential-migration review.
 
+Personal Gmail follows the separate
+[Milestone 13](../../roadmap.md#milestone-13--personal-gmail-integration) gate.
+It may enter scheduled generation only after its on-demand implementation,
+bounded live trial, and human review are accepted. Its first scheduled use
+must be another explicitly bounded trial. Personal Gmail will initially be an
+optional action source: an unavailable instance must be disclosed but does not
+change the existing Calendar-plus-action-source sufficiency rule. No Personal
+Gmail code, credential, health requirement, or retrieval belongs to the active
+Milestone 12 trial.
+
 ## Implemented operating surface
 
 The accepted implementation provides:
@@ -223,5 +235,6 @@ accept routine post-trial use.
 - [Implementation roadmap](../../roadmap.md#milestone-12--scheduled-morning-generation)
 - [ADR-0011: Durable Scheduled Connector Authorization](../../decisions/0011-require-durable-authorization-for-scheduled-connectors.md)
 - [ADR-0010: Scheduled Morning Generation Mechanism](../../decisions/0010-choose-scheduled-morning-generation-mechanism.md)
+- [ADR-0012: Isolated Personal Gmail Connector](../../decisions/0012-add-personal-gmail-as-an-isolated-connector.md)
 - [Milestone 12 decision checklist](scheduled-morning-generation-decision-checklist.md)
 - [On-demand briefing runbook](../../operations/runbooks/on-demand-briefing.md)

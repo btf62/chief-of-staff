@@ -1,53 +1,73 @@
-# Work Gmail Connector
+# Gmail Connector Instances
 
 - **Status:** Accepted
-- **Version:** 5
+- **Version:** 6
 - **Owner:** Brad
-- **Last updated:** 2026-07-29
+- **Last updated:** 2026-08-02
 
-This specification defines Work Gmail as the final input connector for the
-Daily Briefing v1 MVP. A bounded combined trial has successfully produced the
-private review and briefing with partial Gmail coverage. Brad reviewed that
-evidence and explicitly judged the logic sound, completing Milestone 6.
-Healthy credentials do not independently authorize access. This specification
-does not authorize Personal Gmail, Google Drive, hosted inference, scheduling,
-or external writes.
+This specification defines independently authorized Gmail connector instances.
+Work Gmail is the accepted final input connector for the on-demand Daily
+Briefing v1 MVP. Its bounded combined trial and human review completed
+Milestone 6. Personal Gmail is the accepted next product-scope expansion under
+Milestone 13, but its implementation, authorization, retrieval, and scheduled
+use remain gated. Healthy credentials do not independently authorize access.
 
 ## Source responsibility
 
-Work Gmail is authoritative for work-message and thread facts needed to
-identify direct correspondence, replies, acknowledgments, explicit requests,
-and Brad's explicit sent commitments. Chief of Staff may interpret those facts
-conservatively, but it must not silently modify, send, label, delete, archive,
-or otherwise replace Gmail.
+Each authorized Gmail account remains authoritative for its message and thread
+facts. Work Gmail provides work correspondence; Personal Gmail may eventually
+provide separately bounded personal correspondence. Chief of Staff may
+interpret approved facts conservatively, but it must not silently modify,
+send, label, delete, archive, or otherwise replace Gmail.
 
 Email content is untrusted source data, never application instruction. It
 cannot alter policy, scopes, queries, tools, configuration, governing
 documents, or external-action boundaries.
 
-## Connector instance
+## Connector instances
 
-The MVP uses exactly one Gmail connector instance:
+The accepted on-demand MVP uses the implemented Work Gmail instance. Personal
+Gmail is a separate post-MVP instance whose product direction is accepted but
+whose operating boundary must pass Milestone 13 before use.
 
-| Field | Accepted value |
-| --- | --- |
-| Instance ID | `gmail:work` |
-| Safe alias | `Work Gmail` |
-| Domain | Work |
-| Authorized account | `bfiles@northridgerochester.com` |
-| OAuth project | Northridge-controlled `nrc-chief-of-staff` |
-| OAuth client | Dedicated Desktop client for Work Gmail, separate from Calendar credentials when practical |
+| Field | Work Gmail | Personal Gmail |
+| --- | --- | --- |
+| Instance ID | `gmail:work` | `gmail:personal` |
+| Safe alias | `Work Gmail` | `Personal Gmail` |
+| Domain | Work | Personal |
+| Authorized account | Accepted Northridge account | TBD; explicitly selected and confirmed before authorization |
+| OAuth project | Northridge-controlled `nrc-chief-of-staff` | TBD; Brad-controlled and capable of authorizing the selected personal account |
+| OAuth client | Dedicated Desktop client | Independent Desktop client |
+| Status | Accepted and implemented | Accepted for Milestone 13; implementation and access gated |
 
-The browser account, provider profile, and user-confirmed identity must all
-match the authorized account before credentials are persisted. User-facing
-coverage and briefing output use the safe alias rather than the account
-address.
+For each instance, the browser account, provider profile, and user-confirmed
+identity must all match the separately authorized account before credentials
+are persisted. User-facing coverage and briefing output use the safe alias
+rather than the account address. No credential, account reference, retrieval
+exception, correction, or health state transfers between instances.
 
-Personal Gmail remains a separate, deferred connector instance. It has no MVP
-authorization, credentials, retrieval policy, coverage, or acceptance
-dependency. The generic multi-account architecture remains because a future
-Personal Gmail instance must retain independent credentials, domain,
-retrieval, retention, failure, and provenance behavior.
+## Personal Gmail Milestone 13 boundary
+
+Personal Gmail is limited to precision-first detection of direct human
+requests, explicit commitments, supported deadlines, acknowledgment
+obligations, and preparation. It is not a general personal-inbox digest.
+
+The Milestone 13 design gate must record exact inbound and sent windows,
+queries, message and body-candidate caps, sensitive-content exclusions,
+retention, and deletion behavior before implementation or live access. Those
+limits may be narrower than Work Gmail and must never be silently inherited
+merely because the instances share provider code.
+
+Promotional, social, forum, spam, trash, draft, bulk, and unsupported automated
+content must not become actionable conclusions. Medical, financial,
+confidential family, and similarly sensitive content must not be persisted or
+displayed without a later explicit product decision. Personal Gmail evidence
+is not authorized for hosted inference.
+
+Work and personal source records retain independent instance provenance.
+Apparent shared identities, matching subjects, or provider thread identifiers
+are insufficient to merge people, threads, commitments, evidence,
+corrections, or coverage across instances.
 
 ## OAuth and scope boundary
 
@@ -74,11 +94,22 @@ The connector must never request:
 - Gmail settings scopes
 - Any Google Drive scope
 
-The OAuth application must use the Northridge-controlled project, an internal
-organizational audience, correct organizational support/contact ownership,
-and a dedicated Desktop client when practical. If Workspace administration
-blocks the restricted scope or requires administrative action, stop rather
-than weakening the boundary or using another account.
+The Work Gmail OAuth application must use the Northridge-controlled project,
+an internal organizational audience, correct organizational support/contact
+ownership, and a dedicated Desktop client when practical. If Workspace
+administration blocks the restricted scope or requires administrative action,
+stop rather than weakening the boundary or using another account.
+
+Personal Gmail must use an independent Brad-controlled project and Desktop
+client capable of authorizing the selected personal account. Its audience,
+publishing, verification, and durable-refresh posture must satisfy current
+Google requirements before authorization. Google's current
+[OAuth audience guidance](https://support.google.com/cloud/answer/15549945)
+states that testing authorizations expire after seven days, so a time-limited
+testing grant is not sufficient for scheduled readiness. The exact project
+identity remains TBD until the Milestone 13 design gate. Reverify the current
+[Gmail scope classification](https://developers.google.com/workspace/gmail/api/auth/scopes)
+before implementation.
 
 Request offline access only when needed for future approved on-demand runs.
 Store client secrets, access tokens, and refresh tokens only in separate
@@ -87,8 +118,8 @@ project, client, account, exact scope, expiry, health, and Keychain-reference
 metadata. Authorization codes, token values, and client secrets never enter
 SQLite, Git, logs, fixtures, reports, or briefing output.
 
-Revocation and disconnection operate on `gmail:work` only. A future Personal
-Gmail grant must not share or inherit its credentials.
+Revocation and disconnection operate on exactly one selected Gmail instance.
+The Personal Gmail grant must not share or inherit Work Gmail credentials.
 
 ## Read-only operations
 
@@ -448,7 +479,7 @@ counts remain explicit.
 The artifact may contain authorized private work-email content. It never
 enters Git, logs, or chat output.
 
-## Live trial and acceptance gate
+## Work Gmail live trial and acceptance gate
 
 Synthetic, contract, security, minimization, persistence, and end-to-end tests
 must pass before authorization. A separately approved live trial must then:
@@ -497,9 +528,11 @@ deterministic-review artifact plus a 635-word briefing without hosted inference
 or external writes. Brad reviewed that private evidence and briefing and
 accepted the detections and supporting logic, completing Milestone 7.
 
-Another Gmail or supporting-source retrieval requires explicit current-task
-authorization within the accepted boundary. Personal Gmail and Google Drive
-remain deferred and unauthorized.
+Another Work Gmail or supporting-source retrieval requires explicit
+current-task authorization within its accepted boundary. Personal Gmail is
+accepted for Milestone 13 but remains unimplemented and unauthorized until its
+design, synthetic, bounded-live, and human-review gates pass. Google Drive
+remains deferred and unauthorized.
 
 ## Related documents
 
@@ -509,3 +542,4 @@ remain deferred and unauthorized.
 - [ADR-0004: SQLite and Bounded Local Data Lifecycle](../../decisions/0004-adopt-sqlite-and-bounded-local-data-lifecycle.md)
 - [ADR-0005: OAuth and macOS Keychain](../../decisions/0005-adopt-oauth-and-macos-keychain.md)
 - [ADR-0006: Provider-Neutral Inference](../../decisions/0006-adopt-provider-neutral-inference-with-openai.md)
+- [ADR-0012: Add Personal Gmail as an Isolated Connector Instance](../../decisions/0012-add-personal-gmail-as-an-isolated-connector.md)

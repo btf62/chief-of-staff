@@ -1,7 +1,7 @@
 # Architecture Overview
 
 - **Status:** Accepted
-- **Version:** 15
+- **Version:** 16
 - **Owner:** Brad
 - **Last updated:** 2026-08-02
 
@@ -20,7 +20,9 @@ paths for Calendar, Work Gmail, Todoist, and Jira, private-safe notification,
 and reversible user LaunchAgent are implemented behind the accepted activation
 gates. Routine unattended operation after the trial, deferred connectors,
 routine hosted inference, remote access, and external mutation remain outside
-the accepted boundary.
+the accepted boundary. Personal Gmail is accepted as the next isolated
+connector instance under Milestone 13, but it is not part of the active trial
+and remains unimplemented and unauthorized until its gates pass.
 
 The architecture is subordinate to the accepted
 [Product Vision](../product/vision.md) and
@@ -248,7 +250,7 @@ instance ID through normalization and provenance; user-facing output normally
 shows only its alias. Coverage distinguishes an unauthorized or failed
 instance from another instance that returned a legitimate empty result.
 
-The active MVP requires connectors for:
+The accepted on-demand MVP requires connectors for:
 
 - Google Calendar
 - Work Gmail
@@ -256,10 +258,12 @@ The active MVP requires connectors for:
 - Jira
 - Approved repository context
 
-Personal Gmail and approved Google Drive content remain deferred after
-on-demand MVP acceptance. The connector-instance architecture continues to
-support a future Personal Gmail instance independently from Work Gmail, but
-deferred sources have no authorization, coverage, or accepted-MVP obligation.
+Personal Gmail is the accepted next expansion under Milestone 13. It will use
+the existing Gmail provider through an independently authorized
+`gmail:personal` instance with separate configuration, credentials, coverage,
+provenance, retention, and failure behavior. It has no authorization, runtime
+coverage, or active-MVP obligation until its implementation and trust gates
+pass. Approved Google Drive content remains deferred and unauthorized.
 
 Connector-specific retrieval rules, permissions, freshness semantics, bounded
 cache exceptions, and failure behavior belong in the
@@ -818,8 +822,10 @@ evaluated model selection, and other decisions in the table above remain
 required before their affected capabilities are implemented.
 
 ADR-0010 and ADR-0011 are accepted for Milestone 12's bounded trial. ADR-0011
-supersedes ADR-0009. They do not authorize routine operation after the seven
-eligible dates.
+supersedes ADR-0009. ADR-0012 accepts Personal Gmail as the next isolated
+connector milestone without changing that trial. These decisions do not
+authorize routine operation after the seven eligible dates or Personal Gmail
+access before Milestone 13's gates.
 
 ### Contradictions and unresolved dependencies
 
@@ -830,8 +836,9 @@ documents. The following dependencies remain unresolved:
   retention and deletion policy before caching is enabled.
 - Routine hosted inference and any private-source evidence require a new
   explicit authorization despite the task-specific Luna selection.
-- Deferred sources require their own accepted specifications and authorization
-  before they may enter product scope.
+- Personal Gmail requires finalized connector-specific retrieval, privacy,
+  retention, OAuth, synthetic, and bounded-live gates before access. Other
+  deferred sources require their own accepted scope decision and specification.
 - Scheduled morning generation must remain within the accepted host, schedule,
   cutoff, source-sufficiency, notification, authorization-continuity, and
   seven-date boundary recorded in
@@ -855,4 +862,5 @@ documents. The following dependencies remain unresolved:
 - [ADR-0005: OAuth and macOS Keychain](../decisions/0005-adopt-oauth-and-macos-keychain.md)
 - [ADR-0006: Provider-Neutral Inference with OpenAI](../decisions/0006-adopt-provider-neutral-inference-with-openai.md)
 - [ADR-0011: Durable Scheduled Connector Authorization](../decisions/0011-require-durable-authorization-for-scheduled-connectors.md)
+- [ADR-0012: Isolated Personal Gmail Connector](../decisions/0012-add-personal-gmail-as-an-isolated-connector.md)
 - [ADR-0010: Scheduled Morning Generation Mechanism](../decisions/0010-choose-scheduled-morning-generation-mechanism.md)

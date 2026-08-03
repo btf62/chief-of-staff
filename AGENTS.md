@@ -4,7 +4,7 @@
 
 This is a documentation-first repository with an accepted Version 1 design
 baseline for Daily Briefing v1. The product requirements, feature
-specification, architecture, and ADR-0001 through ADR-0011 are accepted;
+specification, architecture, and ADR-0001 through ADR-0012 are accepted;
 ADR-0009 is superseded by ADR-0011.
 Milestones 0 through 4 are complete. Milestone 5 has completed the accepted
 Todoist connector, one combined Calendar-and-Todoist trial, and one explicitly
@@ -70,7 +70,10 @@ LaunchAgent activation, notification test, and disable/re-enable test passed.
 One attended exact-boundary Jira reauthorization and retrieval-free readiness
 verification are authorized for the active trial; no issue retrieval is part
 of that setup step.
-Personal Gmail and Google Drive remain deferred and unauthorized.
+Personal Gmail is accepted as the next isolated connector milestone under
+ADR-0012 and Milestone 13. Its implementation begins only after the Milestone
+12 post-trial review; live authorization, retrieval, and scheduled use require
+their documented later gates. Google Drive remains deferred and unauthorized.
 
 ## Working rules
 
@@ -152,9 +155,11 @@ activation of the bounded trial are authorized only through the documented
 synthetic, validation, clean-repository, connector-health, and host-
 verification gates. Jira `offline_access` is authorized only alongside
 `read:jira-work` for rotating refresh continuity under ADR-0011. No
-always-running timer, wake schedule, Personal Gmail, Drive, hosted inference,
-external write, added source, or routine operation after the trial is
-authorized.
+always-running timer, wake schedule, Personal Gmail access during Milestone 12,
+Drive, hosted inference, external write, added active-trial source, or routine
+operation after the trial is authorized. Milestone 13's product direction is
+accepted, but implementation must wait for the Milestone 12 post-trial review,
+and Personal Gmail live access still requires a separate explicit gate.
 
 ## Validation
 

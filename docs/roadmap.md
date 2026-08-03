@@ -1,7 +1,7 @@
 # Daily Briefing v1 Implementation Roadmap
 
 - **Status:** Accepted
-- **Version:** 15
+- **Version:** 16
 - **Owner:** Brad
 - **Last updated:** 2026-08-02
 
@@ -22,11 +22,12 @@ and bounded live comparison results and selected OpenAI `gpt-5.6-luna` with
 low reasoning for `contextual_action_classification` only, completing
 Milestone 8. Brad reviewed and accepted Milestone 9's corrected
 representative briefings after its deterministic ranking, structured plan,
-composition, and 26-scenario synthetic evaluation passed. Personal Gmail and
-Google Drive remain deferred and unauthorized. Brad accepted Milestones 10 and
-11 after reviewing the local interface and corrected operational-hardening
-package. Milestones 1 through 11 and the on-demand Daily Briefing v1 MVP are
-complete and accepted.
+composition, and 26-scenario synthetic evaluation passed. Brad accepted
+Milestones 10 and 11 after reviewing the local interface and corrected
+operational-hardening package. Milestones 1 through 11 and the on-demand Daily
+Briefing v1 MVP are complete and accepted. Personal Gmail is the accepted next
+scope expansion under Milestone 13 after the active Milestone 12 trial; Google
+Drive remains deferred and unauthorized.
 Dates and estimates remain intentionally omitted until implementation
 evidence supports them.
 
@@ -42,8 +43,9 @@ boundaries.
 - Use synthetic data before approved live data.
 - Add one connector at a time.
 - Keep deterministic processing independently testable.
-- Treat Work Gmail as the final accepted MVP input. Personal Gmail and Google
-  Drive remain post-MVP, deferred, and unauthorized until separately scoped.
+- Treat Work Gmail as the final accepted on-demand MVP input. Add Personal
+  Gmail only through the isolated Milestone 13 gates after Milestone 12 review.
+  Google Drive remains deferred and unauthorized.
 - Do not implement dashboards, Rock RMS, Church Online Platform, analytics,
   external actions, or multi-user behavior.
 - Update documentation and ADRs when implementation reveals a material
@@ -612,3 +614,59 @@ exercises, and trial activation are authorized. Routine unattended operation
 after the trial is not accepted. The implementation and synthetic validation
 gates are complete; retrieval-free durability and active-trial version checks
 remain required after credential setup.
+
+## Milestone 13 — Personal Gmail Integration
+
+- **Status:** Accepted and queued; implementation begins only after the
+  Milestone 12 post-trial review
+- **Intended user-visible outcome:** The Daily Briefing can surface a small,
+  trustworthy set of important personal requests, commitments, deadlines, and
+  preparation without becoming a personal-inbox digest or combining work and
+  personal authority.
+- **Dependencies:** Completed Milestone 12 post-trial review;
+  [ADR-0012](decisions/0012-add-personal-gmail-as-an-isolated-connector.md);
+  the accepted multi-account connector model; a finalized Personal Gmail
+  access, retrieval, privacy, and retention boundary; and Brad's separate
+  approval before live authorization or retrieval.
+- **Principal deliverables:**
+  - One `gmail:personal` connector instance with the safe alias
+    `Personal Gmail` and personal domain classification.
+  - An explicitly selected personal account and an independent,
+    Brad-controlled OAuth project and Desktop client capable of authorizing
+    that account.
+  - Exact `gmail.readonly` scope, instance-specific Keychain credentials, and
+    non-secret SQLite authorization metadata.
+  - Explicit personal inbound and sent queries, windows, caps, exclusions,
+    freshness, retention, deletion, and failure behavior.
+  - Shared Gmail provider mechanics with no shared credentials, account state,
+    coverage, evidence, corrections, or revocation behavior.
+  - Precision-first direct-request, explicit-commitment, supported-deadline,
+    acknowledgment, and preparation behavior.
+  - Conservative handling of family, medical, financial, bulk, automated, and
+    other sensitive or low-value content.
+  - Separate Work Gmail and Personal Gmail coverage, provenance, private review,
+    and connector-health presentation.
+  - One synthetic multi-account quality gate followed by one separately
+    approved, attended, bounded Personal Gmail trial and combined briefing.
+  - After Brad accepts the on-demand evidence, one separately approved bounded
+    scheduled trial in which Personal Gmail is an optional action source.
+- **Acceptance gate:** Exact account, application ownership, scope, retrieval,
+  retention, and sensitive-content boundaries are documented; tests prove
+  read-only behavior, instance isolation, secret absence, minimized
+  persistence, independent failure, correction, deletion, and provenance; the
+  bounded live review shows high-precision Personal Gmail conclusions without
+  unsupported cross-account merging; and Brad explicitly accepts the evidence
+  before Personal Gmail enters scheduled generation. A scheduled Personal
+  Gmail failure must be disclosed but must not block a briefing when the
+  existing source-sufficiency rule is otherwise satisfied.
+- **Explicitly excluded work:** Changing the active Milestone 12 source set;
+  shared Work and Personal Gmail credentials; whole-mailbox retrieval;
+  attachments; external links; Gmail writes; personal-inbox summaries; hosted
+  inference over Personal Gmail; Google Drive; cross-account identity, thread,
+  or commitment merging without independently supported provenance; and
+  routine scheduled operation without a later acceptance decision.
+
+The active Milestone 12 trial remains fixed from 2026-08-03 through
+2026-08-10. Milestone 13 documentation and test-first implementation may begin
+only after Brad reviews that trial. Live Personal Gmail authorization and
+retrieval require a separate explicit gate after the synthetic package passes.

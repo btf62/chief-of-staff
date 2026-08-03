@@ -1,9 +1,9 @@
 # Feature: Daily Briefing v1
 
 - **Status:** Accepted
-- **Version:** 14
+- **Version:** 15
 - **Owner:** Brad
-- **Last updated:** 2026-07-30
+- **Last updated:** 2026-08-02
 
 ## Summary
 
@@ -19,8 +19,11 @@ the systems where the underlying records live.
 
 The `Accepted` status approves this specification as the Version 1 design
 contract. On 2026-07-30, Brad also accepted the implemented on-demand MVP after
-reviewing the corrected Milestone 11 evidence. That acceptance does not
-authorize scheduled generation or any deferred source or agency boundary.
+reviewing the corrected Milestone 11 evidence. Personal Gmail is an accepted
+post-MVP expansion through Milestone 13, but it does not enter this
+specification's operational source set until its separate trust gate passes.
+The MVP acceptance does not authorize scheduled generation, Personal Gmail
+retrieval, or any other deferred source or agency boundary.
 
 ## User Outcome
 
@@ -38,7 +41,7 @@ wait, and what is approaching without reviewing every source independently.
 
 ## Scope and Source Authority
 
-The input-complete MVP may read only approved content from these sources:
+The accepted on-demand MVP may read only approved content from these sources:
 
 | Source | Authoritative responsibility |
 | --- | --- |
@@ -48,9 +51,12 @@ The input-complete MVP may read only approved content from these sources:
 | Jira | Jira-managed work, status, ownership, dependencies, and deadlines |
 | Approved repository context | Approved project goals, decisions, requirements, and working context |
 
-Personal Gmail and Google Drive remain deferred after on-demand MVP
-acceptance. Their future designs do not authorize retrieval, coverage claims,
-persistence, or acceptance dependencies in the accepted MVP.
+Personal Gmail is approved as the next isolated connector instance under
+[Milestone 13](../../roadmap.md#milestone-13--personal-gmail-integration). It
+may join this source set only after its independent authorization, privacy,
+retrieval, retention, synthetic, bounded-live, and human-review gates pass.
+Until then, the briefing must not retrieve it or claim Personal Gmail
+coverage. Google Drive remains deferred and unauthorized.
 
 Each source remains authoritative for its own records. The briefing may
 interpret and prioritize records across sources, but it must not replace,

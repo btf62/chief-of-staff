@@ -9,6 +9,12 @@ No strict versioning scheme is promised before a distributable product exists.
 
 ### Changed
 
+- Personal Gmail is now the accepted Milestone 13 scope expansion after the
+  bounded Milestone 12 review; the active seven-date scheduled trial remains
+  unchanged, and live Personal Gmail access retains a separate gate.
+- The Gmail design now treats `gmail:personal` as an isolated instance with
+  independent authorization, Keychain credentials, retrieval policy,
+  provenance, coverage, retention, failure, and disconnection behavior.
 - Brad required durable authorization continuity for every approved scheduled
   connector. Jira now adds `offline_access` solely for rotating refresh while
   retaining its exact `read:jira-work` data and selected-resource boundary.
@@ -36,6 +42,9 @@ No strict versioning scheme is promised before a distributable product exists.
 
 ### Added
 
+- ADR-0012 and the Milestone 13 roadmap gate for an isolated, read-only
+  Personal Gmail integration followed by bounded on-demand and scheduled trust
+  reviews.
 - Rotating Jira refresh support with separate Keychain credentials,
   exact-scope validation, noninteractive pre-retrieval refresh, retrieval-free
   readiness reporting, and synthetic secret-persistence tests.
