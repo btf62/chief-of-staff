@@ -1,9 +1,9 @@
 # Architecture Overview
 
 - **Status:** Accepted
-- **Version:** 14
+- **Version:** 15
 - **Owner:** Brad
-- **Last updated:** 2026-07-31
+- **Last updated:** 2026-08-02
 
 This document defines the technical architecture required for
 [Daily Briefing v1](../product/features/daily-briefing-v1.md). It establishes
@@ -15,10 +15,10 @@ invocation direction.
 The on-demand Daily Briefing v1 implementation within this architecture was
 accepted on 2026-07-30. On 2026-07-31, Brad accepted the user-level LaunchAgent
 and connector-continuity decisions for a self-limiting seven-eligible-date
-trial. The bounded scheduling adapter, local state, exact-scope Calendar
-refresh path, private-safe notification, and reversible user LaunchAgent are
-implemented behind the accepted activation gates. Routine unattended
-operation after the trial, deferred connectors,
+trial. The bounded scheduling adapter, local state, exact-boundary refresh
+paths for Calendar, Work Gmail, Todoist, and Jira, private-safe notification,
+and reversible user LaunchAgent are implemented behind the accepted activation
+gates. Routine unattended operation after the trial, deferred connectors,
 routine hosted inference, remote access, and external mutation remain outside
 the accepted boundary.
 
@@ -233,6 +233,13 @@ Exact accounts, resource boundaries, scopes, provider registration, refresh
 behavior, and revocation procedures belong in each connector specification.
 Read-only behavior is enforced through scopes, connector interfaces, and
 contract tests.
+
+Scheduled setup requires durable, Keychain-backed refresh continuity for each
+approved remote connector. This does not make every connector an absolute
+runtime dependency: temporary provider failure still follows the accepted
+honest reduced-coverage policy. Jira's `offline_access` permission supplies
+authorization continuity without changing its `read:jira-work` data boundary.
+See [ADR-0011](../decisions/0011-require-durable-authorization-for-scheduled-connectors.md).
 
 Authorization, Keychain entries, disconnection, failure, and refresh are
 instance-specific. A failure or policy exception for one instance does not
@@ -810,8 +817,9 @@ MVP. Connector-specific specifications, inference-task specifications,
 evaluated model selection, and other decisions in the table above remain
 required before their affected capabilities are implemented.
 
-ADR-0009 and ADR-0010 are accepted for Milestone 12's bounded trial. They do
-not authorize routine operation after the seven eligible dates.
+ADR-0010 and ADR-0011 are accepted for Milestone 12's bounded trial. ADR-0011
+supersedes ADR-0009. They do not authorize routine operation after the seven
+eligible dates.
 
 ### Contradictions and unresolved dependencies
 
@@ -828,7 +836,7 @@ documents. The following dependencies remain unresolved:
   cutoff, source-sufficiency, notification, authorization-continuity, and
   seven-date boundary recorded in
   [ADR-0010](../decisions/0010-choose-scheduled-morning-generation-mechanism.md),
-  [ADR-0009](../decisions/0009-choose-connector-authorization-continuity.md),
+  [ADR-0011](../decisions/0011-require-durable-authorization-for-scheduled-connectors.md),
   and the
   [Milestone 12 decision checklist](../product/features/scheduled-morning-generation-decision-checklist.md).
 
@@ -846,5 +854,5 @@ documents. The following dependencies remain unresolved:
 - [ADR-0004: SQLite and Bounded Local Data Lifecycle](../decisions/0004-adopt-sqlite-and-bounded-local-data-lifecycle.md)
 - [ADR-0005: OAuth and macOS Keychain](../decisions/0005-adopt-oauth-and-macos-keychain.md)
 - [ADR-0006: Provider-Neutral Inference with OpenAI](../decisions/0006-adopt-provider-neutral-inference-with-openai.md)
-- [ADR-0009: Connector Authorization Continuity](../decisions/0009-choose-connector-authorization-continuity.md)
+- [ADR-0011: Durable Scheduled Connector Authorization](../decisions/0011-require-durable-authorization-for-scheduled-connectors.md)
 - [ADR-0010: Scheduled Morning Generation Mechanism](../decisions/0010-choose-scheduled-morning-generation-mechanism.md)

@@ -22,6 +22,7 @@ from chief_of_staff.connector_health import (
 from chief_of_staff.connectors import (
     GMAIL_WORK_INSTANCE,
     GOOGLE_CALENDAR_PRIMARY_INSTANCE,
+    JIRA_PRIMARY_INSTANCE,
     TODOIST_PRIMARY_INSTANCE,
 )
 from chief_of_staff.domain import CredentialHealth, ScheduledOutcome
@@ -355,12 +356,22 @@ def _readiness_payload(
         keychain,
         GOOGLE_CALENDAR_PRIMARY_INSTANCE,
     )
-    action_ready = (
-        by_instance[GMAIL_WORK_INSTANCE].can_retrieve
-        and _refresh_ready(store, keychain, GMAIL_WORK_INSTANCE)
-    ) or (
-        by_instance[TODOIST_PRIMARY_INSTANCE].can_retrieve
-        and _refresh_ready(store, keychain, TODOIST_PRIMARY_INSTANCE)
+    gmail_ready = by_instance[GMAIL_WORK_INSTANCE].can_retrieve and _refresh_ready(
+        store,
+        keychain,
+        GMAIL_WORK_INSTANCE,
+    )
+    todoist_ready = by_instance[
+        TODOIST_PRIMARY_INSTANCE
+    ].can_retrieve and _refresh_ready(
+        store,
+        keychain,
+        TODOIST_PRIMARY_INSTANCE,
+    )
+    jira_ready = by_instance[JIRA_PRIMARY_INSTANCE].can_retrieve and _refresh_ready(
+        store,
+        keychain,
+        JIRA_PRIMARY_INSTANCE,
     )
     return {
         "connectors": {
@@ -370,12 +381,19 @@ def _readiness_payload(
         "ready": all(value for _name, value in host)
         and clean_application
         and calendar_ready
-        and action_ready,
+        and gmail_ready
+        and todoist_ready
+        and jira_ready,
         "reviewed_application_tree": clean_application,
         "source_policy": {
             "calendar_ready": calendar_ready,
-            "gmail_or_todoist_ready": action_ready,
-            "jira_optional": True,
+            "gmail_ready": gmail_ready,
+            "jira_ready": jira_ready,
+            "todoist_ready": todoist_ready,
+            "all_approved_connectors_durable": (
+                calendar_ready and gmail_ready and todoist_ready and jira_ready
+            ),
+            "transient_runtime_failures_may_reduce_coverage": True,
         },
     }
 
@@ -427,6 +445,11 @@ def _status_payload(
                 store,
                 keychain,
                 GMAIL_WORK_INSTANCE,
+            ),
+            "Jira": _refresh_ready(
+                store,
+                keychain,
+                JIRA_PRIMARY_INSTANCE,
             ),
         },
         "launch_agent": {

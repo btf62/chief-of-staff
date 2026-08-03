@@ -17,8 +17,10 @@ import pytest
 
 from chief_of_staff.auth.jira_oauth import (
     JIRA_CONNECTOR,
+    JIRA_DURABLE_GRANTED_SCOPE,
     JIRA_GRANT_TYPE,
     JIRA_OAUTH_AUDIENCE,
+    JIRA_OFFLINE_ACCESS_SCOPE,
     JIRA_PROPOSED_READ_SCOPE,
     JIRA_REDIRECT_URI,
     JiraAccessibleResource,
@@ -28,7 +30,9 @@ from chief_of_staff.auth.jira_oauth import (
     JiraInstalledAppOAuth,
     JiraNoAccessibleSiteError,
     JiraOAuthClientRegistrar,
+    JiraOAuthError,
     JiraOAuthStateMismatch,
+    JiraOAuthTokenClient,
     JiraOAuthTokenResponse,
 )
 from chief_of_staff.auth.keychain import (
@@ -53,6 +57,7 @@ from chief_of_staff.connectors.jira_discovery import (
     JiraSiteBoundaryError,
     StoredJiraDiscoveryAuthorizationProvider,
 )
+from chief_of_staff.connectors.jira_live import StoredJiraAuthorizationProvider
 from chief_of_staff.jira_live_cli import _read_interactive_client_credentials
 from chief_of_staff.persistence import Database, StateStore
 
@@ -60,6 +65,9 @@ NOW = datetime(2026, 7, 27, 14, 0, tzinfo=UTC)
 CLIENT_ID = "synthetic-atlassian-client"
 CLIENT_SECRET = "synthetic-atlassian-client-secret"
 ACCESS_TOKEN = "synthetic-atlassian-access-token"
+REFRESH_TOKEN = "synthetic-atlassian-refresh-token"
+ROTATED_ACCESS_TOKEN = "rotated-atlassian-access-token"
+ROTATED_REFRESH_TOKEN = "rotated-atlassian-refresh-token"
 ACCOUNT_IDENTITY = "selected@example.invalid"
 ACCOUNT_REFERENCE = "primary-user"
 CLOUD_ID = "11111111-2222-3333-4444-555555555555"
@@ -110,11 +118,13 @@ class _FakeTokenClient:
     response: JiraOAuthTokenResponse = field(
         default_factory=lambda: JiraOAuthTokenResponse(
             access_token=ACCESS_TOKEN,
-            granted_scope=JIRA_PROPOSED_READ_SCOPE,
+            granted_scope=JIRA_DURABLE_GRANTED_SCOPE,
             expires_in_seconds=3600,
+            refresh_token=REFRESH_TOKEN,
         )
     )
     exchange_called: bool = False
+    refresh_called: bool = False
 
     def exchange_code(
         self,
@@ -130,6 +140,24 @@ class _FakeTokenClient:
         assert redirect_uri == JIRA_REDIRECT_URI
         self.exchange_called = True
         return self.response
+
+    def refresh(
+        self,
+        *,
+        client_id: str,
+        client_secret: str,
+        refresh_token: str,
+    ) -> JiraOAuthTokenResponse:
+        assert client_id == CLIENT_ID
+        assert client_secret == CLIENT_SECRET
+        assert refresh_token == REFRESH_TOKEN
+        self.refresh_called = True
+        return JiraOAuthTokenResponse(
+            access_token=ROTATED_ACCESS_TOKEN,
+            granted_scope=JIRA_DURABLE_GRANTED_SCOPE,
+            expires_in_seconds=3600,
+            refresh_token=ROTATED_REFRESH_TOKEN,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -222,6 +250,7 @@ def _authorize(
     store: StateStore,
     keychain: MacOSKeychain,
     *,
+    token_client: _FakeTokenClient | None = None,
     resource_client: _FakeResourceClient | None = None,
     browser: _CallbackBrowser | None = None,
     account_confirmed: bool = True,
@@ -230,7 +259,7 @@ def _authorize(
     result = JiraInstalledAppOAuth(
         keychain=keychain,
         state_store=store,
-        token_client=_FakeTokenClient(),
+        token_client=token_client or _FakeTokenClient(),
         resource_client=resource_client or _FakeResourceClient(),
         clock=lambda: NOW,
         browser_opener=selected_browser,
@@ -267,16 +296,16 @@ def test_jira_oauth_exact_scope_state_account_site_and_keychain(
         assert resource is not None
         assert client is not None
         assert client.oauth_grant_type == JIRA_GRANT_TYPE
-        assert authorization.granted_scope == JIRA_PROPOSED_READ_SCOPE
+        assert authorization.granted_scope == JIRA_DURABLE_GRANTED_SCOPE
         assert authorization.account_identity == ACCOUNT_IDENTITY
-        assert authorization.refresh_token_account is None
+        assert authorization.refresh_token_account is not None
         assert resource.resource_id == CLOUD_ID
         assert resource.resource_url == SITE_URL
         assert resource.grant_type == JIRA_GRANT_TYPE
         assert result.accessible_site_count == 1
         assert result.account_identity_source == "user-confirmed"
         assert result.access_token_issued
-        assert not result.refresh_token_issued
+        assert result.refresh_token_issued
 
     assert browser.authorization_url is not None
     query = urllib.parse.parse_qs(
@@ -285,7 +314,7 @@ def test_jira_oauth_exact_scope_state_account_site_and_keychain(
     assert query == {
         "audience": [JIRA_OAUTH_AUDIENCE],
         "client_id": [CLIENT_ID],
-        "scope": [JIRA_PROPOSED_READ_SCOPE],
+        "scope": [f"{JIRA_PROPOSED_READ_SCOPE} {JIRA_OFFLINE_ACCESS_SCOPE}"],
         "redirect_uri": [JIRA_REDIRECT_URI],
         "state": [query["state"][0]],
         "response_type": ["code"],
@@ -295,7 +324,6 @@ def test_jira_oauth_exact_scope_state_account_site_and_keychain(
     forbidden_scopes = (
         "read:jira-user",
         "read:me",
-        "offline_access",
         "write:jira-work",
         "manage:jira",
         "servicedesk",
@@ -304,11 +332,14 @@ def test_jira_oauth_exact_scope_state_account_site_and_keychain(
     assert all(scope not in browser.authorization_url for scope in forbidden_scopes)
     assert CLIENT_SECRET in runner.items.values()
     assert ACCESS_TOKEN in runner.items.values()
+    assert REFRESH_TOKEN in runner.items.values()
     database_bytes = database_path.read_bytes()
     assert CLIENT_SECRET.encode() not in database_bytes
     assert ACCESS_TOKEN.encode() not in database_bytes
+    assert REFRESH_TOKEN.encode() not in database_bytes
     assert stat.S_IMODE(database_path.stat().st_mode) == 0o600
     assert ACCESS_TOKEN not in repr(result)
+    assert REFRESH_TOKEN not in repr(result)
 
 
 def test_jira_oauth_rejects_state_and_account_before_exchange(
@@ -414,6 +445,209 @@ class _Response:
 
     def __exit__(self, *args: object) -> None:
         return
+
+
+def test_jira_token_client_requests_and_validates_rotating_refresh(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requests: list[urllib.request.Request] = []
+    payloads = [
+        {
+            "access_token": ACCESS_TOKEN,
+            "refresh_token": REFRESH_TOKEN,
+            "scope": f"{JIRA_PROPOSED_READ_SCOPE} {JIRA_OFFLINE_ACCESS_SCOPE}",
+            "expires_in": 3600,
+        },
+        {
+            "access_token": ROTATED_ACCESS_TOKEN,
+            "refresh_token": ROTATED_REFRESH_TOKEN,
+            "scope": f"{JIRA_OFFLINE_ACCESS_SCOPE} {JIRA_PROPOSED_READ_SCOPE}",
+            "expires_in": 3600,
+        },
+    ]
+
+    def open_request(
+        request: urllib.request.Request,
+        *,
+        timeout: int,
+    ) -> _Response:
+        assert timeout == 30
+        requests.append(request)
+        return _Response(payloads.pop(0))
+
+    monkeypatch.setattr(urllib.request, "urlopen", open_request)
+    client = JiraOAuthTokenClient()
+    exchanged = client.exchange_code(
+        client_id=CLIENT_ID,
+        client_secret=CLIENT_SECRET,
+        code="synthetic-code",
+        redirect_uri=JIRA_REDIRECT_URI,
+    )
+    refreshed = client.refresh(
+        client_id=CLIENT_ID,
+        client_secret=CLIENT_SECRET,
+        refresh_token=REFRESH_TOKEN,
+    )
+
+    assert exchanged.granted_scope == JIRA_DURABLE_GRANTED_SCOPE
+    assert refreshed.granted_scope == JIRA_DURABLE_GRANTED_SCOPE
+    assert refreshed.refresh_token_issued
+    request_payloads: list[object] = []
+    for request in requests:
+        assert isinstance(request.data, bytes)
+        request_payloads.append(json.loads(request.data))
+    assert request_payloads == [
+        {
+            "client_id": CLIENT_ID,
+            "client_secret": CLIENT_SECRET,
+            "code": "synthetic-code",
+            "grant_type": "authorization_code",
+            "redirect_uri": JIRA_REDIRECT_URI,
+        },
+        {
+            "client_id": CLIENT_ID,
+            "client_secret": CLIENT_SECRET,
+            "grant_type": "refresh_token",
+            "refresh_token": REFRESH_TOKEN,
+        },
+    ]
+    assert all(request.method == "POST" for request in requests)
+    assert REFRESH_TOKEN not in repr(refreshed)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {
+            "access_token": ROTATED_ACCESS_TOKEN,
+            "scope": f"{JIRA_OFFLINE_ACCESS_SCOPE} {JIRA_PROPOSED_READ_SCOPE}",
+            "expires_in": 3600,
+        },
+        {
+            "access_token": ROTATED_ACCESS_TOKEN,
+            "refresh_token": ROTATED_REFRESH_TOKEN,
+            "scope": (
+                f"{JIRA_OFFLINE_ACCESS_SCOPE} {JIRA_PROPOSED_READ_SCOPE} "
+                "write:jira-work"
+            ),
+            "expires_in": 3600,
+        },
+    ],
+)
+def test_jira_refresh_rejects_missing_rotation_or_scope_expansion(
+    payload: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        urllib.request,
+        "urlopen",
+        lambda _request, *, timeout: _Response(payload),
+    )
+
+    with pytest.raises(JiraOAuthError, match="exact approved grant"):
+        JiraOAuthTokenClient().refresh(
+            client_id=CLIENT_ID,
+            client_secret=CLIENT_SECRET,
+            refresh_token=REFRESH_TOKEN,
+        )
+
+
+def test_jira_refresh_rotates_keychain_values_without_persisting_secrets(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "state.sqlite3"
+    keychain, runner = _keychain()
+    token_client = _FakeTokenClient()
+    with Database.open(database_path) as database:
+        store = StateStore(database)
+        _register_client(store, keychain)
+        result = _authorize(store, keychain, token_client=token_client)
+        refreshed = JiraInstalledAppOAuth(
+            keychain=keychain,
+            state_store=store,
+            token_client=token_client,
+            resource_client=_FakeResourceClient(),
+            clock=lambda: NOW + timedelta(hours=2),
+        ).refresh_authorization(account_reference=ACCOUNT_REFERENCE)
+
+    assert token_client.refresh_called
+    assert refreshed.authorized_at == result.metadata.authorized_at
+    assert refreshed.token_expires_at == NOW + timedelta(hours=3)
+    assert ROTATED_ACCESS_TOKEN in runner.items.values()
+    assert ROTATED_REFRESH_TOKEN in runner.items.values()
+    assert ACCESS_TOKEN not in runner.items.values()
+    assert REFRESH_TOKEN not in runner.items.values()
+    database_bytes = database_path.read_bytes()
+    for secret in (
+        CLIENT_SECRET,
+        ACCESS_TOKEN,
+        REFRESH_TOKEN,
+        ROTATED_ACCESS_TOKEN,
+        ROTATED_REFRESH_TOKEN,
+    ):
+        assert secret.encode() not in database_bytes
+
+
+def test_expired_jira_issue_authorization_refreshes_without_interaction(
+    tmp_path: Path,
+) -> None:
+    keychain, runner = _keychain()
+    token_client = _FakeTokenClient()
+    with Database.open(tmp_path / "state.sqlite3") as database:
+        store = StateStore(database)
+        _register_client(store, keychain)
+        _authorize(store, keychain, token_client=token_client)
+        oauth = JiraInstalledAppOAuth(
+            keychain=keychain,
+            state_store=store,
+            token_client=token_client,
+            resource_client=_FakeResourceClient(),
+            clock=lambda: NOW + timedelta(hours=2),
+        )
+        authorization = StoredJiraAuthorizationProvider(
+            state_store=store,
+            keychain=keychain,
+            refresher=oauth,
+            clock=lambda: NOW + timedelta(hours=2),
+        ).get_jira_authorization(ACCOUNT_REFERENCE, "approved-site")
+
+    assert token_client.refresh_called
+    assert authorization.granted_scopes == frozenset({JIRA_PROPOSED_READ_SCOPE})
+    assert ROTATED_ACCESS_TOKEN in runner.items.values()
+    assert ROTATED_REFRESH_TOKEN in runner.items.values()
+
+
+def test_missing_jira_access_token_refreshes_without_interaction(
+    tmp_path: Path,
+) -> None:
+    keychain, runner = _keychain()
+    token_client = _FakeTokenClient()
+    with Database.open(tmp_path / "state.sqlite3") as database:
+        store = StateStore(database)
+        _register_client(store, keychain)
+        result = _authorize(store, keychain, token_client=token_client)
+        access_reference = KeychainSecretReference(
+            result.metadata.credential_service,
+            result.metadata.access_token_account,
+        )
+        keychain.delete(access_reference)
+        oauth = JiraInstalledAppOAuth(
+            keychain=keychain,
+            state_store=store,
+            token_client=token_client,
+            resource_client=_FakeResourceClient(),
+            clock=lambda: NOW + timedelta(minutes=1),
+        )
+        StoredJiraAuthorizationProvider(
+            state_store=store,
+            keychain=keychain,
+            refresher=oauth,
+            clock=lambda: NOW + timedelta(minutes=1),
+        ).get_jira_authorization(ACCOUNT_REFERENCE, "approved-site")
+
+    assert token_client.refresh_called
+    assert ROTATED_ACCESS_TOKEN in runner.items.values()
+    assert ROTATED_REFRESH_TOKEN in runner.items.values()
 
 
 @dataclass(slots=True)
@@ -714,7 +948,7 @@ def test_private_report_and_sqlite_contain_only_approved_persistence(
     assert not report.project_catalog_persisted
     assert not report.raw_payload_persisted
     assert not report.issue_endpoint_called
-    assert not report.refresh_token_requested
+    assert report.refresh_token_requested
     assert stat.S_IMODE(report.output_path.stat().st_mode) == 0o600
     private_report = report.output_path.read_text(encoding="utf-8")
     assert "PRIVATEKEY" in private_report

@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Owner:** Brad
-- **Last updated:** 2026-07-31
+- **Last updated:** 2026-08-02
 
 This runbook operates the self-limiting Milestone 12 trial on Brad's approved
 primary Mac. It does not authorize routine unattended use after the trial,
@@ -11,7 +11,7 @@ an external write.
 
 The governing product contract is
 [Scheduled Morning Generation v1](../../product/features/scheduled-morning-generation-v1.md).
-[ADR-0009](../../decisions/0009-choose-connector-authorization-continuity.md)
+[ADR-0011](../../decisions/0011-require-durable-authorization-for-scheduled-connectors.md)
 governs credential continuity, and
 [ADR-0010](../../decisions/0010-choose-scheduled-morning-generation-mechanism.md)
 governs the user-level LaunchAgent.
@@ -75,10 +75,11 @@ Inspect host and connector readiness without retrieving source records:
 make scheduled-readiness
 ```
 
-The readiness report contains safe health categories only. It must show usable
-Calendar coverage and at least one usable action source from Work Gmail or
-Todoist. It also requires the reviewed application commit to have no tracked
-or untracked repository changes. Jira may be expired or unavailable.
+The readiness report contains safe health categories only. It must show
+healthy refresh continuity for Calendar, Work Gmail, Todoist, and Jira
+individually. It also requires the reviewed application commit to have no
+tracked or untracked repository changes. Runtime provider failures may still
+produce honest reduced coverage under the accepted source-sufficiency policy.
 
 ## Establish accepted authorization continuity
 
@@ -103,12 +104,26 @@ uses state and PKCE, stores access and refresh credentials only in macOS
 Keychain, and stores only non-secret metadata in SQLite.
 
 Work Gmail and Todoist retain their existing exact-account, exact-scope refresh
-paths. Jira retains its short-lived `read:jira-work` grant without
-`offline_access`; an expired Jira grant is omitted rather than refreshed or
-authorized interactively by a scheduled run.
+paths. Jira requires one separately approved, attended authorization with the
+unchanged `read:jira-work` data permission plus `offline_access` for rotating
+refresh continuity:
 
-Run `make scheduled-readiness` again after the attended Calendar flow. Do not
-perform a source retrieval merely to test installation.
+```text
+.venv/bin/python -m chief_of_staff.jira_live_cli authorize \
+  --expected-account <approved-work-account> \
+  --account-reference primary-user \
+  --resource-reference approved-site
+```
+
+Confirm the expected Atlassian account, application, one selected Jira site,
+and exact permissions. Stop if any differ. Access and rotating refresh tokens
+remain only in macOS Keychain. The attended authorization command performs
+site binding but no project or issue retrieval. Scheduled operation may
+refresh the stored exact grant; it never opens an interactive authorization
+flow.
+
+Run `make scheduled-readiness` again after the attended Calendar and Jira
+flows. Do not perform a source retrieval merely to test installation.
 
 ## Install the bounded trial
 

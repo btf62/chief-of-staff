@@ -4,7 +4,8 @@
 
 This is a documentation-first repository with an accepted Version 1 design
 baseline for Daily Briefing v1. The product requirements, feature
-specification, architecture, and ADR-0001 through ADR-0008 are accepted.
+specification, architecture, and ADR-0001 through ADR-0011 are accepted;
+ADR-0009 is superseded by ADR-0011.
 Milestones 0 through 4 are complete. Milestone 5 has completed the accepted
 Todoist connector, one combined Calendar-and-Todoist trial, and one explicitly
 approved complete-retrieval and workday-quality validation. Jira has completed
@@ -58,11 +59,17 @@ seven-eligible-date trial on Brad's current primary Mac from 2026-08-03 through
 2026-08-10. The accepted schedule is 6:00 a.m. `America/New_York` on Monday
 through Thursday, Saturday, and Sunday, with catch-up only through 11:00 a.m.
 The trial must become inert after seven eligible dates. Routine unattended
-operation after the trial is not accepted. The implementation, 419-test
-repository gate, Milestone 8 and 9
+operation after the trial is not accepted. Durable, exact-boundary
+authorization continuity is required for Calendar, Work Gmail, Todoist, and
+Jira. Jira retains `read:jira-work` and adds `offline_access` solely for
+rotating refresh continuity. The implementation, 426-test repository gate,
+Milestone 8 and 9
 evaluations, Milestone 11 evaluation, Markdown validation, and wheel packaging
 are complete. The exact-scope Calendar continuity check, reversible
 LaunchAgent activation, notification test, and disable/re-enable test passed.
+One attended exact-boundary Jira reauthorization and retrieval-free readiness
+verification are authorized for the active trial; no issue retrieval is part
+of that setup step.
 Personal Gmail and Google Drive remain deferred and unauthorized.
 
 ## Working rules
@@ -139,13 +146,15 @@ modify an external system, or begin a deferred milestone without new explicit
 approval. Acceptance does not authorize unattended operation or expand any
 connector, credential, inference, agency, or retention boundary. Record
 material new product or architecture decisions before implementing them.
-Milestone 12 implementation, one exact-scope refreshable Calendar
-reauthorization, installation of the accepted user LaunchAgent, and activation
-of the bounded trial are authorized only through the documented synthetic,
-validation, clean-repository, connector-health, and host-verification gates.
-No always-running timer, wake schedule, Jira `offline_access`, Personal Gmail,
-Drive, hosted inference, external write, added source, or routine operation
-after the trial is authorized.
+Milestone 12 implementation, exact-boundary durable authorization for the four
+approved connectors, installation of the accepted user LaunchAgent, and
+activation of the bounded trial are authorized only through the documented
+synthetic, validation, clean-repository, connector-health, and host-
+verification gates. Jira `offline_access` is authorized only alongside
+`read:jira-work` for rotating refresh continuity under ADR-0011. No
+always-running timer, wake schedule, Personal Gmail, Drive, hosted inference,
+external write, added source, or routine operation after the trial is
+authorized.
 
 ## Validation
 

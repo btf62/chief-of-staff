@@ -133,18 +133,22 @@ class StoredWorkGmailAuthorizationProvider:
         ):
             raise GmailAuthorizationUnavailable
 
-        if (
-            metadata.token_expires_at <= self.clock()
-            or metadata.credential_health is not CredentialHealth.HEALTHY
-        ):
-            if self.refresher is None:
-                raise GmailAuthorizationUnavailable
-            metadata = self.refresher.refresh(account_reference=account_reference)
-
         reference = KeychainSecretReference(
             service=metadata.credential_service,
             account=metadata.access_token_account,
         )
+        if (
+            metadata.token_expires_at <= self.clock()
+            or metadata.credential_health is not CredentialHealth.HEALTHY
+            or not self.keychain.exists(reference)
+        ):
+            if self.refresher is None:
+                raise GmailAuthorizationUnavailable
+            metadata = self.refresher.refresh(account_reference=account_reference)
+            reference = KeychainSecretReference(
+                service=metadata.credential_service,
+                account=metadata.access_token_account,
+            )
         if not self.keychain.exists(reference):
             raise GmailAuthorizationUnavailable
         return GmailAuthorization(

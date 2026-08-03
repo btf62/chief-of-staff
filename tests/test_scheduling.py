@@ -4,23 +4,33 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
-from datetime import date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import pytest
+
+from chief_of_staff.auth import MacOSKeychain
+from chief_of_staff.auth.keychain import SecurityCommandResult
 from chief_of_staff.connector_health import (
     APPROVED_CONNECTORS,
     ConnectorHealth,
     ConnectorHealthReport,
 )
 from chief_of_staff.domain import (
+    AuthorizationStatus,
     BriefingRun,
     BriefingStatus,
+    ConnectorAuthorizationMetadata,
+    ConnectorResourceMetadata,
+    CredentialHealth,
+    OAuthClientMetadata,
     ScheduledOccurrence,
     ScheduledOutcome,
 )
 from chief_of_staff.on_demand import OnDemandBriefingReport
 from chief_of_staff.persistence import Database, StateStore
+from chief_of_staff.scheduled_cli import _readiness_payload
 from chief_of_staff.scheduling import (
     MAXIMUM_ELIGIBLE_DATES,
     TRIAL_ID,
@@ -32,6 +42,25 @@ from chief_of_staff.scheduling import (
 )
 
 LOCAL_ZONE = ZoneInfo("America/New_York")
+
+
+class _ReadinessKeychainRunner:
+    def __init__(self) -> None:
+        self.items: set[tuple[str, str]] = set()
+
+    def __call__(
+        self,
+        arguments: tuple[str, ...],
+        *,
+        input_text: str | None,
+        capture_output: bool,
+    ) -> SecurityCommandResult:
+        del input_text, capture_output
+        service = arguments[arguments.index("-s") + 1]
+        account = arguments[arguments.index("-a") + 1]
+        return SecurityCommandResult(
+            returncode=0 if (service, account) in self.items else 44
+        )
 
 
 def _local(value: str) -> datetime:
@@ -55,6 +84,105 @@ def _health(
         )
         for connector in APPROVED_CONNECTORS
     )
+
+
+def _store_durable_connector_authorizations(
+    store: StateStore,
+    runner: _ReadinessKeychainRunner,
+    *,
+    omit_refresh_for: str | None = None,
+) -> None:
+    now = datetime(2026, 8, 2, 12, 0, tzinfo=UTC)
+    for connector in APPROVED_CONNECTORS:
+        provider = connector.instance_id.partition(":")[0]
+        access_account = f"{provider}:access"
+        refresh_account = f"{provider}:refresh"
+        store.save_oauth_client(
+            OAuthClientMetadata(
+                connector=provider,
+                oauth_project_id="synthetic-project",
+                oauth_client_id=f"{provider}-client",
+                credential_service="test.service",
+                client_secret_account=f"{provider}:client-secret",
+                configured_at=now,
+                connector_instance_id=connector.instance_id,
+            )
+        )
+        refresh_present = connector.instance_id != omit_refresh_for
+        store.save_connector_authorization(
+            ConnectorAuthorizationMetadata(
+                connector=provider,
+                account_reference="primary-user",
+                account_identity="user@example.invalid",
+                granted_scope=connector.expected_scope,
+                credential_service="test.service",
+                access_token_account=access_account,
+                refresh_token_account=(refresh_account if refresh_present else None),
+                authorization_status=AuthorizationStatus.AUTHORIZED,
+                credential_health=CredentialHealth.HEALTHY,
+                refresh_health=(CredentialHealth.HEALTHY if refresh_present else None),
+                token_expires_at=now + timedelta(days=3650),
+                authorized_at=now,
+                updated_at=now,
+                connector_instance_id=connector.instance_id,
+            )
+        )
+        runner.items.add(("test.service", access_account))
+        if refresh_present:
+            runner.items.add(("test.service", refresh_account))
+        if connector.resource_required:
+            store.save_connector_resource(
+                ConnectorResourceMetadata(
+                    connector=provider,
+                    resource_reference="approved-site",
+                    resource_id="synthetic-cloud-id",
+                    resource_url="https://example.atlassian.net",
+                    resource_type="jira_cloud_site",
+                    grant_type="resource_level",
+                    selected_at=now,
+                    connector_instance_id=connector.instance_id,
+                )
+            )
+
+
+def test_scheduled_readiness_requires_durable_continuity_for_every_connector(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "chief_of_staff.scheduled_cli.host_readiness",
+        lambda **_kwargs: (("synthetic_host", True),),
+    )
+    monkeypatch.setattr(
+        "chief_of_staff.scheduled_cli.application_version",
+        lambda: "reviewed.clean",
+    )
+    runner = _ReadinessKeychainRunner()
+    keychain = MacOSKeychain(command_runner=runner)
+    with Database.open(tmp_path / "state.sqlite3") as database:
+        store = StateStore(database)
+        _store_durable_connector_authorizations(
+            store,
+            runner,
+            omit_refresh_for="jira:primary",
+        )
+        missing_jira = _readiness_payload(store, keychain)
+        _store_durable_connector_authorizations(store, runner)
+        complete = _readiness_payload(store, keychain)
+
+    assert not missing_jira["ready"]
+    assert missing_jira["source_policy"] == {
+        "all_approved_connectors_durable": False,
+        "calendar_ready": True,
+        "gmail_ready": True,
+        "jira_ready": False,
+        "todoist_ready": True,
+        "transient_runtime_failures_may_reduce_coverage": True,
+    }
+    assert complete["ready"]
+    complete_policy = complete["source_policy"]
+    assert isinstance(complete_policy, dict)
+    assert complete_policy["all_approved_connectors_durable"] is True
 
 
 def _briefing(

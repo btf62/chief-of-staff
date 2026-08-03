@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Owner:** Brad
-- **Last updated:** 2026-07-30
+- **Last updated:** 2026-08-02
 
 This runbook describes the supported local, on-demand Daily Briefing command.
 It reads only the existing approved connector instances and never modifies an
@@ -147,10 +147,11 @@ modify an external system. The separately accepted bounded schedule is
 operated only through the
 [Scheduled Morning Generation runbook](scheduled-morning-generation.md).
 
-Calendar, Work Gmail, and Todoist refresh authority remains limited to the
-exact accounts and scopes accepted in
-[ADR-0009](../../decisions/0009-choose-connector-authorization-continuity.md).
-Jira remains short-lived without `offline_access`.
+Calendar, Work Gmail, Todoist, and Jira refresh authority remains limited to
+the exact accounts, resources, and scopes accepted in
+[ADR-0011](../../decisions/0011-require-durable-authorization-for-scheduled-connectors.md).
+Jira's `offline_access` permission provides continuity only; its Jira data
+permission and source boundary remain unchanged.
 
 ## Understand time and historical modes
 

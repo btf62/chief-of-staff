@@ -155,7 +155,8 @@ for output locations, partial-coverage behavior, and safe failure handling.
 
 Milestone 12 adds an exact user-level macOS LaunchAgent, deterministic
 eligibility and catch-up policy, Calendar-plus-action-source sufficiency,
-private-safe notifications, and a self-limiting seven-eligible-date trial.
+private-safe notifications, durable exact-boundary authorization for all four
+approved remote connectors, and a self-limiting seven-eligible-date trial.
 Preview or inspect it without retrieving source records:
 
 ```text

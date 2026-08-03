@@ -8,6 +8,7 @@ from enum import StrEnum
 from typing import Final
 
 from chief_of_staff.auth import KeychainSecretReference, MacOSKeychain
+from chief_of_staff.auth.jira_oauth import JIRA_DURABLE_GRANTED_SCOPE
 from chief_of_staff.connectors import (
     GMAIL_READONLY_SCOPE,
     GMAIL_WORK_INSTANCE,
@@ -78,7 +79,7 @@ APPROVED_CONNECTORS: Final = (
     ApprovedConnector(
         JIRA_PRIMARY_INSTANCE,
         "Jira",
-        "read:jira-work",
+        JIRA_DURABLE_GRANTED_SCOPE,
         "python -m chief_of_staff.jira_live_cli authorize",
         resource_required=True,
     ),

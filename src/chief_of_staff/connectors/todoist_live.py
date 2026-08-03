@@ -138,19 +138,34 @@ class StoredTodoistAuthorizationProvider:
         account_reference: str,
     ) -> TodoistAuthorization:
         metadata = self.state_store.get_connector_authorization("todoist")
+        access_present = bool(
+            metadata is not None
+            and self.keychain.exists(
+                KeychainSecretReference(
+                    service=metadata.credential_service,
+                    account=metadata.access_token_account,
+                )
+            )
+        )
         if (
             metadata is not None
             and metadata.account_reference == account_reference
             and metadata.granted_scope == TODOIST_DATA_READ_SCOPE
             and metadata.authorization_status is AuthorizationStatus.AUTHORIZED
             and metadata.credential_health is CredentialHealth.HEALTHY
-            and metadata.token_expires_at <= self.clock()
+            and (metadata.token_expires_at <= self.clock() or not access_present)
             and metadata.refresh_token_account is not None
             and metadata.refresh_health is CredentialHealth.HEALTHY
             and self.refresher is not None
         ):
             metadata = self.refresher.refresh_authorization(
                 account_reference=account_reference,
+            )
+            access_present = self.keychain.exists(
+                KeychainSecretReference(
+                    service=metadata.credential_service,
+                    account=metadata.access_token_account,
+                )
             )
 
         if (
@@ -160,14 +175,13 @@ class StoredTodoistAuthorizationProvider:
             or metadata.authorization_status is not AuthorizationStatus.AUTHORIZED
             or metadata.credential_health is not CredentialHealth.HEALTHY
             or metadata.token_expires_at <= self.clock()
+            or not access_present
         ):
             raise TodoistAuthorizationUnavailable
         reference = KeychainSecretReference(
             service=metadata.credential_service,
             account=metadata.access_token_account,
         )
-        if not self.keychain.exists(reference):
-            raise TodoistAuthorizationUnavailable
         return TodoistAuthorization(
             account_reference=metadata.account_reference,
             account_identity=metadata.account_identity,

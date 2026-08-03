@@ -9,6 +9,12 @@ No strict versioning scheme is promised before a distributable product exists.
 
 ### Changed
 
+- Brad required durable authorization continuity for every approved scheduled
+  connector. Jira now adds `offline_access` solely for rotating refresh while
+  retaining its exact `read:jira-work` data and selected-resource boundary.
+- Scheduled setup readiness now requires healthy Keychain refresh continuity
+  for Calendar, Work Gmail, Todoist, and Jira individually; transient runtime
+  provider failure still follows the accepted honest reduced-coverage policy.
 - Brad changed the bounded Milestone 12 trigger from 7:00 to 6:00 a.m.
   `America/New_York` without resetting or extending the seven-date trial.
 - Scheduled generation now requires repository context, Calendar, and at least
@@ -30,6 +36,11 @@ No strict versioning scheme is promised before a distributable product exists.
 
 ### Added
 
+- Rotating Jira refresh support with separate Keychain credentials,
+  exact-scope validation, noninteractive pre-retrieval refresh, retrieval-free
+  readiness reporting, and synthetic secret-persistence tests.
+- ADR-0011, which supersedes ADR-0009 and records durable authorization as a
+  requirement for every approved scheduled connector.
 - A safe `make web-stop` command using a private PID file and exact process
   validation instead of broad process matching.
 - Repository-native `make help`, `make commands`, and bare `make` command
@@ -39,7 +50,7 @@ No strict versioning scheme is promised before a distributable product exists.
   idempotency, migration `0012`, private-safe notifications, local status,
   reversible current-user LaunchAgent management, exact-scope Calendar refresh
   continuity, synthetic tests, and an operator runbook.
-- A passing 414-test repository gate, existing inference and ranking
+- A passing 426-test repository gate, existing inference and ranking
   evaluations, Milestone 11 evaluation, Markdown validation, dry-run package,
   and clean wheel-install verification for the bounded scheduler.
 - An accepted Milestone 12 Scheduled Morning Generation specification, macOS

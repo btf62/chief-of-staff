@@ -1,9 +1,9 @@
 # Feature: Scheduled Morning Generation v1
 
 - **Status:** Accepted
-- **Version:** 1
+- **Version:** 2
 - **Owner:** Brad
-- **Last updated:** 2026-07-31
+- **Last updated:** 2026-08-02
 - **Trial state:** Live activation authorized for seven eligible dates
 - **Implementation state:** Complete; live activation requires the accepted
   setup gates
@@ -24,10 +24,9 @@ The intended outcome is:
 Brad accepted this specification and the
 [Milestone 12 decision checklist](scheduled-morning-generation-decision-checklist.md)
 for implementation and a self-limiting seven-eligible-date trial on his
-current primary Mac. This acceptance authorizes one bounded Calendar
-reauthorization under the unchanged exact read-only scope and scheduled use of
-the already accepted Work Gmail and Todoist refresh paths. It does not accept
-routine unattended operation after the trial.
+current primary Mac. This acceptance authorizes durable, exact-boundary
+authorization continuity for Calendar, Work Gmail, Todoist, and Jira. It does
+not accept routine unattended operation after the trial.
 
 ## Problem and evidence
 
@@ -41,7 +40,8 @@ Scheduling adds failure modes that the on-demand workflow does not have:
 - The selected Mac may be asleep, powered off, logged out, disconnected, or
   mid-update.
 - A trigger may be missed, delayed, duplicated, or coalesced after wake.
-- Short-lived connector authorization may expire without a person present.
+- Connector authorization may expire or lose refresh continuity without a
+  person present.
 - A retry may overwrite or duplicate a briefing already recorded for the day.
 - A failure may remain invisible unless the product records and surfaces it.
 
@@ -130,7 +130,7 @@ mini.
 | SMG-006 | An existing recorded briefing must never be overwritten. A successful scheduled run for the same date must become a separate immutable run only when the approved invocation policy permits it. | Replay, manual, reduced-source, and scheduled histories retain distinct run IDs, modes, timestamps, and lineage. |
 | SMG-007 | The bounded trial performs no automatic whole-run retry. Provider transports retain only their already accepted pagination and one exact-scope token-refresh behavior. | A failed run records its outcome and waits for review or the next eligible scheduled date. |
 | SMG-008 | Connector health preflight must run before retrieval and must distinguish healthy, refreshable, expired, missing, revoked, scope-mismatched, and unavailable sources. | An unusable connector is omitted before retrieval and is never represented as empty coverage. |
-| SMG-009 | Scheduled operation may use only authorization continuity explicitly approved for Milestone 12. | Tests prove no browser OAuth flow, new scope, account change, or unapproved refresh path can occur from the scheduled command. |
+| SMG-009 | Scheduled operation may use only authorization continuity explicitly approved for Milestone 12. Each approved remote connector must have healthy refresh continuity at setup readiness. | Tests prove no browser OAuth flow, account change, resource expansion, data-scope expansion, or unapproved refresh path can occur from the scheduled command. |
 | SMG-010 | A scheduled run succeeds only with repository context, usable Calendar coverage, and at least one usable source from Work Gmail or Todoist. Jira is optional. | Representative single-source and multi-source outages are classified as full success, reduced success, or failure exactly as accepted. |
 | SMG-011 | Complete failure must not persist a successful briefing presentation. | The run records safe failure metadata and makes the failure visible through the approved notification and local status surface. |
 | SMG-012 | Diagnostics must be private, local, mode `0600`, bounded, and non-content. | Diagnostics contain only run identity, dates, safe source aliases, stages, health categories, counts, durations, and safe error categories—never source content or secrets. |
@@ -155,11 +155,13 @@ mini.
 - **Failure:** Repository context or Calendar is unavailable; both Work Gmail
   and Todoist are unusable; or the pipeline cannot produce a valid briefing.
 
-An expired or failed connector is unavailable, never empty. Jira remains
-short-lived and is omitted without an interactive authorization attempt when
-unusable. Calendar may use the separately authorized refresh credential under
-the unchanged exact read-only scope. Work Gmail and Todoist may use only their
-already accepted exact-account, exact-scope refresh paths.
+An expired or failed connector is unavailable, never empty. Calendar, Work
+Gmail, Todoist, and Jira may use only their accepted exact-account,
+exact-resource, exact-data-scope Keychain refresh paths. Jira's
+`offline_access` permission provides authorization continuity only; its Jira
+data permission remains `read:jira-work`. Scheduled operation never starts an
+interactive authorization flow. A transient source failure may still produce
+an honestly reduced briefing under the source-sufficiency policy above.
 
 The supported outcomes are `full_success`, `reduced_success`,
 `already_completed`, `ineligible_day`, `before_window`,
@@ -176,7 +178,7 @@ The supported outcomes are `full_success`, `reduced_success`,
   off triggers are not recovered automatically. The application still needs
   an explicit catch-up cutoff and idempotency.
 - Scheduled refresh authority is limited to the exact connector decisions in
-  [ADR-0009](../../decisions/0009-choose-connector-authorization-continuity.md).
+  [ADR-0011](../../decisions/0011-require-durable-authorization-for-scheduled-connectors.md).
 - Notifications must reveal no private briefing content.
 - An always-awake host reduces sleep-related misses but creates a longer-lived
   local attack and credential-availability window.
@@ -200,7 +202,8 @@ The accepted implementation provides:
   automatic whole-run retry;
 - retrieval-free readiness, dry-run, status, install, notification-test,
   disable, enable, and removal commands;
-- exact-scope Calendar refresh continuity through macOS Keychain;
+- exact-boundary Calendar, Work Gmail, Todoist, and Jira refresh continuity
+  through macOS Keychain;
 - source sufficiency requiring Calendar plus Work Gmail or Todoist, with Jira
   optional;
 - private-safe fixed notifications and a non-content local web status summary;
@@ -218,7 +221,7 @@ accept routine post-trial use.
 - [Product requirements](../requirements.md)
 - [Daily Briefing v1](daily-briefing-v1.md)
 - [Implementation roadmap](../../roadmap.md#milestone-12--scheduled-morning-generation)
-- [ADR-0009: Connector Authorization Continuity](../../decisions/0009-choose-connector-authorization-continuity.md)
+- [ADR-0011: Durable Scheduled Connector Authorization](../../decisions/0011-require-durable-authorization-for-scheduled-connectors.md)
 - [ADR-0010: Scheduled Morning Generation Mechanism](../../decisions/0010-choose-scheduled-morning-generation-mechanism.md)
 - [Milestone 12 decision checklist](scheduled-morning-generation-decision-checklist.md)
 - [On-demand briefing runbook](../../operations/runbooks/on-demand-briefing.md)

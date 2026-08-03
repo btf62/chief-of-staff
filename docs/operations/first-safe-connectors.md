@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Owner:** Brad
-- **Last updated:** 2026-07-29
+- **Last updated:** 2026-08-02
 
 This document describes the implemented repository, Calendar, Todoist, Jira,
 and Work Gmail boundaries. The synthetic demonstrations, bounded Calendar and
@@ -128,6 +128,12 @@ through a command argument, shell history, configuration file, or repository
 file. Brad's personal API token is not an accepted fallback.
 
 ## Jira authorization and credential boundary
+
+The following records the historical one-time discovery and issue-trial
+boundary. The later scheduled-authorization decision in
+[ADR-0011](../decisions/0011-require-durable-authorization-for-scheduled-connectors.md)
+supersedes its no-refresh limitation while preserving its account, site,
+project, query, field, and read-only data boundaries.
 
 The Jira connector uses a private OAuth 2.0 3LO application named
 `Chief of Staff (Local) — Jira`, owned and administered by Brad through his
@@ -419,19 +425,21 @@ promises, local correction recurrence, private review artifacts, briefing
 integration, structured failure categories, current-run aggregate failure
 audits, failed-trial non-persistence, and absence of attachment or mutation
 operations.
-## Current limitations and stop condition
+## Historical trial limitations and current stop condition
 
 - Google's approved scope can technically read events on other calendars the
   user owns; the application restricts every retrieval to `primary` and
   contract tests enforce that boundary.
-- Authorization uses a short-lived access token without offline access or
-  automatic refresh.
-- Todoist refresh credentials exist in Keychain, but their presence does not
-  authorize scheduled, unattended, or repeated retrieval.
-- Jira uses a short-lived access token without refresh capability.
+- The original Calendar and Jira trials used short-lived access tokens without
+  automatic refresh. Current bounded scheduling requires the exact durable
+  authorization paths accepted in ADR-0011.
+- Calendar, Todoist, Jira, and Work Gmail refresh credentials remain in
+  Keychain and authorize use only within the accepted on-demand or bounded
+  scheduled operating contracts.
 - Work Gmail uses conservative deterministic rules only; uncertain requests
   and commitments are intentionally omitted.
-- Daily Briefing v1 has not been accepted for operational use.
+- Daily Briefing v1 is accepted for on-demand use. Routine scheduling after
+  the bounded seven-date trial remains unaccepted.
 
 Live connector retrieval requires explicit current-task authorization. Do not
 broaden any account, scope, source, endpoint, retrieval cap, or operating mode,

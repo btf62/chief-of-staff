@@ -1,8 +1,13 @@
 # ADR-0009: Choose Connector Authorization Continuity
 
-- **Status:** Accepted
+- **Status:** Superseded
 - **Date:** 2026-07-31
 - **Owners:** Brad
+- **Superseded by:** [ADR-0011](0011-require-durable-authorization-for-scheduled-connectors.md)
+
+ADR-0011 replaces this decision by requiring durable refresh continuity for
+all four approved scheduled connectors, including Jira. This record remains
+the historical rationale for the original bounded-trial choice.
 
 ## Context
 

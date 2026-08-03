@@ -140,6 +140,10 @@ def main(arguments: list[str] | None = None) -> int:
                     authorization_provider=StoredJiraDiscoveryAuthorizationProvider(
                         state_store=state_store,
                         keychain=keychain,
+                        refresher=JiraInstalledAppOAuth(
+                            state_store=state_store,
+                            keychain=keychain,
+                        ),
                     ),
                     transport=JiraProjectDiscoveryHttpTransport(
                         keychain=keychain,
@@ -211,6 +215,17 @@ def _print_status(state_store: StateStore, keychain: MacOSKeychain) -> None:
             health = "missing"
         elif authorization.token_expires_at <= datetime.now(UTC):
             health = "expired"
+        refresh_reference = (
+            None
+            if authorization.refresh_token_account is None
+            else KeychainSecretReference(
+                service=authorization.credential_service,
+                account=authorization.refresh_token_account,
+            )
+        )
+        refresh_present = bool(
+            refresh_reference is not None and keychain.exists(refresh_reference)
+        )
         payload.update(
             {
                 "access_token_present": keychain.exists(reference),
@@ -220,7 +235,12 @@ def _print_status(state_store: StateStore, keychain: MacOSKeychain) -> None:
                 "credential_health": health,
                 "granted_scope": authorization.granted_scope,
                 "last_used_at": authorization.last_used_at,
-                "refresh_token_present": False,
+                "refresh_health": (
+                    None
+                    if authorization.refresh_health is None
+                    else authorization.refresh_health.value
+                ),
+                "refresh_token_present": refresh_present,
                 "token_expires_at": authorization.token_expires_at,
             }
         )

@@ -128,7 +128,7 @@ without changing product semantics.
 ## Dependencies
 
 - [Scheduled Morning Generation v1](../product/features/scheduled-morning-generation-v1.md)
-- [ADR-0009: Connector Authorization Continuity](0009-choose-connector-authorization-continuity.md)
+- [ADR-0011: Durable Scheduled Connector Authorization](0011-require-durable-authorization-for-scheduled-connectors.md)
 - [Milestone 12 decision checklist](../product/features/scheduled-morning-generation-decision-checklist.md)
 
 ## Current implementation status

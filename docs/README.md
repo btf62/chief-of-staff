@@ -109,8 +109,8 @@ afterward remain unauthorized.
   MVP input boundary; Personal Gmail deferred
 - [Decision records](decisions/README.md) — architecture and significant
   product decisions
-- [ADR-0009: Connector Authorization Continuity](decisions/0009-choose-connector-authorization-continuity.md)
-  — accepted Milestone 12 credential-continuity boundary
+- [ADR-0011: Durable Scheduled Connector Authorization](decisions/0011-require-durable-authorization-for-scheduled-connectors.md)
+  — accepted refresh-continuity boundary for all approved scheduled connectors
 - [ADR-0010: Scheduled Morning Generation Mechanism](decisions/0010-choose-scheduled-morning-generation-mechanism.md)
   — accepted user-level macOS LaunchAgent decision
 

@@ -10,6 +10,7 @@ import pytest
 import chief_of_staff.connectors.jira as jira_module
 from chief_of_staff.auth import (
     JIRA_OAUTH_AUDIENCE,
+    JIRA_OFFLINE_ACCESS_SCOPE,
     JIRA_PROPOSED_READ_SCOPE,
     JiraLiveAccessNotApproved,
     JiraOAuthStateMismatch,
@@ -186,7 +187,10 @@ def test_mocked_oauth_validates_state_and_rejects_live_exchange() -> None:
     preview = boundary.prepare_preview()
 
     assert preview.audience == JIRA_OAUTH_AUDIENCE
-    assert preview.requested_scopes == (JIRA_PROPOSED_READ_SCOPE,)
+    assert preview.requested_scopes == (
+        JIRA_PROPOSED_READ_SCOPE,
+        JIRA_OFFLINE_ACCESS_SCOPE,
+    )
     assert preview.resource_restricted
     assert not preview.live_authorization_enabled
     with pytest.raises(JiraOAuthStateMismatch):

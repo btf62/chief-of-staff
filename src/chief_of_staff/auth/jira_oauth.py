@@ -16,7 +16,11 @@ from datetime import UTC, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Final, Protocol
 
-from chief_of_staff.auth.keychain import KeychainSecretReference, MacOSKeychain
+from chief_of_staff.auth.keychain import (
+    KeychainSecretNotFound,
+    KeychainSecretReference,
+    MacOSKeychain,
+)
 from chief_of_staff.connectors.instances import JIRA_PRIMARY_INSTANCE
 from chief_of_staff.domain import (
     AuthorizationStatus,
@@ -29,6 +33,13 @@ from chief_of_staff.persistence import StateStore
 
 JIRA_OAUTH_AUDIENCE: Final = "api.atlassian.com"
 JIRA_PROPOSED_READ_SCOPE: Final = "read:jira-work"
+JIRA_OFFLINE_ACCESS_SCOPE: Final = "offline_access"
+JIRA_DURABLE_GRANTED_SCOPE: Final = (
+    f"{JIRA_OFFLINE_ACCESS_SCOPE} {JIRA_PROPOSED_READ_SCOPE}"
+)
+JIRA_AUTHORIZATION_SCOPE: Final = (
+    f"{JIRA_PROPOSED_READ_SCOPE} {JIRA_OFFLINE_ACCESS_SCOPE}"
+)
 JIRA_CONNECTOR: Final = "jira"
 JIRA_GRANT_TYPE: Final = "resource_level"
 JIRA_AUTHORIZATION_ENDPOINT: Final = "https://auth.atlassian.com/authorize"
@@ -75,12 +86,18 @@ class JiraResourceRateLimitError(JiraOAuthError):
 
 @dataclass(frozen=True, slots=True)
 class JiraOAuthTokenResponse:
-    """Validated short-lived token response with its secret hidden."""
+    """Validated durable token response with its secrets hidden."""
 
     access_token: str = field(repr=False)
     granted_scope: str
     expires_in_seconds: int
-    refresh_token_issued: bool = False
+    refresh_token: str | None = field(default=None, repr=False)
+
+    @property
+    def refresh_token_issued(self) -> bool:
+        """Report refresh continuity without exposing the token value."""
+
+        return self.refresh_token is not None
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,7 +122,7 @@ class JiraAuthorizationResult:
 
 
 class JiraOAuthTokenClientProtocol(Protocol):
-    """Injectable authorization-code exchange boundary."""
+    """Injectable authorization-code and rotating-refresh boundary."""
 
     def exchange_code(
         self,
@@ -116,6 +133,15 @@ class JiraOAuthTokenClientProtocol(Protocol):
         redirect_uri: str,
     ) -> JiraOAuthTokenResponse:
         """Exchange one code without logging secret material."""
+
+    def refresh(
+        self,
+        *,
+        client_id: str,
+        client_secret: str,
+        refresh_token: str,
+    ) -> JiraOAuthTokenResponse:
+        """Exchange and rotate one refresh credential."""
 
 
 class JiraResourceClientProtocol(Protocol):
@@ -186,7 +212,7 @@ class JiraOAuthClientRegistrar:
 
 @dataclass(frozen=True, slots=True)
 class JiraInstalledAppOAuth:
-    """Run one exact-scope resource-level flow and persist its selected site."""
+    """Run one durable resource-level flow and persist its selected site."""
 
     keychain: MacOSKeychain
     state_store: StateStore
@@ -279,8 +305,8 @@ class JiraInstalledAppOAuth:
         )
         client_secret = ""
         code = ""
-        if token.refresh_token_issued:
-            raise JiraOAuthError("Jira issued an unauthorized refresh token")
+        if not token.refresh_token_issued:
+            raise JiraOAuthError("Jira omitted the approved refresh credential")
         resources = self.resource_client.get_accessible_resources(
             access_token=token.access_token
         )
@@ -294,6 +320,82 @@ class JiraInstalledAppOAuth:
             accessible_site_count=len(resources),
         )
 
+    def refresh_authorization(
+        self,
+        *,
+        account_reference: str,
+    ) -> ConnectorAuthorizationMetadata:
+        """Refresh one exact grant and persist Atlassian's rotated credentials."""
+
+        metadata = self.state_store.get_connector_authorization(JIRA_CONNECTOR)
+        client = self.state_store.get_oauth_client(JIRA_CONNECTOR)
+        if (
+            metadata is None
+            or client is None
+            or metadata.account_reference != account_reference
+            or metadata.connector_instance_id != JIRA_PRIMARY_INSTANCE
+            or metadata.granted_scope != JIRA_DURABLE_GRANTED_SCOPE
+            or metadata.authorization_status is not AuthorizationStatus.AUTHORIZED
+            or metadata.refresh_token_account is None
+            or metadata.refresh_health is not CredentialHealth.HEALTHY
+            or client.oauth_grant_type != JIRA_GRANT_TYPE
+            or client.connector_instance_id != JIRA_PRIMARY_INSTANCE
+        ):
+            raise JiraOAuthError("Jira refresh metadata is unavailable")
+        client_reference = KeychainSecretReference(
+            service=client.credential_service,
+            account=client.client_secret_account,
+        )
+        access_reference = KeychainSecretReference(
+            service=metadata.credential_service,
+            account=metadata.access_token_account,
+        )
+        refresh_reference = KeychainSecretReference(
+            service=metadata.credential_service,
+            account=metadata.refresh_token_account,
+        )
+        try:
+            client_secret = self.keychain.read(client_reference)
+            refresh_token = self.keychain.read(refresh_reference)
+        except KeychainSecretNotFound:
+            raise JiraOAuthError("Jira refresh credential is missing") from None
+        try:
+            token = self.token_client.refresh(
+                client_id=client.oauth_client_id,
+                client_secret=client_secret,
+                refresh_token=refresh_token,
+            )
+        finally:
+            client_secret = ""
+            refresh_token = ""
+        if token.granted_scope != JIRA_DURABLE_GRANTED_SCOPE:
+            raise JiraOAuthError("Jira refreshed scope exceeded its boundary")
+        if token.refresh_token is None:
+            raise JiraOAuthError("Jira refresh omitted the rotated token")
+
+        now = self.clock()
+        self.keychain.store(refresh_reference, token.refresh_token)
+        self.keychain.store(access_reference, token.access_token)
+        refreshed = ConnectorAuthorizationMetadata(
+            connector=metadata.connector,
+            account_reference=metadata.account_reference,
+            account_identity=metadata.account_identity,
+            granted_scope=token.granted_scope,
+            credential_service=metadata.credential_service,
+            access_token_account=metadata.access_token_account,
+            refresh_token_account=metadata.refresh_token_account,
+            authorization_status=AuthorizationStatus.AUTHORIZED,
+            credential_health=CredentialHealth.HEALTHY,
+            refresh_health=CredentialHealth.HEALTHY,
+            token_expires_at=now + timedelta(seconds=token.expires_in_seconds),
+            authorized_at=metadata.authorized_at,
+            updated_at=now,
+            last_used_at=metadata.last_used_at,
+            connector_instance_id=JIRA_PRIMARY_INSTANCE,
+        )
+        self.state_store.save_connector_authorization(refreshed)
+        return refreshed
+
     def _store_authorization(
         self,
         *,
@@ -304,7 +406,7 @@ class JiraInstalledAppOAuth:
         selected_resource: JiraAccessibleResource,
         accessible_site_count: int,
     ) -> JiraAuthorizationResult:
-        if token.granted_scope != JIRA_PROPOSED_READ_SCOPE:
+        if token.granted_scope != JIRA_DURABLE_GRANTED_SCOPE:
             raise JiraOAuthError("Jira granted scope does not match the approved scope")
         if selected_resource.scopes != frozenset({JIRA_PROPOSED_READ_SCOPE}):
             raise JiraOAuthError("Jira site scopes do not match the approved scope")
@@ -314,7 +416,14 @@ class JiraInstalledAppOAuth:
             service=KEYCHAIN_SERVICE,
             account=f"{JIRA_CONNECTOR}:access-token:{account_reference}",
         )
+        refresh_reference = KeychainSecretReference(
+            service=KEYCHAIN_SERVICE,
+            account=f"{JIRA_CONNECTOR}:refresh-token:{account_reference}",
+        )
+        if token.refresh_token is None:
+            raise JiraOAuthError("Jira omitted the approved refresh credential")
         self.keychain.store(access_reference, token.access_token)
+        self.keychain.store(refresh_reference, token.refresh_token)
         authorization = ConnectorAuthorizationMetadata(
             connector=JIRA_CONNECTOR,
             account_reference=account_reference,
@@ -322,10 +431,10 @@ class JiraInstalledAppOAuth:
             granted_scope=token.granted_scope,
             credential_service=KEYCHAIN_SERVICE,
             access_token_account=access_reference.account,
-            refresh_token_account=None,
+            refresh_token_account=refresh_reference.account,
             authorization_status=AuthorizationStatus.AUTHORIZED,
             credential_health=CredentialHealth.HEALTHY,
-            refresh_health=None,
+            refresh_health=CredentialHealth.HEALTHY,
             token_expires_at=now + timedelta(seconds=token.expires_in_seconds),
             authorized_at=now,
             updated_at=now,
@@ -346,6 +455,7 @@ class JiraInstalledAppOAuth:
             self.state_store.save_connector_resource(resource)
         except BaseException:
             self.keychain.delete(access_reference)
+            self.keychain.delete(refresh_reference)
             self.state_store.delete_connector_authorization(JIRA_CONNECTOR)
             raise
         return JiraAuthorizationResult(
@@ -353,12 +463,12 @@ class JiraInstalledAppOAuth:
             resource=resource,
             accessible_site_count=accessible_site_count,
             access_token_issued=True,
-            refresh_token_issued=False,
+            refresh_token_issued=True,
         )
 
 
 class JiraOAuthTokenClient:
-    """Minimal Atlassian authorization-code token client."""
+    """Minimal Atlassian authorization-code and rotating-refresh client."""
 
     def exchange_code(
         self,
@@ -368,7 +478,7 @@ class JiraOAuthTokenClient:
         code: str,
         redirect_uri: str,
     ) -> JiraOAuthTokenResponse:
-        request_body = json.dumps(
+        return self._token_request(
             {
                 "grant_type": "authorization_code",
                 "client_id": client_id,
@@ -376,7 +486,28 @@ class JiraOAuthTokenClient:
                 "code": code,
                 "redirect_uri": redirect_uri,
             }
-        ).encode()
+        )
+
+    def refresh(
+        self,
+        *,
+        client_id: str,
+        client_secret: str,
+        refresh_token: str,
+    ) -> JiraOAuthTokenResponse:
+        """Exchange one refresh token and require a rotated replacement."""
+
+        return self._token_request(
+            {
+                "grant_type": "refresh_token",
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "refresh_token": refresh_token,
+            }
+        )
+
+    def _token_request(self, parameters: dict[str, str]) -> JiraOAuthTokenResponse:
+        request_body = json.dumps(parameters).encode()
         request = urllib.request.Request(  # noqa: S310 - fixed HTTPS endpoint
             JIRA_TOKEN_ENDPOINT,
             data=request_body,
@@ -406,23 +537,25 @@ class JiraOAuthTokenClient:
             scope = payload.get("scope")
             expires_in = payload.get("expires_in")
             refresh_token = payload.get("refresh_token")
+            normalized_scope = _normalize_granted_scope(scope)
             if (
                 not isinstance(access_token, str)
                 or not access_token
-                or scope != JIRA_PROPOSED_READ_SCOPE
+                or normalized_scope != JIRA_DURABLE_GRANTED_SCOPE
                 or isinstance(expires_in, bool)
                 or not isinstance(expires_in, int)
                 or expires_in <= 0
-                or refresh_token is not None
+                or not isinstance(refresh_token, str)
+                or not refresh_token
             ):
                 raise JiraOAuthError(
                     "Jira OAuth response omitted the exact approved grant"
                 )
             return JiraOAuthTokenResponse(
                 access_token=access_token,
-                granted_scope=scope,
+                granted_scope=normalized_scope,
                 expires_in_seconds=expires_in,
-                refresh_token_issued=False,
+                refresh_token=refresh_token,
             )
         finally:
             payload.clear()
@@ -492,7 +625,10 @@ class MockJiraOAuthBoundary:
     def prepare_preview(
         self,
         *,
-        requested_scopes: tuple[str, ...] = (JIRA_PROPOSED_READ_SCOPE,),
+        requested_scopes: tuple[str, ...] = (
+            JIRA_PROPOSED_READ_SCOPE,
+            JIRA_OFFLINE_ACCESS_SCOPE,
+        ),
     ) -> JiraOAuthPreview:
         """Create a non-live resource-restricted authorization preview."""
 
@@ -532,7 +668,7 @@ def _authorization_url(*, client_id: str, state: str) -> str:
             {
                 "audience": JIRA_OAUTH_AUDIENCE,
                 "client_id": client_id,
-                "scope": JIRA_PROPOSED_READ_SCOPE,
+                "scope": JIRA_AUTHORIZATION_SCOPE,
                 "redirect_uri": JIRA_REDIRECT_URI,
                 "state": state,
                 "response_type": "code",
@@ -630,6 +766,15 @@ def _valid_atlassian_site_url(value: str) -> bool:
         and parsed.query == ""
         and parsed.fragment == ""
     )
+
+
+def _normalize_granted_scope(value: object) -> str:
+    if not isinstance(value, str):
+        return ""
+    scopes = value.split()
+    if len(scopes) != len(set(scopes)):
+        return ""
+    return " ".join(sorted(scopes))
 
 
 def _validate_account_inputs(

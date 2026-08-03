@@ -1,9 +1,9 @@
 # Daily Briefing v1 Implementation Roadmap
 
 - **Status:** Accepted
-- **Version:** 14
+- **Version:** 15
 - **Owner:** Brad
-- **Last updated:** 2026-07-31
+- **Last updated:** 2026-08-02
 
 This roadmap sequences implementation of the accepted
 [Daily Briefing v1](product/features/daily-briefing-v1.md) design. Milestones 0
@@ -565,7 +565,7 @@ in the accepted boundary.
 
 ## Milestone 12 — Scheduled Morning Generation
 
-- **Status:** Implementation complete — bounded trial activation pending
+- **Status:** Bounded seven-date trial active
 - **Intended user-visible outcome:** Chief of Staff can generate one reliable
   morning briefing automatically on approved days without duplicate runs,
   silent failures, unexpected authorization expansion, or dependence on Brad
@@ -573,7 +573,7 @@ in the accepted boundary.
 - **Dependencies:** Accepted Milestone 11; the accepted
   [Scheduled Morning Generation v1](product/features/scheduled-morning-generation-v1.md)
   specification; accepted decisions for
-  [connector authorization continuity](decisions/0009-choose-connector-authorization-continuity.md)
+  [durable connector authorization](decisions/0011-require-durable-authorization-for-scheduled-connectors.md)
   and the
   [scheduling mechanism](decisions/0010-choose-scheduled-morning-generation-mechanism.md);
   Brad's accepted
@@ -591,7 +591,7 @@ in the accepted boundary.
 - **Acceptance gate:** The accepted decisions and ADRs authorize
   implementation. The synthetic gate now covers schedule, sleep/wake,
   daylight-saving, idempotency, duplicate, reduced-source, failure,
-  notification, privacy, retention, and removal behavior. All 414 repository
+  notification, privacy, retention, and removal behavior. All 426 repository
   tests, the inference and ranking evaluations, the Milestone 11 evaluation,
   Markdown validation, and wheel packaging pass. The installed trial must stop
   retrieval after seven eligible dates. Brad must review the bounded results
@@ -603,11 +603,12 @@ in the accepted boundary.
 
 Brad approved the current primary Mac, Monday–Thursday plus Saturday and
 Sunday, 6:00 a.m. `America/New_York`, catch-up through 11:00 a.m., the exact
-source-sufficiency rule, refreshable Calendar continuity under the unchanged
-read-only scope, existing Gmail and Todoist refresh paths, short-lived Jira
-without `offline_access`, private-safe notifications, and a seven-date trial.
-Implementation, one bounded Calendar authorization exercise, and trial
-activation are authorized. Routine unattended operation after the trial is
-not accepted. The implementation and synthetic validation gates are complete;
-the attended Calendar continuity check and reversible LaunchAgent activation
-remain.
+source-sufficiency rule, durable exact-boundary continuity for Calendar, Work
+Gmail, Todoist, and Jira, private-safe notifications, and a seven-date trial.
+Jira adds `offline_access` only for rotating authorization continuity; its
+`read:jira-work` data permission, selected site, `NRC` project, and fixed query
+remain unchanged. Implementation, bounded Calendar and Jira authorization
+exercises, and trial activation are authorized. Routine unattended operation
+after the trial is not accepted. The implementation and synthetic validation
+gates are complete; retrieval-free durability and active-trial version checks
+remain required after credential setup.

@@ -31,6 +31,7 @@ from chief_of_staff.auth.todoist_oauth import (
 )
 from chief_of_staff.connectors import (
     TODOIST_DATA_READ_SCOPE,
+    StoredTodoistAuthorizationProvider,
     TodoistAuthorization,
     TodoistHttpTransport,
     TodoistPageRequest,
@@ -240,6 +241,26 @@ def test_todoist_oauth_uses_exact_scope_state_refresh_and_keychain(
         assert result.access_token_issued
         assert result.refresh_token_issued
         assert result.refresh_tested
+
+        access_reference = KeychainSecretReference(
+            stored.credential_service,
+            stored.access_token_account,
+        )
+        keychain.delete(access_reference)
+        authorization = StoredTodoistAuthorizationProvider(
+            state_store=store,
+            keychain=keychain,
+            refresher=TodoistInstalledAppOAuth(
+                keychain=keychain,
+                state_store=store,
+                token_client=token_client,
+                identity_client=_FakeIdentityClient(),
+                clock=lambda: NOW,
+            ),
+            clock=lambda: NOW,
+        ).get_todoist_authorization(ACCOUNT_REFERENCE)
+        assert authorization.granted_scopes == frozenset({TODOIST_DATA_READ_SCOPE})
+        assert keychain.exists(access_reference)
 
     assert browser.callback_thread is not None
     browser.callback_thread.join(timeout=5)

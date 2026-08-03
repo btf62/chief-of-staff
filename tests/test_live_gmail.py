@@ -41,6 +41,7 @@ from chief_of_staff.connectors import (
     GmailFailureStage,
     GmailMessageListRequest,
     GmailRetrievalError,
+    StoredWorkGmailAuthorizationProvider,
     WorkGmailHttpTransport,
 )
 from chief_of_staff.connectors.gmail_live import MAX_GMAIL_RESPONSE_BYTES
@@ -322,6 +323,26 @@ def test_oauth_uses_exact_scope_state_pkce_account_and_separate_keychain_entries
         assert b"synthetic-access-token" not in database_bytes
         assert b"synthetic-refresh-token" not in database_bytes
         assert store.get_connector_instance("gmail:personal") is None
+
+        access_reference = KeychainSecretReference(
+            result.metadata.credential_service,
+            result.metadata.access_token_account,
+        )
+        keychain.delete(access_reference)
+        authorization = StoredWorkGmailAuthorizationProvider(
+            state_store=store,
+            keychain=keychain,
+            refresher=WorkGmailInstalledAppOAuth(
+                keychain=keychain,
+                state_store=store,
+                token_client=token_client,
+                profile_client=_ProfileClient(),
+                clock=lambda: NOW,
+            ),
+            clock=lambda: NOW,
+        ).get_gmail_authorization(ACCOUNT_REFERENCE)
+        assert authorization.granted_scopes == frozenset({GMAIL_READONLY_SCOPE})
+        assert keychain.exists(access_reference)
 
 
 def test_oauth_rejects_state_mismatch(tmp_path: Path) -> None:

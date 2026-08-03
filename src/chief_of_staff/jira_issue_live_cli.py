@@ -10,6 +10,7 @@ from pathlib import Path
 
 from chief_of_staff.auth import (
     GoogleInstalledAppOAuth,
+    JiraInstalledAppOAuth,
     KeychainSecretReference,
     MacOSKeychain,
     TodoistInstalledAppOAuth,
@@ -143,6 +144,10 @@ def _jira_connector(
         authorization_provider=StoredJiraAuthorizationProvider(
             state_store=state_store,
             keychain=keychain,
+            refresher=JiraInstalledAppOAuth(
+                state_store=state_store,
+                keychain=keychain,
+            ),
         ),
         transport=JiraEnhancedSearchHttpTransport(
             keychain=keychain,

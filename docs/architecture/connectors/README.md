@@ -57,7 +57,7 @@ decisions for each future connector specification.
 | Approved repository context | [Repository context](repository-context.md) | Accepted and implemented |
 | Google Calendar | [Google Calendar](google-calendar.md) | Accepted; bounded live trial complete and stopped |
 | Todoist | [Todoist](todoist.md) | Accepted; bounded live trial and workday validation complete and stopped |
-| Jira | [Jira](jira.md) | Accepted; bounded project and issue trials complete and stopped |
+| Jira | [Jira](jira.md) | Accepted; on-demand MVP and durable bounded-schedule authorization implemented |
 | Work Gmail | [Gmail](gmail.md) | Accepted and implemented; Milestones 6 and 7 complete |
 
 ## Planned specifications
@@ -79,3 +79,4 @@ future remote repository access requires a connector-specific decision.
 - [Product requirements](../../product/requirements.md)
 - [ADR-0004: SQLite and Bounded Local Data Lifecycle](../../decisions/0004-adopt-sqlite-and-bounded-local-data-lifecycle.md)
 - [ADR-0005: OAuth and macOS Keychain](../../decisions/0005-adopt-oauth-and-macos-keychain.md)
+- [ADR-0011: Durable Scheduled Connector Authorization](../../decisions/0011-require-durable-authorization-for-scheduled-connectors.md)

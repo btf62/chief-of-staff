@@ -1041,7 +1041,7 @@ class LiveJiraIssueTrialRunner:
             raw_payload_persisted=False,
             cursor_persisted=False,
             description_persisted=False,
-            refresh_token_requested=False,
+            refresh_token_requested=True,
             hosted_inference_used=False,
             external_mutation_used=False,
             briefing=briefing,

@@ -18,6 +18,7 @@ from typing import Final, Protocol, cast
 
 from chief_of_staff.auth.jira_oauth import (
     JIRA_CONNECTOR,
+    JIRA_DURABLE_GRANTED_SCOPE,
     JIRA_GRANT_TYPE,
     JIRA_PROPOSED_READ_SCOPE,
 )
@@ -29,6 +30,7 @@ from chief_of_staff.auth.keychain import (
 from chief_of_staff.connectors.instances import JIRA_PRIMARY_INSTANCE
 from chief_of_staff.domain import (
     AuthorizationStatus,
+    ConnectorAuthorizationMetadata,
     ConnectorRun,
     ConnectorStatus,
     CoverageStatus,
@@ -198,7 +200,7 @@ class JiraProjectDiscoveryReport:
     raw_payload_persisted: bool = False
     project_catalog_persisted: bool = False
     issue_endpoint_called: bool = False
-    refresh_token_requested: bool = False
+    refresh_token_requested: bool = True
 
     @property
     def pagination_occurred(self) -> bool:
@@ -230,6 +232,17 @@ class JiraProjectUrlOpener(Protocol):
         """Open one fixed GET request."""
 
 
+class JiraDiscoveryAuthorizationRefresher(Protocol):
+    """Narrow rotating-refresh boundary for Jira discovery."""
+
+    def refresh_authorization(
+        self,
+        *,
+        account_reference: str,
+    ) -> ConnectorAuthorizationMetadata:
+        """Rotate the exact approved grant without browser interaction."""
+
+
 def _open_url(
     request: urllib.request.Request,
     *,
@@ -250,6 +263,11 @@ class StoredJiraDiscoveryAuthorizationProvider:
 
     state_store: StateStore
     keychain: MacOSKeychain
+    refresher: JiraDiscoveryAuthorizationRefresher | None = field(
+        default=None,
+        repr=False,
+        compare=False,
+    )
     clock: Callable[[], datetime] = field(
         default=lambda: datetime.now(UTC),
         repr=False,
@@ -263,33 +281,63 @@ class StoredJiraDiscoveryAuthorizationProvider:
         resource_reference: str,
     ) -> JiraDiscoveryAuthorization:
         metadata = self.state_store.get_connector_authorization(JIRA_CONNECTOR)
+        access_present = bool(
+            metadata is not None
+            and self.keychain.exists(
+                KeychainSecretReference(
+                    service=metadata.credential_service,
+                    account=metadata.access_token_account,
+                )
+            )
+        )
+        if (
+            metadata is not None
+            and metadata.account_reference == account_reference
+            and metadata.granted_scope == JIRA_DURABLE_GRANTED_SCOPE
+            and metadata.authorization_status is AuthorizationStatus.AUTHORIZED
+            and metadata.credential_health is CredentialHealth.HEALTHY
+            and (metadata.token_expires_at <= self.clock() or not access_present)
+            and metadata.refresh_token_account is not None
+            and metadata.refresh_health is CredentialHealth.HEALTHY
+            and self.refresher is not None
+        ):
+            metadata = self.refresher.refresh_authorization(
+                account_reference=account_reference,
+            )
+            access_present = self.keychain.exists(
+                KeychainSecretReference(
+                    service=metadata.credential_service,
+                    account=metadata.access_token_account,
+                )
+            )
+
         resource = self.state_store.get_connector_resource(JIRA_CONNECTOR)
         if (
             metadata is None
             or resource is None
             or metadata.account_reference != account_reference
             or resource.resource_reference != resource_reference
-            or metadata.granted_scope != JIRA_PROPOSED_READ_SCOPE
+            or metadata.granted_scope != JIRA_DURABLE_GRANTED_SCOPE
             or resource.grant_type != JIRA_GRANT_TYPE
             or resource.resource_type != "jira_cloud_site"
             or metadata.authorization_status is not AuthorizationStatus.AUTHORIZED
             or metadata.credential_health is not CredentialHealth.HEALTHY
             or metadata.token_expires_at <= self.clock()
-            or metadata.refresh_token_account is not None
+            or metadata.refresh_token_account is None
+            or metadata.refresh_health is not CredentialHealth.HEALTHY
+            or not access_present
         ):
             raise JiraDiscoveryAuthorizationUnavailable
         reference = KeychainSecretReference(
             service=metadata.credential_service,
             account=metadata.access_token_account,
         )
-        if not self.keychain.exists(reference):
-            raise JiraDiscoveryAuthorizationUnavailable
         return JiraDiscoveryAuthorization(
             account_reference=metadata.account_reference,
             account_identity=metadata.account_identity,
             cloud_id=resource.resource_id,
             site_url=resource.resource_url,
-            granted_scope=metadata.granted_scope,
+            granted_scope=JIRA_PROPOSED_READ_SCOPE,
             grant_type=resource.grant_type,
             credential_reference=reference.identifier,
         )

@@ -1,16 +1,16 @@
 # Jira Connector
 
 - **Status:** Accepted
-- **Version:** 3
+- **Version:** 4
 - **Owner:** Brad
-- **Last updated:** 2026-07-27
+- **Last updated:** 2026-08-02
 
 This specification defines the read-only Jira connector through its bounded
 issue-retrieval phase. It accepts the resource-restricted authorization,
 project discovery, exact-project enhanced JQL search, minimized issue
-persistence, and deterministic briefing behavior described below. It does not
-authorize another issue retrieval, another project, broader fields or scopes,
-refresh capability, or external mutation.
+persistence, deterministic briefing behavior, and durable rotating
+authorization described below. It does not authorize another issue retrieval,
+another project, broader Jira data access, or external mutation.
 
 ## Source authority
 
@@ -29,10 +29,12 @@ daily candidate, primary outcome, human commitment, or relationship claim.
 The implemented phase contains:
 
 - A private, resource-level Atlassian OAuth 2.0 3LO application.
-- Exact `read:jira-work` scope enforcement without offline access.
+- Exact `read:jira-work` data permission plus `offline_access` solely for
+  authorization continuity.
 - A state-protected fixed loopback callback and explicit browser-account
   confirmation.
-- Keychain-only client-secret and short-lived access-token storage.
+- Separate Keychain-only client-secret, access-token, and rotating
+  refresh-token storage.
 - Exact one-site discovery through `accessible-resources`.
 - A current paginated project-search transport restricted to the selected
   `cloudId`, `action=browse`, and minimal project metadata.
@@ -52,9 +54,10 @@ The implemented phase contains:
 - Deterministic briefing integration across approved repository context,
   primary Calendar, Todoist, and Jira without hosted inference.
 
-There is no background poller, refresh-token path, hosted-inference path,
-external write, unrestricted search, or other-project access. Project
-discovery and issue retrieval remain separate bounded operations.
+There is no background poller, hosted-inference path, external write,
+unrestricted search, or other-project access. The connector refreshes only an
+expired accepted grant before a bounded retrieval. Project discovery and issue
+retrieval remain separate bounded operations.
 
 ## Accepted account, site, and application boundary
 
@@ -66,7 +69,8 @@ The completed project-discovery trial uses:
 - A resource-level grant limited to the site selected during consent.
 - The private application `Chief of Staff (Local) — Jira`, owned and
   administered by Brad through his Northridge account.
-- Exact `read:jira-work` scope with no refresh token or offline access.
+- Exact `read:jira-work` Jira data permission and `offline_access` for rotating
+  authorization continuity.
 - The fixed callback `http://127.0.0.1:8766/oauth/callback`.
 
 Brad explicitly approved proceeding with himself as the sole current
@@ -85,7 +89,7 @@ called three-legged OAuth or 3LO, for external integrations. New applications
 can use resource-restricted grants so the token applies only to the site
 selected during consent.
 
-The approved least-privilege scope is:
+The approved least-privilege Jira data permission is:
 
 ```text
 read:jira-work
@@ -97,12 +101,18 @@ The connector does not call a user-profile endpoint; account identity is
 therefore explicitly confirmed from the browser consent experience rather than
 requesting `read:jira-user` or `read:me`.
 
-Do not request:
+The approved authorization-continuity permission is:
+
+```text
+offline_access
+```
+
+It does not broaden the Jira records or provider operations the connector may
+access. Do not request:
 
 - `write:jira-work`
 - Jira administration or project-management scopes
 - User-profile scope without a demonstrated endpoint need
-- `offline_access` for the first bounded on-demand trial
 - Any granular or product scope not required by the approved operations
 
 Authorization uses a cryptographically random, unguessable `state` value and
@@ -111,14 +121,17 @@ Atlassian's current documented confidential-client 3LO sequence does not
 specify PKCE parameters, so this implementation does not invent unsupported
 parameters.
 
-The bounded trial uses a short-lived access token without refresh capability.
-Any future refresh token or unattended operation requires separate approval of
-`offline_access`, rotation behavior, revocation, retention, and scheduling.
+The authorization-code exchange and every successful refresh must return the
+exact set `read:jira-work offline_access`. Atlassian rotates refresh tokens;
+the connector must replace the stored refresh token after every successful
+exchange and fail closed if the rotated token is absent. A scheduled run may
+refresh this accepted grant but may not open an interactive browser flow.
 
-The client secret and short-lived access token belong only in macOS Keychain
-under reviewed lookup references. SQLite contains only non-secret account,
-site, scope, expiry, health, app-ownership, grant-type, and Keychain-reference
-metadata.
+The client secret, access token, and refresh token belong only in macOS
+Keychain under separate reviewed lookup references. SQLite contains only
+non-secret account, site, scope, expiry, credential health, app ownership,
+grant type, and Keychain-reference metadata. See
+[ADR-0011](../../decisions/0011-require-durable-authorization-for-scheduled-connectors.md).
 
 ## Bounded project discovery
 
@@ -349,13 +362,16 @@ The project-discovery and bounded issue phases apply
 
 Tests demonstrate:
 
-- Exact `read:jira-work` authorization without user-profile, offline, write,
-  administrative, granular, Confluence, Jira Software, or Jira Service
-  Management scopes.
+- Exact `read:jira-work` data permission plus `offline_access`, without
+  user-profile, write, administrative, granular, Confluence, Jira Software,
+  or Jira Service Management scopes.
 - State mismatch and replay rejection.
 - Explicit account confirmation before token exchange.
 - One resource-level selected site and rejection of an unselected `cloudId`.
-- Keychain-only client-secret and access-token storage.
+- Separate Keychain-only client-secret, access-token, and rotating
+  refresh-token storage with no secret value in SQLite or output.
+- Automatic refresh of an expired accepted grant, mandatory rotated-token
+  replacement, and failure before retrieval when continuity is unhealthy.
 - Project-only endpoint, field minimization, pagination, and browse filtering.
 - Distinct missing-site, ambiguous-site, authentication, permission,
   rate-limit, empty-project, and partial-pagination outcomes.
@@ -384,12 +400,14 @@ Tests demonstrate:
 - Absence of credentials, private live fixtures, hosted inference, and
   external writes.
 
-## Mandatory stop after the issue trial
+## Operating authorization after the issue trial
 
-The approved issue gate permits one bounded retrieval and combined briefing.
-After that trial, work stops. Another Jira query, project discovery,
-authorization refresh, scope or project expansion, field expansion, external
-mutation, or another connector requires new explicit approval.
+The original bounded issue gate stopped after its approved retrieval and
+review. The later accepted on-demand MVP and bounded scheduled trial may invoke
+this exact connector as part of their documented pipelines. ADR-0011 also
+permits refresh of the exact accepted grant. A standalone discovery or query,
+different account or site, project or field expansion, broader data scope,
+external mutation, or new connector still requires explicit approval.
 
 ## Official references
 
