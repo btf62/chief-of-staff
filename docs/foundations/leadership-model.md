@@ -1,9 +1,9 @@
 # Leadership Model
 
 - **Status:** Accepted
-- **Version:** 1
+- **Version:** 2
 - **Owner:** Brad
-- **Last updated:** 2026-07-25
+- **Last updated:** 2026-08-03
 
 This document describes how Brad Files leads, the responsibilities he is
 stewarding, the rhythms and conditions that support his best work, and the
@@ -68,6 +68,8 @@ become the normal pattern.
 
 - Daily prayer and Scripture.
 - Deep work during morning hours whenever possible.
+- A real midday meal and brief reset on full workdays; ordinary open Calendar
+  time should not silently displace it.
 - A monthly Prayer & Planning Day.
 - Chapel House retreats in January and July.
 - A weekly planning and review rhythm.

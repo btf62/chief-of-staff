@@ -25,6 +25,7 @@ from chief_of_staff.pipeline import (
     BriefingValidationError,
     CalendarEventClassification,
     DeterministicBriefingPipeline,
+    LunchPlanKind,
     RenderedBriefing,
     SourceLink,
     WorkdayType,
@@ -1622,6 +1623,249 @@ def test_july_27_calendar_shape_and_focus_window_are_accurate() -> None:
     assert "90-minute window for" not in focus.items[0].detail
     assert "p.m.." not in result.rendered.text
     assert result.plan.coverage[1].displayed_count == 1
+
+
+def test_full_workday_protects_default_lunch_and_keeps_focus_outside_it() -> None:
+    calendar = _connector(
+        "google_calendar",
+        _item(
+            "morning",
+            item_type="calendar_event",
+            title="Morning commitment",
+            status="confirmed",
+            start_at="2026-07-27T09:00:00-04:00",
+            end_at="2026-07-27T10:00:00-04:00",
+        ),
+    )
+    todoist = _connector(
+        "todoist",
+        _item(
+            "supported-outcome",
+            title="Prepare the supported plan",
+            due_at="2026-07-27T00:00:00-04:00",
+            all_day=True,
+        ),
+    )
+    context = resolve_context(
+        run_id="default-lunch",
+        briefing_date=BRIEFING_DATE,
+        timezone="America/New_York",
+    )
+
+    result = DeterministicBriefingPipeline().run(context, (calendar, todoist))
+    note = result.plan.sections[0].summary or ""
+    inputs = result.plan.note_inputs
+    assert inputs is not None
+    assert inputs.lunch_plan_kind == LunchPlanKind.PROTECTED_WINDOW.value
+    assert inputs.lunch_window is not None
+    lunch_start, lunch_end = inputs.lunch_window
+    assert (lunch_start.hour, lunch_start.minute) == (12, 0)
+    assert (lunch_end.hour, lunch_end.minute) == (12, 45)
+    assert "Protect 12:00\N{EN DASH}12:45 p.m. for lunch" in note
+
+    focus = next(
+        section
+        for section in result.plan.sections
+        if section.name is BriefingSectionName.RECOMMENDED_FOCUS_BLOCK
+    )
+    focus_item = focus.items[0]
+    assert focus_item.starts_at is not None
+    assert focus_item.ends_at is not None
+    assert focus_item.ends_at <= lunch_start or focus_item.starts_at >= lunch_end
+
+
+def test_occupied_noon_moves_lunch_within_the_midday_window() -> None:
+    calendar = _connector(
+        "google_calendar",
+        _item(
+            "midday",
+            item_type="calendar_event",
+            title="Midday commitment",
+            status="confirmed",
+            start_at="2026-07-27T11:45:00-04:00",
+            end_at="2026-07-27T12:30:00-04:00",
+        ),
+    )
+    context = resolve_context(
+        run_id="displaced-lunch",
+        briefing_date=BRIEFING_DATE,
+        timezone="America/New_York",
+    )
+
+    result = DeterministicBriefingPipeline().run(context, (calendar,))
+    inputs = result.plan.note_inputs
+    note = result.plan.sections[0].summary or ""
+
+    assert inputs is not None
+    assert inputs.lunch_window is not None
+    starts_at, ends_at = inputs.lunch_window
+    assert (starts_at.hour, starts_at.minute) == (12, 30)
+    assert (ends_at.hour, ends_at.minute) == (13, 15)
+    assert (
+        "Noon is occupied; protect 12:30\N{EN DASH}1:15 p.m. for lunch instead" in note
+    )
+
+
+def test_explicit_calendar_meal_is_the_authoritative_lunch_plan() -> None:
+    calendar = _connector(
+        "google_calendar",
+        _item(
+            "meal",
+            item_type="calendar_event",
+            title="Team lunch",
+            status="confirmed",
+            start_at="2026-07-27T12:15:00-04:00",
+            end_at="2026-07-27T13:00:00-04:00",
+        ),
+    )
+    context = resolve_context(
+        run_id="calendar-meal",
+        briefing_date=BRIEFING_DATE,
+        timezone="America/New_York",
+    )
+
+    result = DeterministicBriefingPipeline().run(context, (calendar,))
+    inputs = result.plan.note_inputs
+    note = result.plan.sections[0].summary or ""
+
+    assert inputs is not None
+    assert inputs.lunch_plan_kind == LunchPlanKind.CALENDAR_MEAL.value
+    assert inputs.lunch_supporting_event_ids == ("google_calendar:meal",)
+    assert (
+        "Calendar already protects 12:15\N{EN DASH}1:00 p.m. for a midday meal" in note
+    )
+
+
+def test_full_midday_schedule_surfaces_lunch_conflict() -> None:
+    calendar = _connector(
+        "google_calendar",
+        _item(
+            "midday-block",
+            item_type="calendar_event",
+            title="Extended midday commitment",
+            status="confirmed",
+            start_at="2026-07-27T11:30:00-04:00",
+            end_at="2026-07-27T13:30:00-04:00",
+        ),
+    )
+    context = resolve_context(
+        run_id="lunch-conflict",
+        briefing_date=BRIEFING_DATE,
+        timezone="America/New_York",
+    )
+
+    result = DeterministicBriefingPipeline().run(context, (calendar,))
+    inputs = result.plan.note_inputs
+    note = result.plan.sections[0].summary or ""
+
+    assert inputs is not None
+    assert inputs.lunch_window is not None
+    lunch_start, _ = inputs.lunch_window
+    assert inputs.lunch_plan_kind == LunchPlanKind.CONFLICT.value
+    assert inputs.lunch_supporting_event_ids == ("google_calendar:midday-block",)
+    assert "Lunch has no reliable 45-minute opening" in note
+    for section in result.plan.sections:
+        if section.name is not BriefingSectionName.RECOMMENDED_FOCUS_BLOCK:
+            continue
+        focus = section.items[0]
+        assert focus.ends_at is not None
+        assert focus.ends_at <= lunch_start
+
+
+def test_unavailable_calendar_does_not_invent_a_lunch_window() -> None:
+    calendar = _connector(
+        "google_calendar",
+        status=CoverageStatus.UNAVAILABLE,
+    )
+    context = resolve_context(
+        run_id="unavailable-calendar-lunch",
+        briefing_date=BRIEFING_DATE,
+        timezone="America/New_York",
+    )
+
+    result = DeterministicBriefingPipeline().run(context, (calendar,))
+    inputs = result.plan.note_inputs
+    note = result.plan.sections[0].summary or ""
+
+    assert inputs is not None
+    assert inputs.lunch_window is None
+    assert "lunch" not in note.casefold()
+
+
+def test_validation_rejects_focus_that_overlaps_lunch_plan() -> None:
+    calendar = _connector(
+        "google_calendar",
+        _item(
+            "morning",
+            item_type="calendar_event",
+            title="Morning commitment",
+            status="confirmed",
+            start_at="2026-07-27T09:00:00-04:00",
+            end_at="2026-07-27T10:00:00-04:00",
+        ),
+    )
+    context = resolve_context(
+        run_id="invalid-lunch-overlap",
+        briefing_date=BRIEFING_DATE,
+        timezone="America/New_York",
+    )
+    result = DeterministicBriefingPipeline().run(context, (calendar,))
+    inputs = result.plan.note_inputs
+    assert inputs is not None
+    assert inputs.lunch_window is not None
+    lunch_start, lunch_end = inputs.lunch_window
+    invalid_plan = replace(
+        result.plan,
+        note_inputs=replace(
+            inputs,
+            focus_window=(lunch_start, lunch_end),
+        ),
+    )
+
+    with pytest.raises(BriefingValidationError) as error:
+        validate_briefing(invalid_plan, result.rendered)
+
+    assert "Recommended Focus Block overlaps the lunch plan" in error.value.errors
+
+
+@pytest.mark.parametrize(
+    ("briefing_date", "workday_type"),
+    [
+        (date(2026, 8, 1), WorkdayType.FLEXIBLE_HALF_WORKDAY),
+        (date(2026, 7, 26), WorkdayType.MINISTRY_WORKDAY),
+        (date(2026, 7, 31), WorkdayType.NON_WORKDAY),
+    ],
+)
+def test_lunch_plan_does_not_interrupt_half_day_ministry_or_non_workday(
+    briefing_date: date,
+    workday_type: WorkdayType,
+) -> None:
+    calendar = _connector(
+        "google_calendar",
+        _item(
+            "morning",
+            item_type="calendar_event",
+            title="Morning commitment",
+            status="confirmed",
+            start_at=f"{briefing_date.isoformat()}T09:00:00-04:00",
+            end_at=f"{briefing_date.isoformat()}T10:00:00-04:00",
+        ),
+    )
+    context = resolve_context(
+        run_id=f"no-lunch-{workday_type.value}",
+        briefing_date=briefing_date,
+        timezone="America/New_York",
+        workday_type_override=workday_type,
+    )
+
+    result = DeterministicBriefingPipeline().run(context, (calendar,))
+    inputs = result.plan.note_inputs
+    note = result.plan.sections[0].summary or ""
+
+    assert inputs is not None
+    assert inputs.lunch_window is None
+    assert inputs.lunch_plan_kind is None
+    assert "lunch" not in note.casefold()
 
 
 def test_focus_assignment_uses_supported_estimate_and_preserves_remainder() -> None:

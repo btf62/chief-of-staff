@@ -52,6 +52,11 @@ FOCUS_WINDOW_START = time(8)
 FOCUS_WINDOW_END = time(17)
 FOCUS_BLOCK_DURATION = timedelta(minutes=90)
 FOCUS_TRANSITION_MARGIN = timedelta(minutes=15)
+LUNCH_WINDOW_START = time(11, 30)
+LUNCH_WINDOW_END = time(13, 30)
+LUNCH_DEFAULT_START = time(12)
+LUNCH_DURATION = timedelta(minutes=45)
+MEAL_EVENT_PATTERN = re.compile(r"\b(?:eat|lunch)\b", flags=re.IGNORECASE)
 CONTROL_TOKEN = re.compile(r"(?<!\S)@[A-Za-z0-9_-]+")
 MAX_SAFE_SOURCE_TITLE_CHARACTERS = 500
 UNTRUSTED_PRIORITY_INSTRUCTION = re.compile(
@@ -108,6 +113,14 @@ class TemporalState(StrEnum):
     EARLIER_TODAY = "Earlier today"
     IN_PROGRESS = "In progress"
     UPCOMING = "Upcoming"
+
+
+class LunchPlanKind(StrEnum):
+    """How a full-workday midday meal is protected or disclosed."""
+
+    PROTECTED_WINDOW = "protected_window"
+    CALENDAR_MEAL = "calendar_meal"
+    CONFLICT = "conflict"
 
 
 @dataclass(frozen=True, slots=True)
@@ -264,6 +277,26 @@ class FocusWindow:
 
 
 @dataclass(frozen=True, slots=True)
+class LunchPlan:
+    """One deterministic full-workday lunch decision."""
+
+    kind: LunchPlanKind
+    starts_at: datetime
+    ends_at: datetime
+    supporting_events: tuple[NormalizedRecord, ...]
+    displaced_from_default: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class _PlanningConstraint:
+    """One time interval excluded from a proposed focus block."""
+
+    starts_at: datetime
+    ends_at: datetime
+    supporting_events: tuple[NormalizedRecord, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class ChiefOfStaffNoteInputs:
     """Supported facts and recommendations available to deterministic synthesis."""
 
@@ -271,6 +304,9 @@ class ChiefOfStaffNoteInputs:
     fixed_commitment_ids: tuple[str, ...]
     primary_outcome_id: str | None
     focus_window: tuple[datetime, datetime] | None
+    lunch_window: tuple[datetime, datetime] | None
+    lunch_plan_kind: str | None
+    lunch_supporting_event_ids: tuple[str, ...]
     tomorrow_sequence_ids: tuple[str, ...]
     workday_diagnostics: tuple[str, ...]
     todoist_ranking_degraded: bool
@@ -422,7 +458,16 @@ def build_reduced_plan(
         and _is_presentable_conclusion(record)
     )
     candidate_task_ids = {record.id for record in task_records}
-    focus_window = _recommended_focus_window(todays_calendar_context, context)
+    lunch_plan = _recommended_lunch_plan(
+        todays_calendar_context,
+        coverage,
+        context,
+    )
+    focus_window = _recommended_focus_window(
+        todays_calendar_context,
+        context,
+        lunch_plan=lunch_plan,
+    )
     ranking = rank_candidates(
         (*task_records, *conclusion_records),
         briefing_date=today,
@@ -477,6 +522,7 @@ def build_reduced_plan(
                 tomorrow_sequence,
                 primary_outcome=(outcome_candidates[0] if outcome_candidates else None),
                 focus_window=focus_window,
+                lunch_plan=lunch_plan,
                 todoist_confidence=todoist_confidence,
             ),
         )
@@ -718,6 +764,15 @@ def build_reduced_plan(
             if focus_window is None
             else (focus_window.starts_at, focus_window.ends_at)
         ),
+        lunch_window=(
+            None if lunch_plan is None else (lunch_plan.starts_at, lunch_plan.ends_at)
+        ),
+        lunch_plan_kind=None if lunch_plan is None else lunch_plan.kind.value,
+        lunch_supporting_event_ids=(
+            ()
+            if lunch_plan is None
+            else tuple(record.id for record in lunch_plan.supporting_events)
+        ),
         tomorrow_sequence_ids=tuple(record.id for record in tomorrow_sequence),
         workday_diagnostics=context.workday_diagnostics,
         todoist_ranking_degraded=bool(
@@ -892,6 +947,8 @@ def validate_briefing(
         errors.append("Chief of Staff Note must not contain source coverage metadata")
     if plan.note_inputs is None:
         errors.append("Chief of Staff Note inputs are missing")
+    else:
+        _validate_lunch_and_focus_plan(plan.note_inputs, errors)
     if rendered.word_count > MAX_WORDS:
         errors.append("briefing exceeds the 1,000-word maximum")
     if len(plan.selected_outcome_ids) > MAX_OUTCOMES:
@@ -976,6 +1033,39 @@ def validate_briefing(
         raise BriefingValidationError(tuple(errors))
 
 
+def _validate_lunch_and_focus_plan(
+    inputs: ChiefOfStaffNoteInputs,
+    errors: list[str],
+) -> None:
+    if inputs.lunch_window is None:
+        if inputs.lunch_plan_kind is not None or inputs.lunch_supporting_event_ids:
+            errors.append("lunch plan metadata is incomplete")
+        return
+    if inputs.workday_type is not WorkdayType.FULL_WORKDAY:
+        errors.append("lunch plan may appear only on a full workday")
+    if inputs.lunch_plan_kind is None:
+        errors.append("lunch plan kind is missing")
+        return
+    try:
+        lunch_kind = LunchPlanKind(inputs.lunch_plan_kind)
+    except ValueError:
+        errors.append("lunch plan kind is invalid")
+        return
+
+    lunch_start, lunch_end = inputs.lunch_window
+    if lunch_end <= lunch_start:
+        errors.append("lunch plan interval is invalid")
+    if (
+        lunch_kind is not LunchPlanKind.CONFLICT
+        and lunch_end - lunch_start < LUNCH_DURATION
+    ):
+        errors.append("lunch plan is shorter than 45 minutes")
+    if inputs.focus_window is not None:
+        focus_start, focus_end = inputs.focus_window
+        if focus_start < lunch_end and lunch_start < focus_end:
+            errors.append("Recommended Focus Block overlaps the lunch plan")
+
+
 def _chief_note(
     context: InvocationContext,
     todays_calendar_context: tuple[NormalizedRecord, ...],
@@ -983,6 +1073,7 @@ def _chief_note(
     *,
     primary_outcome: NormalizedRecord | None,
     focus_window: FocusWindow | None,
+    lunch_plan: LunchPlan | None,
     todoist_confidence: TaskPlanningConfidence | None,
 ) -> str:
     if context.workday_type is WorkdayType.MINISTRY_WORKDAY:
@@ -994,6 +1085,7 @@ def _chief_note(
             todays_calendar_context,
             primary_outcome=primary_outcome,
             focus_window=focus_window,
+            lunch_plan=lunch_plan,
             todoist_confidence=todoist_confidence,
         )
 
@@ -1153,6 +1245,7 @@ def _normal_workday_note(
     *,
     primary_outcome: NormalizedRecord | None,
     focus_window: FocusWindow | None,
+    lunch_plan: LunchPlan | None,
     todoist_confidence: TaskPlanningConfidence | None,
 ) -> str:
     day_label = (
@@ -1164,6 +1257,8 @@ def _normal_workday_note(
         f"Today is a {day_label}.",
         _calendar_shape_summary(todays_calendar_context),
     ]
+    if lunch_plan is not None:
+        parts.append(_lunch_plan_note(lunch_plan))
     if primary_outcome is not None:
         if primary_outcome.association_conflicts:
             fields = _natural_join(primary_outcome.association_conflicts)
@@ -1207,6 +1302,23 @@ def _normal_workday_note(
     if todoist_confidence is not None and todoist_confidence.relative_ranking_degraded:
         parts.append(_todoist_confidence_disclosure(todoist_confidence))
     return " ".join(parts)
+
+
+def _lunch_plan_note(lunch_plan: LunchPlan) -> str:
+    span = _natural_time_span(lunch_plan.starts_at, lunch_plan.ends_at)
+    if lunch_plan.kind is LunchPlanKind.CALENDAR_MEAL:
+        return (
+            f"Calendar already protects {span} for a midday meal; honor it rather "
+            "than treating that time as focus capacity."
+        )
+    if lunch_plan.kind is LunchPlanKind.CONFLICT:
+        return (
+            "Lunch has no reliable 45-minute opening between 11:30 a.m. and "
+            "1:30 p.m.; resolve the conflict rather than silently skipping it."
+        )
+    if lunch_plan.displaced_from_default:
+        return f"Noon is occupied; protect {span} for lunch instead."
+    return f"Protect {span} for lunch and a brief reset."
 
 
 def _ministry_workday_note(
@@ -1953,15 +2065,39 @@ def _contains_untrusted_priority_instruction(record: NormalizedRecord) -> bool:
     return UNTRUSTED_PRIORITY_INSTRUCTION.search(candidate_text) is not None
 
 
-def _recommended_focus_window(
+def _recommended_lunch_plan(
     todays_calendar_context: tuple[NormalizedRecord, ...],
+    coverage: tuple[SourceCoverage, ...],
     context: InvocationContext,
-) -> FocusWindow | None:
-    if context.workday_type not in {
-        WorkdayType.FULL_WORKDAY,
-        WorkdayType.FLEXIBLE_HALF_WORKDAY,
-    }:
+) -> LunchPlan | None:
+    """Protect a real midday meal on full workdays when Calendar is available."""
+
+    if context.workday_type is not WorkdayType.FULL_WORKDAY:
         return None
+    usable_calendar_coverage = any(
+        report.source == "google_calendar"
+        and report.status in {CoverageStatus.COMPLETE, CoverageStatus.PARTIAL}
+        for report in coverage
+    )
+    if not todays_calendar_context and not usable_calendar_coverage:
+        return None
+
+    zone = ZoneInfo(context.timezone)
+    window_start = datetime.combine(
+        context.briefing_date,
+        LUNCH_WINDOW_START,
+        tzinfo=zone,
+    )
+    window_end = datetime.combine(
+        context.briefing_date,
+        LUNCH_WINDOW_END,
+        tzinfo=zone,
+    )
+    default_start = datetime.combine(
+        context.briefing_date,
+        LUNCH_DEFAULT_START,
+        tzinfo=zone,
+    )
     occupied = tuple(
         sorted(
             (
@@ -1977,7 +2113,144 @@ def _recommended_focus_window(
             key=lambda record: record.start_at or datetime.max,
         )
     )
-    if not occupied:
+    scheduled_meals = tuple(
+        record
+        for record in occupied
+        if classify_calendar_event(record)
+        is CalendarEventClassification.FIXED_COMMITMENT
+        and MEAL_EVENT_PATTERN.search(record.title) is not None
+        and record.start_at is not None
+        and record.end_at is not None
+        and record.end_at > window_start
+        and record.start_at < window_end
+        and record.end_at - record.start_at >= LUNCH_DURATION
+    )
+    if scheduled_meals:
+        meal = scheduled_meals[0]
+        if meal.start_at is None or meal.end_at is None:
+            raise AssertionError("scheduled meal must have a bounded interval")
+        return LunchPlan(
+            kind=LunchPlanKind.CALENDAR_MEAL,
+            starts_at=meal.start_at,
+            ends_at=meal.end_at,
+            supporting_events=(meal,),
+            displaced_from_default=meal.start_at != default_start,
+        )
+
+    free_windows: list[tuple[datetime, datetime]] = []
+    cursor = window_start
+    relevant_events: list[NormalizedRecord] = []
+    for event in occupied:
+        if event.start_at is None or event.end_at is None:
+            continue
+        if event.end_at <= window_start or event.start_at >= window_end:
+            continue
+        relevant_events.append(event)
+        event_start = max(window_start, event.start_at)
+        event_end = min(window_end, event.end_at)
+        if event_start > cursor:
+            free_windows.append((cursor, event_start))
+        cursor = max(cursor, event_end)
+    if cursor < window_end:
+        free_windows.append((cursor, window_end))
+
+    candidates: list[tuple[timedelta, datetime, datetime]] = []
+    for starts_at, ends_at in free_windows:
+        latest_start = ends_at - LUNCH_DURATION
+        if latest_start < starts_at:
+            continue
+        candidate_start = min(max(default_start, starts_at), latest_start)
+        candidates.append(
+            (
+                abs(candidate_start - default_start),
+                candidate_start,
+                candidate_start + LUNCH_DURATION,
+            )
+        )
+    if candidates:
+        _, starts_at, ends_at = min(candidates, key=lambda item: (item[0], item[1]))
+        supporting_events = _nearest_calendar_events(
+            occupied,
+            starts_at,
+            ends_at,
+        )
+        return LunchPlan(
+            kind=LunchPlanKind.PROTECTED_WINDOW,
+            starts_at=starts_at,
+            ends_at=ends_at,
+            supporting_events=supporting_events,
+            displaced_from_default=starts_at != default_start,
+        )
+
+    return LunchPlan(
+        kind=LunchPlanKind.CONFLICT,
+        starts_at=window_start,
+        ends_at=window_end,
+        supporting_events=tuple(relevant_events),
+    )
+
+
+def _nearest_calendar_events(
+    events: tuple[NormalizedRecord, ...],
+    starts_at: datetime,
+    ends_at: datetime,
+) -> tuple[NormalizedRecord, ...]:
+    before = tuple(
+        event
+        for event in events
+        if event.end_at is not None and event.end_at <= starts_at
+    )
+    after = tuple(
+        event
+        for event in events
+        if event.start_at is not None and event.start_at >= ends_at
+    )
+    nearby = (
+        *(() if not before else (before[-1],)),
+        *(() if not after else (after[0],)),
+    )
+    return _unique_calendar_records(nearby)
+
+
+def _unique_calendar_records(
+    records: tuple[NormalizedRecord, ...],
+) -> tuple[NormalizedRecord, ...]:
+    unique: list[NormalizedRecord] = []
+    seen: set[str] = set()
+    for record in records:
+        if record.id not in seen:
+            seen.add(record.id)
+            unique.append(record)
+    return tuple(unique)
+
+
+def _recommended_focus_window(
+    todays_calendar_context: tuple[NormalizedRecord, ...],
+    context: InvocationContext,
+    *,
+    lunch_plan: LunchPlan | None,
+) -> FocusWindow | None:
+    if context.workday_type not in {
+        WorkdayType.FULL_WORKDAY,
+        WorkdayType.FLEXIBLE_HALF_WORKDAY,
+    }:
+        return None
+    occupied_events = tuple(
+        sorted(
+            (
+                record
+                for record in todays_calendar_context
+                if _is_active_calendar_event(record)
+                and record.start_at is not None
+                and record.end_at is not None
+                and not record.all_day
+                and classify_calendar_event(record)
+                is not CalendarEventClassification.STATUS_SIGNAL
+            ),
+            key=lambda record: record.start_at or datetime.max,
+        )
+    )
+    if not occupied_events:
         return None
 
     zone = ZoneInfo(context.timezone)
@@ -1991,29 +2264,53 @@ def _recommended_focus_window(
         FOCUS_WINDOW_END,
         tzinfo=zone,
     )
+    constraints = [
+        _PlanningConstraint(
+            starts_at=event.start_at,
+            ends_at=event.end_at,
+            supporting_events=(event,),
+        )
+        for event in occupied_events
+        if event.start_at is not None and event.end_at is not None
+    ]
+    if lunch_plan is not None and lunch_plan.kind is not LunchPlanKind.CALENDAR_MEAL:
+        constraints.append(
+            _PlanningConstraint(
+                starts_at=lunch_plan.starts_at,
+                ends_at=lunch_plan.ends_at,
+                supporting_events=lunch_plan.supporting_events,
+            )
+        )
+    constraints.sort(key=lambda constraint: constraint.starts_at)
+
     cursor = planning_start
-    previous: NormalizedRecord | None = None
-    for event in occupied:
-        if event.start_at is None or event.end_at is None:
-            continue
-        gap_end = min(planning_end, event.start_at - FOCUS_TRANSITION_MARGIN)
+    previous_supporting: tuple[NormalizedRecord, ...] = ()
+    for constraint in constraints:
+        gap_end = min(
+            planning_end,
+            constraint.starts_at - FOCUS_TRANSITION_MARGIN,
+        )
         if gap_end - cursor >= FOCUS_BLOCK_DURATION:
-            supporting = tuple(
-                record for record in (previous, event) if record is not None
+            supporting = _unique_calendar_records(
+                (*previous_supporting, *constraint.supporting_events)
             )
             return FocusWindow(
                 starts_at=cursor,
                 ends_at=cursor + FOCUS_BLOCK_DURATION,
                 supporting_events=supporting,
             )
-        cursor = max(cursor, event.end_at + FOCUS_TRANSITION_MARGIN)
-        previous = event
+        cursor = max(
+            cursor,
+            constraint.ends_at + FOCUS_TRANSITION_MARGIN,
+        )
+        if constraint.supporting_events:
+            previous_supporting = constraint.supporting_events
     if planning_end - cursor < FOCUS_BLOCK_DURATION:
         return None
     return FocusWindow(
         starts_at=cursor,
         ends_at=cursor + FOCUS_BLOCK_DURATION,
-        supporting_events=(() if previous is None else (previous,)),
+        supporting_events=previous_supporting,
     )
 
 

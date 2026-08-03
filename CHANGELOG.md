@@ -9,6 +9,11 @@ No strict versioning scheme is promised before a distributable product exists.
 
 ### Changed
 
+- Full-workday briefing synthesis now protects a 45-minute lunch between 11:30
+  a.m. and 1:30 p.m., prefers noon when Calendar permits, honors explicit meal
+  events, surfaces unresolved lunch conflicts, and prevents focus blocks from
+  overlapping the lunch plan without adding the rule to shorter or non-workday
+  schedules.
 - Calendar normalization now retains only the authorized user's own invitation
   response status, suppresses declined invitations from briefing and schedule
   reasoning, and keeps tentative or unanswered invitations non-fixed without

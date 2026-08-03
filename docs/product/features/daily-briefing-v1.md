@@ -1,7 +1,7 @@
 # Feature: Daily Briefing v1
 
 - **Status:** Accepted
-- **Version:** 16
+- **Version:** 17
 - **Owner:** Brad
 - **Last updated:** 2026-08-03
 
@@ -154,6 +154,7 @@ The note should explain:
 - The shape of the day
 - The strongest supported outcome
 - Meaningful open work windows
+- The lunch plan or an unresolved lunch conflict on a full workday
 - The central priority tension
 - What would make the day successful
 - Any important risk or opportunity
@@ -384,6 +385,15 @@ high-confidence objective. Do not assume a noon gap is suitable for deep work.
 When Calendar supports a focus window but degraded Todoist confidence leaves
 no sufficiently supported objective, identify the window without assigning an
 arbitrary task.
+
+On a full workday, protect at least 45 minutes for lunch between 11:30 a.m. and
+1:30 p.m., preferring noon when the live Calendar permits. A confirmed
+Calendar event explicitly identified as a meal remains authoritative. If noon
+is occupied, select another supported interval inside the window; if no such
+interval exists, surface the conflict rather than silently skipping lunch. A
+Recommended Focus Block must not overlap the protected lunch interval. Do not
+introduce this ordinary full-workday lunch interruption on a flexible Saturday
+half-day, Sunday ministry workday, or configured non-workday.
 
 Keep the available Calendar window distinct from the proposed task assignment.
 When a supported objective has no reliable source effort estimate, recommend
@@ -686,6 +696,7 @@ The following sources and capabilities are outside Daily Briefing v1:
 | AC-22 | Todoist saturation uses documented aggregate thresholds; degraded relative-ranking confidence requires stronger current evidence, excludes overdue-only and priority-only tasks, preserves the selected background pool, and is disclosed concisely. |
 | AC-23 | Todoist titles omit control syntax in display without changing source data; all-day due dates never render as midnight; source priority uses transparent Todoist terminology only when material. |
 | AC-24 | Up Next excludes work more than fourteen days away without explicit current preparation. A Recommended Focus Block requires Calendar margin, distinguishes the available window from the proposed task assignment, uses only source-supported effort estimates, and explicitly leaves unsupported or remaining time unassigned. |
+| AC-25 | A full-workday briefing protects a Calendar-supported 45-minute lunch between 11:30 a.m. and 1:30 p.m., prefers noon, honors an explicit scheduled meal, discloses displacement or conflict, and prevents the Recommended Focus Block from overlapping lunch. It does not add an ordinary lunch interruption to flexible Saturday half-days, Sunday ministry workdays, or configured non-workdays. |
 
 ## Acceptance Record
 

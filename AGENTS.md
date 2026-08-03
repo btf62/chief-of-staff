@@ -62,7 +62,7 @@ The trial must become inert after seven eligible dates. Routine unattended
 operation after the trial is not accepted. Durable, exact-boundary
 authorization continuity is required for Calendar, Work Gmail, Todoist, and
 Jira. Jira retains `read:jira-work` and adds `offline_access` solely for
-rotating refresh continuity. The implementation, 433-test repository gate,
+rotating refresh continuity. The implementation, 442-test repository gate,
 Milestone 8 and 9
 evaluations, Milestone 11 evaluation, Markdown validation, and wheel packaging
 are complete. The exact-scope Calendar continuity check, reversible

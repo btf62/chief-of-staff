@@ -223,7 +223,9 @@ class LiveCalendarTrialRunner:
                 originating_recorded_run_id=(context.originating_recorded_run_id),
                 processing_versions_json=json.dumps(
                     {
-                        "briefing_rules": "milestone-11+calendar-self-response-v1",
+                        "briefing_rules": (
+                            "milestone-11+calendar-self-response-v1+lunch-rhythm-v1"
+                        ),
                         "ranking_rules": "milestone-9",
                     },
                     sort_keys=True,
