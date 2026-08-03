@@ -88,6 +88,7 @@ class CalendarEventClassification(StrEnum):
     TENTATIVE_HOLD = "Tentative hold"
     ALL_DAY_CONTEXT = "All-day context"
     STATUS_SIGNAL = "Status signal"
+    DECLINED_INVITATION = "Declined invitation"
     SCHEDULED_EVENT = "Scheduled event"
 
 
@@ -1277,14 +1278,19 @@ def classify_calendar_event(
         "outofoffice",
     }:
         return CalendarEventClassification.STATUS_SIGNAL
+    response_status = (record.self_response_status or "").casefold()
+    if response_status == "declined":
+        return CalendarEventClassification.DECLINED_INVITATION
     if record.all_day:
         return CalendarEventClassification.ALL_DAY_CONTEXT
 
     status = (record.status or "").casefold()
+    if response_status == "tentative" or status == "tentative":
+        return CalendarEventClassification.TENTATIVE_HOLD
+    if response_status == "needsaction":
+        return CalendarEventClassification.SCHEDULED_EVENT
     if status == "confirmed":
         return CalendarEventClassification.FIXED_COMMITMENT
-    if status == "tentative":
-        return CalendarEventClassification.TENTATIVE_HOLD
     return CalendarEventClassification.SCHEDULED_EVENT
 
 
@@ -1565,7 +1571,9 @@ def _schedule_implications(
 
 
 def _is_active_calendar_event(record: NormalizedRecord) -> bool:
-    return (record.status or "").casefold() != "cancelled"
+    return (record.status or "").casefold() != "cancelled" and (
+        record.self_response_status or ""
+    ).casefold() != "declined"
 
 
 def _is_displayable_calendar_event(record: NormalizedRecord) -> bool:

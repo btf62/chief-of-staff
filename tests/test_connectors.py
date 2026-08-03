@@ -416,6 +416,34 @@ def test_google_calendar_paginates_and_normalizes_synthetic_fixtures() -> None:
     )
 
 
+def test_google_calendar_normalizes_only_the_self_response_status() -> None:
+    connector = _calendar_connector(
+        _PagedTransport(
+            (
+                GoogleCalendarPage(
+                    events=(
+                        GoogleCalendarEvent(
+                            id="declined-invitation",
+                            title="Synthetic declined invitation",
+                            start="2026-07-27T09:00:00-04:00",
+                            end="2026-07-27T10:00:00-04:00",
+                            updated_at=NOW,
+                            status="confirmed",
+                            self_response_status="declined",
+                        ),
+                    )
+                ),
+            )
+        )
+    )
+
+    result = connector.retrieve(_request(connector.approved_scope))
+
+    assert result.coverage.status is CoverageStatus.COMPLETE
+    assert result.items[0].facts["status"] == "confirmed"
+    assert result.items[0].facts["self_response_status"] == "declined"
+
+
 def test_google_calendar_preserves_first_page_during_partial_failure() -> None:
     pages = _fixture_pages()
     transport = _PagedTransport(

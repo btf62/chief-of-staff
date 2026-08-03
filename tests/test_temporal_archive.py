@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta, timezone
@@ -438,7 +439,10 @@ def test_source_title_neutralizes_html_scripts_and_bounds_length() -> None:
 
 
 def test_normalized_fact_archive_round_trips_without_provider_payload() -> None:
-    record = _normalized("Archived task")
+    record = replace(
+        _normalized("Archived task"),
+        self_response_status="declined",
+    )
 
     serialized = serialize_normalized_record(record)
     restored = deserialize_normalized_record(serialized)
@@ -447,6 +451,11 @@ def test_normalized_fact_archive_round_trips_without_provider_payload() -> None:
     assert "access_token" not in serialized
     assert "raw_payload" not in serialized
     assert "mime" not in serialized.casefold()
+
+    legacy_payload = json.loads(serialized)
+    del legacy_payload["record"]["self_response_status"]
+    legacy = deserialize_normalized_record(json.dumps(legacy_payload))
+    assert legacy.self_response_status is None
 
 
 @pytest.mark.parametrize(

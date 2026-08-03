@@ -37,6 +37,9 @@ GOOGLE_CALENDAR_EVENTS_ENDPOINT: Final = (
     "https://www.googleapis.com/calendar/v3/calendars/primary/events"
 )
 MAX_CALENDAR_RESPONSE_BYTES: Final = 5 * 1024 * 1024
+CALENDAR_SELF_RESPONSE_STATUSES: Final = frozenset(
+    {"accepted", "declined", "needsAction", "tentative"}
+)
 
 
 class CalendarHttpResponse(Protocol):
@@ -269,6 +272,7 @@ def _event_from_payload(payload: object) -> GoogleCalendarEvent:
     updated = payload.get("updated")
     html_link = payload.get("htmlLink")
     status = payload.get("status", "confirmed")
+    attendees = payload.get("attendees")
     event_type = payload.get("eventType", "default")
     location = payload.get("location")
     if not (
@@ -282,6 +286,11 @@ def _event_from_payload(payload: object) -> GoogleCalendarEvent:
         and isinstance(event_type, str)
         and (location is None or isinstance(location, str))
     ):
+        return _invalid_event()
+
+    try:
+        self_response_status = _self_response_status(attendees)
+    except ValueError:
         return _invalid_event()
 
     start_datetime = start.get("dateTime")
@@ -311,10 +320,35 @@ def _event_from_payload(payload: object) -> GoogleCalendarEvent:
         updated_at=updated_at,
         html_link=html_link,
         status=status,
+        self_response_status=self_response_status,
         event_type=event_type,
         location=location,
         all_day=all_day,
     )
+
+
+def _self_response_status(attendees: object) -> str | None:
+    """Extract only the authorized user's response, never attendee identity."""
+
+    if attendees is None:
+        return None
+    if not isinstance(attendees, list):
+        raise ValueError("calendar attendee collection is invalid")
+    response: str | None = None
+    for attendee in attendees:
+        if not isinstance(attendee, dict):
+            raise ValueError("calendar attendee entry is invalid")
+        if attendee.get("self") is not True:
+            continue
+        candidate = attendee.get("responseStatus")
+        if (
+            response is not None
+            or not isinstance(candidate, str)
+            or candidate not in CALENDAR_SELF_RESPONSE_STATUSES
+        ):
+            raise ValueError("calendar self-response status is invalid")
+        response = candidate
+    return response
 
 
 def _invalid_event() -> GoogleCalendarEvent:

@@ -9,6 +9,10 @@ No strict versioning scheme is promised before a distributable product exists.
 
 ### Changed
 
+- Calendar normalization now retains only the authorized user's own invitation
+  response status, suppresses declined invitations from briefing and schedule
+  reasoning, and keeps tentative or unanswered invitations non-fixed without
+  retaining attendee identities or collections.
 - Personal Gmail is now the accepted Milestone 13 scope expansion after the
   bounded Milestone 12 review; the active seven-date scheduled trial remains
   unchanged, and live Personal Gmail access retains a separate gate.
@@ -65,7 +69,7 @@ No strict versioning scheme is promised before a distributable product exists.
   idempotency, migration `0012`, private-safe notifications, local status,
   reversible current-user LaunchAgent management, exact-scope Calendar refresh
   continuity, synthetic tests, and an operator runbook.
-- A passing 432-test repository gate, existing inference and ranking
+- A passing 433-test repository gate, existing inference and ranking
   evaluations, Milestone 11 evaluation, Markdown validation, dry-run package,
   and clean wheel-install verification for the bounded scheduler.
 - An accepted Milestone 12 Scheduled Morning Generation specification, macOS

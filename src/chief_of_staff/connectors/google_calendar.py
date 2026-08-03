@@ -68,6 +68,7 @@ class GoogleCalendarEvent:
     updated_at: datetime
     html_link: str | None = None
     status: str = "confirmed"
+    self_response_status: str | None = None
     event_type: str = "default"
     location: str | None = None
     all_day: bool = False
@@ -336,6 +337,7 @@ def _event_to_source_item(
             "title": event.title.strip(),
             "summary": summary,
             "status": event.status,
+            "self_response_status": event.self_response_status,
             "event_type": event.event_type,
             "preparation": event.preparation,
             "all_day": event.all_day,

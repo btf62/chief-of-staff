@@ -105,6 +105,7 @@ class NormalizedRecord:
     associated_provenance: tuple[Provenance, ...] = ()
     associated_source_facts: tuple[AssociatedSourceFacts, ...] = ()
     association_conflicts: tuple[str, ...] = ()
+    self_response_status: str | None = None
 
 
 def normalize_item(
@@ -173,6 +174,11 @@ def normalize_item(
         project_reference=_optional_string(item, "project_reference"),
         issue_type=_optional_string(item, "issue_type"),
         status_category=_optional_string(item, "status_category"),
+        self_response_status=_optional_choice(
+            item,
+            "self_response_status",
+            {"accepted", "declined", "needsaction", "tentative"},
+        ),
         assignee_reference=_optional_string(item, "assignee_reference"),
         parent_reference=_optional_string(item, "parent_reference"),
         labels=_string_tuple(item, "labels"),

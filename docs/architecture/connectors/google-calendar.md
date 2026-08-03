@@ -1,9 +1,9 @@
 # Google Calendar Connector
 
 - **Status:** Accepted
-- **Version:** 3
+- **Version:** 4
 - **Owner:** Brad
-- **Last updated:** 2026-07-26
+- **Last updated:** 2026-08-03
 
 This specification defines the implemented read-only Google Calendar
 connector, the explicitly approved bounded live trial that completed
@@ -110,7 +110,9 @@ The live boundary reads only the provider fields needed to normalize:
 
 - Stable Google event ID.
 - Title.
-- Status.
+- Event status.
+- The response status belonging only to the attendee entry marked by Google as
+  the authorized calendar user. No attendee identity is retained.
 - Provider event type, used to distinguish working-location and out-of-office
   status signals from appointments.
 - Timezone-aware start and end, including all-day dates.
@@ -119,9 +121,19 @@ The live boundary reads only the provider fields needed to normalize:
 - Authoritative event link when available.
 - Retrieval and source-coverage metadata.
 
-Descriptions, attendees, attachments, conference payloads, and private
-extended properties are ignored. Invalid events are omitted with partial
-coverage rather than converted into unsupported facts.
+Descriptions, attendee identities and collections, attachments, conference
+payloads, and private extended properties are ignored. The connector extracts
+only the authorized user's response status from the provider attendee
+collection, then deletes the collection with the raw payload. Invalid events
+are omitted with partial coverage rather than converted into unsupported
+facts.
+
+An invitation declined by the authorized user remains an inspectable
+normalized source fact but is omitted from visible briefing sections,
+availability calculations, focus-window reasoning, and schedule synthesis. A
+tentative response is never presented as fixed, and an invitation awaiting a
+response remains non-fixed. Google event status and the user's response status
+remain distinct facts.
 
 Working-location and similar routine status signals remain available to
 schedule interpretation but are normally suppressed from visible briefing

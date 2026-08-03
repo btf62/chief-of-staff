@@ -38,7 +38,7 @@ from chief_of_staff.web import presentation_from_plan
 ARCHIVE_SCHEMA_VERSION = 1
 PROCESSING_VERSIONS = {
     "archive_schema": ARCHIVE_SCHEMA_VERSION,
-    "briefing_rules": "milestone-11",
+    "briefing_rules": "milestone-11+calendar-self-response-v1",
     "ranking_rules": "milestone-9",
 }
 

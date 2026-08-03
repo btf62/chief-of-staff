@@ -650,6 +650,33 @@ def test_calendar_events_receive_evidence_bounded_classifications() -> None:
             start_at="2026-07-27T13:00:00-04:00",
             end_at="2026-07-27T14:00:00-04:00",
         ),
+        _item(
+            "declined",
+            item_type="calendar_event",
+            title="Declined Invitation",
+            status="confirmed",
+            self_response_status="declined",
+            start_at="2026-07-27T14:30:00-04:00",
+            end_at="2026-07-27T15:00:00-04:00",
+        ),
+        _item(
+            "self-tentative",
+            item_type="calendar_event",
+            title="Self-Tentative Invitation",
+            status="confirmed",
+            self_response_status="tentative",
+            start_at="2026-07-27T15:30:00-04:00",
+            end_at="2026-07-27T16:00:00-04:00",
+        ),
+        _item(
+            "awaiting-response",
+            item_type="calendar_event",
+            title="Unanswered Invitation",
+            status="confirmed",
+            self_response_status="needsAction",
+            start_at="2026-07-27T16:30:00-04:00",
+            end_at="2026-07-27T17:00:00-04:00",
+        ),
     )
     context = resolve_context(
         run_id="calendar-classification",
@@ -669,6 +696,18 @@ def test_calendar_events_receive_evidence_bounded_classifications() -> None:
     assert classify_calendar_event(home) is CalendarEventClassification.STATUS_SIGNAL
     assert "Home" not in result.rendered.text
     assert "Cancelled Event" not in result.rendered.text
+    assert "Declined Invitation" not in result.rendered.text
+    assert "Self-Tentative Invitation** — Tentative hold" in result.rendered.text
+    assert "Unanswered Invitation** — Scheduled event" in result.rendered.text
+    declined = next(
+        record
+        for record in result.deduplication.records
+        if record.title == "Declined Invitation"
+    )
+    assert (
+        classify_calendar_event(declined)
+        is CalendarEventClassification.DECLINED_INVITATION
+    )
 
 
 def test_material_out_of_office_status_signal_remains_visible() -> None:
@@ -839,6 +878,15 @@ def test_tomorrows_early_online_campus_events_form_one_sequence() -> None:
             end_at="2026-07-28T08:30:00-04:00",
         ),
         _item(
+            "declined-standup",
+            item_type="calendar_event",
+            title="Declined Early Standup",
+            status="confirmed",
+            self_response_status="declined",
+            start_at="2026-07-28T07:30:00-04:00",
+            end_at="2026-07-28T07:45:00-04:00",
+        ),
+        _item(
             "first-service",
             item_type="calendar_event",
             title="9:00AM ONL Service",
@@ -891,6 +939,7 @@ def test_tomorrows_early_online_campus_events_form_one_sequence() -> None:
     assert "Calendar status signal" not in note
     assert "1 Calendar" not in note
     assert "Office" not in result.rendered.text
+    assert "Declined Early Standup" not in result.rendered.text
 
 
 def test_non_workday_note_describes_tightly_sequenced_next_morning() -> None:

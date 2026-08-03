@@ -1,9 +1,9 @@
 # Feature: Daily Briefing v1
 
 - **Status:** Accepted
-- **Version:** 15
+- **Version:** 16
 - **Owner:** Brad
-- **Last updated:** 2026-08-02
+- **Last updated:** 2026-08-03
 
 ## Summary
 
@@ -680,7 +680,7 @@ The following sources and capabilities are outside Daily Briefing v1:
 | AC-16 | After reading the briefing, Brad can identify what to do, what can wait, and what is approaching. |
 | AC-17 | Governing context constrains briefing behavior but is not rendered as a daily item merely because it was retrieved. |
 | AC-18 | Workday classification follows explicit current or date configuration, explicit leave or workday configuration, the recurring weekly pattern, and Calendar conflict evidence in that order. A non-workday briefing preserves fixed commitments, explicit preparation, concise looking-ahead context, and source coverage while suppressing ordinary task-driven work sections. A Sunday ministry briefing treats the scheduled ministry period as normal work and protects the remainder from unrelated ordinary project work. |
-| AC-19 | Calendar events are classified from provider status, event type, and time shape; cancelled events are omitted, routine working-location signals remain contextual but are suppressed from visible sections, materially relevant status signals may appear, tentative events are not called fixed, and all-day events are not treated as full-day occupancy without additional evidence. |
+| AC-19 | Calendar events are classified from provider event status, the authorized user's own invitation response, event type, and time shape; cancelled and self-declined events are omitted from presentation and schedule reasoning, routine working-location signals remain contextual but are suppressed from visible sections, materially relevant status signals may appear, tentative or unanswered invitations are not called fixed, and all-day events are not treated as full-day occupancy without additional evidence. |
 | AC-20 | Timestamp-derived overlaps, back-to-back commitments, transitions of 15 minutes or less, confirmed schedule span, and tomorrow-morning sequences are synthesized deterministically without unsupported implications. |
 | AC-21 | Source status; retrieved, selected, persisted, and displayed counts; supporting-context counts; safe warnings; and error categories appear in a final Source Coverage appendix rather than the Chief of Staff Note. |
 | AC-22 | Todoist saturation uses documented aggregate thresholds; degraded relative-ranking confidence requires stronger current evidence, excludes overdue-only and priority-only tasks, preserves the selected background pool, and is disclosed concisely. |

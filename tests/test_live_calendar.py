@@ -456,7 +456,14 @@ def test_live_transport_calls_only_primary_events_list_and_minimizes_payload() -
         {
             "items": [
                 {
-                    "attendees": [{"email": "private-person@example.invalid"}],
+                    "attendees": [
+                        {"email": "private-person@example.invalid"},
+                        {
+                            "email": "private-self@example.invalid",
+                            "responseStatus": "declined",
+                            "self": True,
+                        },
+                    ],
                     "description": raw_private_marker,
                     "end": {"dateTime": "2026-07-25T11:00:00-04:00"},
                     "eventType": "workingLocation",
@@ -501,8 +508,10 @@ def test_live_transport_calls_only_primary_events_list_and_minimizes_payload() -
     assert page.next_page_token == "next-page"
     assert page.events[0].id == "event-1"
     assert page.events[0].event_type == "workingLocation"
+    assert page.events[0].self_response_status == "declined"
     assert raw_private_marker not in repr(page)
     assert "private-person" not in repr(page)
+    assert "private-self" not in repr(page)
     for mutation in ("create", "insert", "update", "patch", "delete", "write"):
         assert not hasattr(transport, mutation)
 
