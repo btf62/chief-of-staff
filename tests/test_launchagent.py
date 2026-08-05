@@ -47,6 +47,8 @@ def test_payload_has_only_accepted_calendar_schedule_and_no_restart(
 
     assert payload["Label"] == LAUNCH_AGENT_LABEL
     assert payload["ProgramArguments"] == [
+        "/usr/bin/caffeinate",
+        "-i",
         str(python),
         "-m",
         "chief_of_staff.scheduled_cli",
@@ -97,8 +99,11 @@ def test_install_disable_enable_and_remove_are_exact_and_reversible(
     assert not manager.loaded()
     assert plist_path.exists()
 
-    manager.enable()
+    manager.refresh_definition(load=True)
     assert manager.loaded()
+    with plist_path.open("rb") as stream:
+        refreshed = plistlib.load(stream)
+    assert refreshed["ProgramArguments"][:2] == ["/usr/bin/caffeinate", "-i"]
 
     manager.remove()
     assert not plist_path.exists()

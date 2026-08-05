@@ -9,6 +9,11 @@ No strict versioning scheme is promised before a distributable product exists.
 
 ### Changed
 
+- Scheduled morning generation now runs under a process-lifetime
+  `PreventUserIdleSystemSleep` assertion so a battery-powered dark wake cannot
+  return to idle sleep during connector retrieval. Reviewed-version adoption
+  also refreshes the installed LaunchAgent definition without resetting the
+  bounded trial.
 - Full-workday briefing synthesis now protects a 45-minute lunch between 11:30
   a.m. and 1:30 p.m., prefers noon when Calendar permits, honors explicit meal
   events, surfaces unresolved lunch conflicts, and prevents focus blocks from

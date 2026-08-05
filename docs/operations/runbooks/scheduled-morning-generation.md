@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Owner:** Brad
-- **Last updated:** 2026-08-03
+- **Last updated:** 2026-08-05
 
 This runbook operates the self-limiting Milestone 12 trial on Brad's approved
 primary Mac. It does not authorize routine unattended use after the trial,
@@ -33,14 +33,17 @@ governs the user-level LaunchAgent.
 
 The LaunchAgent invokes one command and exits. It does not keep the application
 resident, update software, open a browser authorization flow, or run the local
-web server.
+web server. The command runs under `/usr/bin/caffeinate -i`, which holds a
+`PreventUserIdleSystemSleep` assertion only for the lifetime of that one
+scheduled process and releases it automatically on exit.
 
 ## Host expectations
 
 Scheduled generation requires:
 
 - the approved user to be logged in;
-- the Mac to be awake, or to wake while the catch-up window remains open;
+- the Mac to be awake, or to wake long enough for the LaunchAgent to start its
+  bounded sleep assertion while the catch-up window remains open;
 - the repository and its project-owned `.venv` to remain at their configured
   paths;
 - the system timezone to remain `America/New_York`;
@@ -215,11 +218,12 @@ make scheduled-diagnostics
 ```
 
 The adoption command acquires the briefing-process lock, requires complete
-host and connector readiness, changes only the recorded application version
-and update time, and preserves the enabled state, first and final dates, and
-all occurrences. It performs no source retrieval and records a content-free
-diagnostic event. A dirty worktree, completed trial, changed scheduling policy,
-or incomplete readiness stops the operation.
+host and connector readiness, changes the recorded application version and
+update time, refreshes the exact LaunchAgent definition, and preserves the
+enabled state, first and final dates, and all occurrences. It performs no
+source retrieval and records a content-free diagnostic event. A dirty
+worktree, completed trial, changed scheduling policy, or incomplete readiness
+stops the operation.
 
 ## Understand scheduled outcomes
 

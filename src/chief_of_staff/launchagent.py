@@ -18,6 +18,7 @@ from chief_of_staff.scheduling import TRIGGER_HOUR, TRIGGER_MINUTE
 LAUNCH_AGENT_LABEL: Final = "org.northridge.chief-of-staff.scheduled-morning"
 LAUNCH_AGENT_FILENAME: Final = f"{LAUNCH_AGENT_LABEL}.plist"
 LAUNCHD_WEEKDAYS: Final = (0, 1, 2, 3, 4, 6)
+CAFFEINATE_PATH: Final = Path("/usr/bin/caffeinate")
 
 
 def launch_agent_payload(
@@ -40,6 +41,8 @@ def launch_agent_payload(
     return {
         "Label": LAUNCH_AGENT_LABEL,
         "ProgramArguments": [
+            str(CAFFEINATE_PATH),
+            "-i",
             str(python),
             "-m",
             "chief_of_staff.scheduled_cli",
@@ -111,17 +114,7 @@ class LaunchAgentManager:
     def install_and_load(self) -> None:
         """Write the exact plist with mode 0600 and load it for this user."""
 
-        payload = launch_agent_payload(
-            repository_root=self.repository_root,
-            python_executable=self.python_executable,
-        )
-        self.plist_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        temporary = self.plist_path.with_suffix(".plist.tmp")
-        with temporary.open("wb") as stream:
-            plistlib.dump(payload, stream, sort_keys=True)
-        temporary.chmod(0o600)
-        temporary.replace(self.plist_path)
-        self.plist_path.chmod(0o600)
+        self._write_definition()
         try:
             self._require_success(
                 (
@@ -143,6 +136,46 @@ class LaunchAgentManager:
         except BaseException:
             self.plist_path.unlink(missing_ok=True)
             raise
+
+    def refresh_definition(self, *, load: bool) -> None:
+        """Replace the exact definition while preserving trial enablement."""
+
+        previous = self.plist_path.read_bytes() if self.plist_path.is_file() else None
+        was_loaded = self.loaded()
+        self.disable()
+        try:
+            if load:
+                self.install_and_load()
+            else:
+                self._write_definition()
+        except BaseException:
+            self.plist_path.unlink(missing_ok=True)
+            if previous is not None:
+                self.plist_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                temporary = self.plist_path.with_suffix(".plist.rollback")
+                temporary.write_bytes(previous)
+                temporary.chmod(0o600)
+                temporary.replace(self.plist_path)
+                self.plist_path.chmod(0o600)
+                if was_loaded:
+                    with suppress(RuntimeError):
+                        self.enable()
+            raise
+
+    def _write_definition(self) -> None:
+        """Atomically write the current exact LaunchAgent definition."""
+
+        payload = launch_agent_payload(
+            repository_root=self.repository_root,
+            python_executable=self.python_executable,
+        )
+        self.plist_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        temporary = self.plist_path.with_suffix(".plist.tmp")
+        with temporary.open("wb") as stream:
+            plistlib.dump(payload, stream, sort_keys=True)
+        temporary.chmod(0o600)
+        temporary.replace(self.plist_path)
+        self.plist_path.chmod(0o600)
 
     def disable(self) -> None:
         """Unload and disable the service without deleting trial history."""
@@ -245,6 +278,10 @@ def host_readiness(
     )
     return (
         ("macOS host", sys.platform == "darwin"),
+        (
+            "bounded sleep-prevention tool",
+            CAFFEINATE_PATH.is_file() and os.access(CAFFEINATE_PATH, os.X_OK),
+        ),
         ("system timezone", system_timezone),
         ("approved repository path", repository_root.is_dir()),
         (

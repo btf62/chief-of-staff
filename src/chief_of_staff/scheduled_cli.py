@@ -196,6 +196,7 @@ def main(arguments: list[str] | None = None) -> int:
                 previous = store.get_scheduled_trial(TRIAL_ID)
                 if previous is None:
                     raise RuntimeError("Scheduled Morning Generation is not installed")
+                manager.refresh_definition(load=previous.enabled)
                 adopted_at = datetime.now(UTC)
                 trial = adopt_reviewed_application_version(
                     store,
@@ -212,6 +213,7 @@ def main(arguments: list[str] | None = None) -> int:
                     "enabled": trial.enabled,
                     "final_eligible_date": trial.final_eligible_date,
                     "first_eligible_date": trial.first_eligible_date,
+                    "launch_agent_refreshed": True,
                     "loaded": manager.loaded(),
                     "preserved_occurrences": len(
                         store.list_scheduled_occurrences(TRIAL_ID)
@@ -428,6 +430,7 @@ def _dry_run() -> int:
             "first_eligible_date": trial.first_eligible_date,
             "final_eligible_date": trial.final_eligible_date,
             "launch_agent_label": payload["Label"],
+            "sleep_prevention": "bounded_to_scheduled_process",
             "maximum_eligible_dates": MAXIMUM_ELIGIBLE_DATES,
             "persistent_state_changed": False,
             "timezone": SCHEDULE_TIMEZONE,

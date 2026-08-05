@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-07-31
+- **Amended:** 2026-08-05
 - **Owners:** Brad
 
 ## Context
@@ -68,7 +69,11 @@ Use a user-level macOS `launchd` LaunchAgent in Brad's logged-in GUI session
 with calendar triggers at 6:00 a.m. on Monday through Thursday, Saturday, and
 Sunday. It invokes one bounded scheduled-generation command and then exits.
 Friday has no trigger. The LaunchAgent uses neither `KeepAlive` nor an
-always-running worker.
+always-running worker. It invokes the one-shot command through
+`/usr/bin/caffeinate -i` so a `PreventUserIdleSystemSleep` assertion is held
+only while that scheduled process is running. This closes the observed gap in
+which a battery-powered dark wake started the command but returned to sleep
+before connector retrieval completed.
 
 The application—not `launchd`—would remain authoritative for:
 
@@ -112,6 +117,9 @@ without changing product semantics.
 - Milestone 12 becomes macOS-specific for its first scheduler.
 - The scheduler remains a thin invocation layer; product behavior stays in the
   existing application.
+- A bounded idle-sleep assertion keeps a dark-wake invocation alive through
+  retrieval and releases automatically when the one-shot process exits; it
+  does not create an always-running service or a wake schedule.
 - The selected user must be logged in and the actual host must pass an attended
   Keychain, network, sleep/wake, privacy, and notification trial.
 - Sleep-delayed triggers may be eligible for one catch-up; powered-off misses
