@@ -88,6 +88,7 @@ trust gates.
 │   ├── operations/
 │   │   └── runbooks/       Step-by-step operational procedures
 │   ├── product/
+│   │   ├── design/         Proposed interface design handoffs
 │   │   ├── features/       Detailed feature specifications
 │   │   ├── future-ideas.md Deferred ideas outside current scope
 │   │   ├── requirements.md Top-level product requirements

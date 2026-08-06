@@ -68,6 +68,11 @@ routine unattended operation afterward remain unauthorized.
   guiding purpose, and anti-goals
 - [Product requirements](product/requirements.md) — top-level PRD, scope,
   phases, cross-feature requirements, and feature index
+- [Product design handoffs](product/design/README.md) — proposed interface and
+  information-design directions with explicit implementation boundaries
+- [Daily Briefing Planner Redesign](product/design/daily-briefing-planner-redesign.md)
+  — proposed planner spread, Time Map, responsive and print adaptations,
+  visual grammar, and Codex implementation handoff
 - [Feature specifications](product/features/README.md) — detailed,
   implementable product behavior
 - [Daily Briefing v1](product/features/daily-briefing-v1.md) — first usable

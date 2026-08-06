@@ -56,6 +56,11 @@ No strict versioning scheme is promised before a distributable product exists.
 
 ### Added
 
+- A proposed Daily Briefing planner-redesign handoff covering the desktop
+  spread, Time Map, responsive and US Letter adaptations, Northridge visual
+  grammar, committed synthetic reference images, component mapping, acceptance
+  criteria, and the separate product gates required for stewardship backlogs
+  and Todoist grooming.
 - A private, content-free scheduled diagnostic log with mode-`0600` files,
   fixed-size two-file rotation, safe operator inspection, and coverage of
   failures that occur before an eligible-date occurrence can be persisted.
