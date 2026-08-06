@@ -18,3 +18,4 @@ product and design contracts remain authoritative.
 | Design | Status | Relationship to implementation |
 | --- | --- | --- |
 | [Daily Briefing Planner Redesign](daily-briefing-planner-redesign.md) | Proposed | Separate implementation authorization required; companion capabilities remain out of scope |
+| [Chief of Staff Product Icon](chief-of-staff-icon.md) | Accepted | Production-ready asset handoff; application integration remains a separate task |

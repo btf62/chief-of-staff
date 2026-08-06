@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="1024"
+  height="1024"
+  viewBox="0 0 1024 1024"
+  role="img"
+  aria-labelledby="title description"
+>
+  <title id="title">Chief of Staff product icon</title>
+  <desc id="description">
+    Two ink brackets protect four briefing signals, with one gold signal in
+    focus, on a cream background.
+  </desc>
+
+  <rect width="1024" height="1024" fill="#EEE7D6" />
+
+  <g
+    fill="none"
+    stroke="#241F20"
+    stroke-width="80"
+    stroke-linecap="round"
+    shape-rendering="geometricPrecision"
+  >
+    <path d="M 340 278 C 302 278 272 308 272 346 V 678 C 272 716 302 746 340 746" />
+    <path d="M 684 278 C 722 278 752 308 752 346 V 678 C 752 716 722 746 684 746" />
+  </g>
+
+  <g
+    fill="none"
+    stroke-width="64"
+    stroke-linecap="round"
+    shape-rendering="geometricPrecision"
+  >
+    <path d="M 372 352 H 652" stroke="#241F20" />
+    <path d="M 372 460 H 652" stroke="#F2C659" />
+    <path d="M 372 568 H 652" stroke="#241F20" />
+    <path d="M 372 676 H 652" stroke="#241F20" />
+  </g>
+</svg>

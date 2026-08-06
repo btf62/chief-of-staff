@@ -73,6 +73,8 @@ routine unattended operation afterward remain unauthorized.
 - [Daily Briefing Planner Redesign](product/design/daily-briefing-planner-redesign.md)
   — proposed planner spread, Time Map, responsive and print adaptations,
   visual grammar, and Codex implementation handoff
+- [Chief of Staff Product Icon](product/design/chief-of-staff-icon.md) —
+  accepted vector mark, exact palette, usage rules, and favicon validation
 - [Feature specifications](product/features/README.md) — detailed,
   implementable product behavior
 - [Daily Briefing v1](product/features/daily-briefing-v1.md) — first usable

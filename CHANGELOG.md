@@ -56,6 +56,9 @@ No strict versioning scheme is promised before a distributable product exists.
 
 ### Added
 
+- An accepted Chief of Staff product icon with an authoritative flat-color
+  SVG, committed 16-pixel and 32-pixel favicon validation renders, exact
+  palette and usage rules, and a separate application-integration boundary.
 - A proposed Daily Briefing planner-redesign handoff covering the desktop
   spread, Time Map, responsive and US Letter adaptations, Northridge visual
   grammar, committed synthetic reference images, component mapping, acceptance
