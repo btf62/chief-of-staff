@@ -86,9 +86,12 @@ contains only the three authoritative flat colors above.
 
 ## Implementation boundary
 
-This accepted design handoff records the icon and its usage rules. It does not
-by itself modify the web interface, desktop packaging, scheduled trial, or
-runtime behavior. A separate explicitly authorized implementation task should
-copy or reference the committed assets from the application's static asset
-location, add the necessary favicon and visible-brand markup, and verify the
-result without changing product behavior or connector boundaries.
+The accepted icon is integrated into the local web application as its visible
+header mark and SVG favicon, with the committed PNGs providing 32-pixel and
+16-pixel favicon fallbacks. Byte-identical application copies are packaged
+under `src/chief_of_staff/web/static/`; the SVG in this design directory
+remains the governing source.
+
+This integration does not change desktop packaging, scheduled-trial behavior,
+product behavior, or connector boundaries. Future icon changes must begin with
+the governing design asset and preserve the usage rules above.

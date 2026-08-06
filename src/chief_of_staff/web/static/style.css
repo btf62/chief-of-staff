@@ -58,10 +58,20 @@ footer {
 }
 
 .wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
   color: var(--ink);
   font-weight: 750;
   letter-spacing: -0.01em;
   text-decoration: none;
+}
+
+.product-icon {
+  display: block;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 2rem;
 }
 
 .local-boundary,

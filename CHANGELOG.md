@@ -9,6 +9,9 @@ No strict versioning scheme is promised before a distributable product exists.
 
 ### Changed
 
+- The accepted Chief of Staff icon is now packaged with the local web
+  application, displayed beside the shared wordmark, and declared as an SVG
+  favicon with 32-pixel and 16-pixel PNG fallbacks.
 - Scheduled morning generation now runs under a process-lifetime
   `PreventUserIdleSystemSleep` assertion so a battery-powered dark wake cannot
   return to idle sleep during connector retrieval. Reviewed-version adoption

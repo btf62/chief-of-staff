@@ -35,6 +35,8 @@ chief_of_staff = [
   "py.typed",
   "persistence/migrations/*.sql",
   "web/static/*.css",
+  "web/static/*.png",
+  "web/static/*.svg",
   "web/templates/*.html",
 ]
 
